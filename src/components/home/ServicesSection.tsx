@@ -1,0 +1,160 @@
+import React, { useState } from 'react';
+import { useLanguage } from '../../context/LanguageContext';
+import { SERVICES_DATA } from '../../data/content';
+import { ServiceItem } from '../../types';
+import { ArrowUpRight, Layers, Globe, Smartphone, Cpu, Cloud, ShieldCheck } from 'lucide-react';
+
+interface ServicesSectionProps {
+  onSelectService: (service: ServiceItem) => void;
+}
+
+export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectService }) => {
+  const { language, t } = useLanguage();
+  const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  const categories = [
+    { id: 'all', label: 'All Services', labelHi: 'सभी सेवाएं' },
+    { id: 'Core Engineering', label: 'Core Engineering', labelHi: 'कोर इंजीनियरिंग' },
+    { id: 'Mobile Systems', label: 'Mobile Systems', labelHi: 'मोबाइल सिस्टम' },
+    { id: 'Artificial Intelligence', label: 'AI Solutions', labelHi: 'एआई समाधान' },
+    { id: 'Cloud Engineering', label: 'Cloud & DevOps', labelHi: 'क्लाउड व डेवऑप्स' },
+  ];
+
+  const filteredServices = SERVICES_DATA.filter((s) => {
+    if (activeCategory === 'all') return true;
+    return s.category === activeCategory;
+  });
+
+  const getIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Layers':
+        return <Layers className="w-5 h-5 text-blue-700" />;
+      case 'Globe':
+        return <Globe className="w-5 h-5 text-blue-700" />;
+      case 'Smartphone':
+        return <Smartphone className="w-5 h-5 text-blue-700" />;
+      case 'Cpu':
+        return <Cpu className="w-5 h-5 text-blue-700" />;
+      case 'Cloud':
+        return <Cloud className="w-5 h-5 text-blue-700" />;
+      case 'ShieldCheck':
+        return <ShieldCheck className="w-5 h-5 text-blue-700" />;
+      default:
+        return <Layers className="w-5 h-5 text-blue-700" />;
+    }
+  };
+
+  return (
+    <section id="services" className="py-20 sm:py-28 bg-slate-50/70 border-b border-slate-200">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Header & Filter Controls */}
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+          <div className="max-w-2xl">
+            <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
+              {t('CORE CAPABILITIES & ENGINEERING SUITE', 'प्रमुख क्षमताएं और सेवाएं')}
+            </div>
+            <h2
+              className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight"
+              style={{ textWrap: 'balance' }}
+            >
+              {language === 'hi' ? (
+                <>
+                  एंटरप्राइज-ग्रेड <span className="text-blue-700">सॉफ्टवेयर व सिस्टम इंजीनियरिंग</span> सेवाएं
+                </>
+              ) : (
+                <>
+                  Enterprise-Grade <span className="text-blue-700">Software & System Engineering</span> Capabilities
+                </>
+              )}
+            </h2>
+            <p className="mt-3 text-sm sm:text-base text-slate-600 leading-relaxed">
+              {t(
+                'Full-lifecycle software engineering from mathematical systems modeling to automated multi-cloud deployment.',
+                'गणितीय मॉडलिंग से लेकर स्वचालित मल्टी-क्लाउड परिनियोजन तक संपूर्ण जीवन-चक्र सॉफ्टवेयर इंजीनियरिंग सेवाएं।'
+              )}
+            </p>
+          </div>
+
+          {/* Interactive Filter Segmented Control (Buttons with click handlers) */}
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white border border-slate-200 rounded-lg shadow-2xs self-start md:self-end">
+            {categories.map((cat) => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategory(cat.id)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                  activeCategory === cat.id
+                    ? 'bg-blue-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
+                }`}
+              >
+                {language === 'hi' ? cat.labelHi : cat.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Bento Grid with Asymmetric Hierarchy */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredServices.map((service) => (
+            <div
+              key={service.id}
+              onClick={() => onSelectService(service)}
+              className="group bg-white rounded-xl border border-slate-200 p-6 hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between"
+            >
+              <div>
+                {/* Header: Editorial Number & Category (Clean unboxed text) */}
+                <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-3 border-b border-slate-100">
+                  <span className="font-mono font-bold text-blue-700">
+                    {service.number}. {language === 'hi' ? service.categoryHi : service.category}
+                  </span>
+                  <div className="w-8 h-8 rounded-md bg-blue-50 group-hover:bg-blue-700 group-hover:text-white transition-colors flex items-center justify-center">
+                    <ArrowUpRight className="w-4 h-4 text-blue-700 group-hover:text-white transition-colors" />
+                  </div>
+                </div>
+
+                {/* Service Title */}
+                <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors mb-2.5">
+                  {language === 'hi' ? service.titleHi : service.title}
+                </h3>
+
+                {/* Short Description */}
+                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
+                  {language === 'hi' ? service.shortDescHi : service.shortDesc}
+                </p>
+              </div>
+
+              <div>
+                {/* Metric Strip (Clean Tabular Numbers) */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-500 font-medium">
+                    {language === 'hi' ? service.metricLabelHi : service.metricLabel}
+                  </span>
+                  <span className="font-mono font-extrabold text-blue-700 tabular-nums">
+                    {service.metric}
+                  </span>
+                </div>
+
+                {/* Tech Pills / Tags as quiet font-mono badges */}
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {service.techStack.slice(0, 4).map((tech) => (
+                    <span
+                      key={tech}
+                      className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700"
+                    >
+                      {tech}
+                    </span>
+                  ))}
+                  {service.techStack.length > 4 && (
+                    <span className="text-[11px] font-mono px-1.5 py-0.5 text-slate-400">
+                      +{service.techStack.length - 4}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};

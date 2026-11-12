@@ -1,0 +1,6 @@
+{
+  "name": "Power Web Studio AI - Enterprise Digital Platform",
+  "description": "Enterprise Digital Technology Platform & AI Engineering Suite by Bhanu Ram Bariha Digital Technologies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

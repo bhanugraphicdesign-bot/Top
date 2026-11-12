@@ -1,0 +1,335 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered user account record",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "lastLoginAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "UserRole": {
+      "title": "UserRole",
+      "description": "System role assignment (admin, client, manager, architect)",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "client", "manager", "architect"] },
+        "assignedBy": { "type": "string" },
+        "assignedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "role"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Extended user profile, company details and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "companyName": { "type": "string" },
+        "phone": { "type": "string" },
+        "designation": { "type": "string" },
+        "preferredLanguage": { "type": "string", "enum": ["hi", "en"] },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid"]
+    },
+    "App": {
+      "title": "App",
+      "description": "Android application catalog item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameHi": { "type": "string" },
+        "tagline": { "type": "string" },
+        "taglineHi": { "type": "string" },
+        "category": { "type": "string" },
+        "version": { "type": "string" },
+        "architecture": { "type": "string" },
+        "description": { "type": "string" },
+        "descriptionHi": { "type": "string" },
+        "status": { "type": "string" },
+        "downloadSize": { "type": "string" },
+        "targetSdk": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "category", "version"]
+    },
+    "AppCategory": {
+      "title": "AppCategory",
+      "description": "Android application categorization taxonomy",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "nameHi": { "type": "string" },
+        "description": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Enterprise software engagement contract",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "name": { "type": "string" },
+        "nameHi": { "type": "string" },
+        "code": { "type": "string" },
+        "completion": { "type": "number" },
+        "status": { "type": "string" },
+        "leadArchitect": { "type": "string" },
+        "currentSprint": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clientId", "name", "status"]
+    },
+    "ProjectTask": {
+      "title": "ProjectTask",
+      "description": "Sprint tickets and deliverables",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "done", "blocked"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "assignedTo": { "type": "string" }
+      },
+      "required": ["id", "projectId", "title", "status"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Commercial engineering order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clientId", "amount", "status"]
+    },
+    "Quotation": {
+      "title": "Quotation",
+      "description": "Architectural scoping estimate or client proposal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string", "format": "email" },
+        "serviceType": { "type": "string" },
+        "estimatedBudget": { "type": "string" },
+        "timeline": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clientName", "clientEmail", "serviceType"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Billing tax invoice for milestone release",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceNumber": { "type": "string" },
+        "clientId": { "type": "string" },
+        "amount": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["draft", "issued", "paid", "overdue"] },
+        "dueDate": { "type": "string", "format": "date" },
+        "issuedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "invoiceNumber", "clientId", "amount", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Recorded milestone disbursement transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "clientId": { "type": "string" },
+        "amount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "transactionRef": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "completed", "failed"] },
+        "paidAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "invoiceId", "clientId", "amount", "status"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Enterprise customer SLA issue ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "subject": { "type": "string" },
+        "priority": { "type": "string", "enum": ["P1_Critical", "P2_High", "P3_Normal", "P4_Low"] },
+        "status": { "type": "string", "enum": ["open", "in_triage", "resolved", "closed"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "clientId", "subject", "priority", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "System and user event notifications",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "body": { "type": "string" },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "read"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Security and administrative audit trail",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "actorId": { "type": "string" },
+        "actorEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "resource": { "type": "string" },
+        "details": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "actorId", "action", "resource", "timestamp"]
+    },
+    "SiteSetting": {
+      "title": "SiteSetting",
+      "description": "Global enterprise platform configuration",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "companyName": { "type": "string" },
+        "cin": { "type": "string" },
+        "maintenanceMode": { "type": "boolean" },
+        "contactEmail": { "type": "string" },
+        "contactPhone": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "companyName"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Enterprise engineering service offering",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "titleHi": { "type": "string" },
+        "description": { "type": "string" },
+        "descriptionHi": { "type": "string" },
+        "category": { "type": "string" },
+        "metric": { "type": "string" },
+        "metricLabel": { "type": "string" },
+        "icon": { "type": "string" }
+      },
+      "required": ["id", "title", "description"]
+    },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "Architectural and engineering knowledge article",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "titleHi": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "excerptHi": { "type": "string" },
+        "author": { "type": "string" },
+        "date": { "type": "string" },
+        "category": { "type": "string" }
+      },
+      "required": ["id", "title", "author", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User base identity document"
+    },
+    "/user_roles/{userId}": {
+      "schema": "UserRole",
+      "description": "Role control document restricted to admin assignment"
+    },
+    "/user_profiles/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile with personal and enterprise contact info"
+    },
+    "/apps/{appId}": {
+      "schema": "App",
+      "description": "Android applications catalog"
+    },
+    "/app_categories/{categoryId}": {
+      "schema": "AppCategory",
+      "description": "App category taxonomy"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Client software engineering engagements"
+    },
+    "/project_tasks/{taskId}": {
+      "schema": "ProjectTask",
+      "description": "Tasks associated with projects"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Commercial platform orders"
+    },
+    "/quotations/{quotationId}": {
+      "schema": "Quotation",
+      "description": "Architectural scoping quotes and inbound inquiries"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Financial milestone tax invoices"
+    },
+    "/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Completed transaction ledger records"
+    },
+    "/support_tickets/{ticketId}": {
+      "schema": "SupportTicket",
+      "description": "Enterprise customer SLA support tickets"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User notifications"
+    },
+    "/audit_logs/{logId}": {
+      "schema": "AuditLog",
+      "description": "Immutable security and administrative audit log"
+    },
+    "/site_settings/{settingId}": {
+      "schema": "SiteSetting",
+      "description": "Platform settings document"
+    },
+    "/services/{serviceId}": {
+      "schema": "Service",
+      "description": "Enterprise engineering service catalog item"
+    },
+    "/blog_posts/{postId}": {
+      "schema": "BlogPost",
+      "description": "Content management blog article document"
+    }
+  }
+}
