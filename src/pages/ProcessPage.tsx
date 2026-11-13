@@ -50,12 +50,12 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
           <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs">
             <ShieldCheck className="w-6 h-6 text-blue-700 mb-3" />
             <h3 className="text-base font-bold text-slate-900 mb-1">
-              {t('OWASP & SOC-2 Audited', 'ओवास्प और एसओसी-2 ऑडिटेड')}
+              {t('Security & OWASP Checklist Reviews', 'सुरक्षा एवं OWASP चेकलिस्ट समीक्षा')}
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
               {t(
-                'Every line of code undergoes automated static vulnerability analysis (SAST) and dynamic penetration testing.',
-                'प्रत्येक कोड लाइन स्वचालित सुरक्षा विश्लेषण (SAST) और पेनेट्रेशन परीक्षण से गुजरती है।'
+                'Codebases undergo internal TypeScript strict checks, dependency audits, and OWASP security checklist reviews prior to release.',
+                'रिलीज़ से पहले कोडबेस की आंतरिक TypeScript जांच, डिपेंडेंसी ऑडिट और OWASP सुरक्षा चेकलिस्ट समीक्षा की जाती है।'
               )}
             </p>
           </div>

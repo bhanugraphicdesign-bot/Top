@@ -6,15 +6,41 @@ import { Send, CheckCircle, ShieldCheck, Award, ArrowUp } from 'lucide-react';
 import { PageRoute } from '../../types';
 
 export const Footer: React.FC = () => {
-  const { language, t } = useLanguage();
+  const { language, t, showToast } = useLanguage();
   const { navigate } = useNavigation();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [subscribeError, setSubscribeError] = useState('');
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newsletterEmail.trim()) return;
-    setSubscribed(true);
+    const trimmed = newsletterEmail.trim();
+    if (!trimmed) return;
+    setSubscribeError('');
+    setSubscribing(true);
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed, language }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setSubscribed(true);
+      showToast(
+        language === 'hi' ? 'तकनीकी डिस्पैच में सदस्यता सफल।' : 'Subscribed to Technical Dispatch.',
+        'success'
+      );
+    } catch (err: any) {
+      const msg = err?.message || t('Subscription failed. Try again.', 'सदस्यता विफल रही। पुनः प्रयास करें।');
+      setSubscribeError(msg);
+      showToast(msg, 'alert');
+    } finally {
+      setSubscribing(false);
+    }
   };
 
   const scrollToTop = () => {
@@ -50,7 +76,7 @@ export const Footer: React.FC = () => {
                 : 'Engineering high-concurrency enterprise architectures, native Android mobility ecosystems, and sovereign AI engines for global organizations.'}
             </p>
 
-            <div className="text-xs text-slate-500 space-y-1 pt-1 font-mono">
+            <div className="text-xs text-slate-500 space-y-1 pt-1 font-mono break-words">
               <div>{COMPANY_INFO.registration}</div>
               <div>{COMPANY_INFO.headquarters}</div>
             </div>
@@ -185,18 +211,24 @@ export const Footer: React.FC = () => {
                   <input
                     type="email"
                     required
+                    disabled={subscribing}
                     value={newsletterEmail}
                     onChange={(e) => setNewsletterEmail(e.target.value)}
                     placeholder="architect@enterprise.com"
-                    className="flex-1 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
+                    className="flex-1 min-w-0 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 disabled:opacity-60"
                   />
                   <button
                     type="submit"
-                    className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 rounded-md transition-colors cursor-pointer shrink-0"
+                    disabled={subscribing}
+                    aria-label={t('Subscribe to dispatch', 'सदस्यता लें')}
+                    className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 disabled:opacity-60 rounded-md transition-colors cursor-pointer shrink-0"
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
                 </div>
+                {subscribeError && (
+                  <div className="text-[11px] text-rose-400">{subscribeError}</div>
+                )}
                 <div className="text-[11px] text-slate-500">
                   {t('Strictly confidential. Unsubscribe at any time.', 'सख्ती से गोपनीय। किसी भी समय रद्द करें।')}
                 </div>
@@ -211,15 +243,15 @@ export const Footer: React.FC = () => {
             © {new Date().getFullYear()} {COMPANY_INFO.name}. {t('All Rights Reserved.', 'सर्वाधिकार सुरक्षित।')}
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <span className="flex items-center gap-1.5 text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-500" />
-              <span>ISO/IEC 27001 Certified Practice</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span>{t('Security-First Design Practices', 'सुरक्षा-प्रथम इंजीनियरिंग अभ्यास')}</span>
             </span>
             <span aria-hidden="true" className="text-slate-700">·</span>
             <span className="flex items-center gap-1.5 text-slate-400">
-              <Award className="w-3.5 h-3.5 text-blue-500" />
-              <span>SOC-2 Type II Attested</span>
+              <Award className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span>{t('DPDP Aligned Architecture (Uncertified)', 'DPDP अनुरूप डिज़ाइन (अप्रमाणित)')}</span>
             </span>
             <span aria-hidden="true" className="text-slate-700">·</span>
             <button

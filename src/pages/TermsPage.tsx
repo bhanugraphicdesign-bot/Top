@@ -60,12 +60,12 @@ export const TermsPage: React.FC = () => {
 
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">
-            {t('3. Service Level Agreement (SLA) & Uptime', '3. सेवा स्तर समझौता (SLA) एवं अपटाइम')}
+            {t('3. Service Level Agreement (SLA) & Uptime Targets', '3. सेवा स्तर समझौता (SLA) एवं उपलब्धता लक्ष्य')}
           </h2>
           <p>
             {language === 'hi'
-              ? 'प्रबंधित क्लाउड और बैकएंड सेवाओं के लिए हम 99.98% अपटाइम अनुबंध प्रदान करते हैं। किसी भी अप्रत्याशित बाधा की स्थिति में हमारी साइट विश्वसनीयता टीम 15 मिनट के भीतर प्राथमिकता प्रतिक्रिया सुनिश्चित करती है।'
-              : 'For managed cloud infrastructure and production APIs, Bhanu Ram Bariha Digital Technologies commits to a contractually backed 99.98% High Availability Uptime SLA with a 15-minute P1 critical incident response window.'}
+              ? 'प्रबंधित क्लाउड और बैकएंड सेवाओं के लिए उपलब्धता लक्ष्य, प्रतिक्रिया समय-सीमा और रखरखाव शर्तें प्रत्येक क्लाइंट के हस्ताक्षरित Statement of Work (SOW) में अलग से परिभाषित की जाती हैं। बिना लिखित SOW के कोई स्वचालित अपटाइम गारंटी लागू नहीं होती।'
+              : 'For managed cloud infrastructure and production APIs, specific availability targets, incident response windows, and support obligations are defined exclusively within each client’s executed Statement of Work (SOW). No blanket uptime guarantee applies outside a signed SOW.'}
           </p>
         </section>
 
@@ -86,8 +86,8 @@ export const TermsPage: React.FC = () => {
           </h2>
           <p>
             {language === 'hi'
-              ? 'यह समझौता भारत के कानूनों के अनुसार शासित और व्याख्यायित किया जाएगा। किसी भी विवाद का निपटारा ओडिशा, भारत के सक्षम न्यायालयों के अनन्य क्षेत्राधिकार में किया जाएगा।'
-              : 'This Agreement shall be governed by and construed in accordance with the laws of the Republic of India. Any legal dispute shall be subject to the exclusive jurisdiction of the competent courts in the State of Odisha, India.'}
+              ? 'यह समझौता भारत के कानूनों के अनुसार शासित और व्याख्यायित किया जाएगा। किसी भी विवाद का निपटारा छत्तीसगढ़, भारत के सक्षम न्यायालयों के अनन्य क्षेत्राधिकार में किया जाएगा।'
+              : 'This Agreement shall be governed by and construed in accordance with the laws of the Republic of India. Any legal dispute shall be subject to the exclusive jurisdiction of the competent courts in the State of Chhattisgarh, India.'}
           </p>
         </section>
       </div>

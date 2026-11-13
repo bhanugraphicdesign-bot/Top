@@ -171,6 +171,8 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
               <img
                 src={ASSETS.aiImage}
                 alt="AI Neural Architecture Studio"
+                loading="lazy"
+                decoding="async"
                 className="absolute inset-0 w-full h-full object-cover opacity-35"
                 referrerPolicy="no-referrer"
               />
@@ -192,21 +194,21 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
 
               {/* Live Calculated Stats Box */}
               <div className="relative z-10 mt-8 p-4 rounded-lg bg-slate-950/80 border border-slate-800 backdrop-blur-md text-white space-y-3">
-                <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
+                <div className="flex items-center justify-between gap-2 text-xs border-b border-slate-800 pb-2">
                   <span className="text-slate-400">{t('Projected Efficiency Gain:', 'अनुमानित दक्षता वृद्धि:')}</span>
-                  <span className="font-mono text-emerald-400 font-extrabold text-base tabular-nums">
+                  <span className="font-mono text-emerald-400 font-extrabold text-base tabular-nums shrink-0">
                     +{est.speedGain}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs border-b border-slate-800 pb-2">
+                <div className="flex items-center justify-between gap-2 text-xs border-b border-slate-800 pb-2">
                   <span className="text-slate-400">{t('Est. Work Hours Saved:', 'बचत किए गए कार्य घंटे:')}</span>
-                  <span className="font-mono text-blue-400 font-extrabold text-base tabular-nums">
+                  <span className="font-mono text-blue-400 font-extrabold text-base tabular-nums shrink-0">
                     {est.processingHours}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="text-slate-400">{t('Target Inference Latency:', 'लक्षित इनफेरेंस लेटेंसी:')}</span>
-                  <span className="font-mono text-white font-extrabold text-sm tabular-nums">
+                  <span className="font-mono text-white font-extrabold text-sm tabular-nums shrink-0">
                     {est.targetLatency}
                   </span>
                 </div>
@@ -271,7 +273,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   3. {t('Scale of Monthly Operations', 'मासिक संचालन का पैमाना')}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { id: 'startup', label: '<10,000 queries/mo', labelHi: '<10,000 क्वेरी/माह' },
                     { id: 'mid', label: '10K - 250K queries/mo', labelHi: '10K - 250K क्वेरी/माह' },
@@ -297,7 +299,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                 <div className="text-xs font-bold text-slate-900">
                   {t('Recommended Production Topology:', 'अनुशंसित प्रोडक्शन टोपोलॉजी:')}
                 </div>
-                <div className="text-xs font-mono text-blue-700">
+                <div className="text-xs font-mono text-blue-700 break-words">
                   {est.blueprint}
                 </div>
               </div>

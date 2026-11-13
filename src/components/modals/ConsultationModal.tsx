@@ -56,7 +56,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
     try {
       // 1. Server validation probe
-      await fetch('/api/inquiries/validate', {
+      const valRes = await fetch('/api/inquiries/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -65,7 +65,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           serviceType: formData.service,
           brief: formData.brief,
         }),
-      }).catch(() => null);
+      });
+
+      if (!valRes.ok) {
+        const errData = await valRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Validation failed (HTTP ${valRes.status})`);
+      }
 
       // 2. Commit to Cloud Firestore
       await submitQuotation({
@@ -89,10 +94,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       setIsSubmitted(true);
       showToast(dict.notifications.consultationBooked, 'success');
     } catch (err: any) {
-      console.warn('[Firestore Quotation Fallback]', err);
-      // Still show successful dispatch to user
-      setIsSubmitted(true);
-      showToast(dict.notifications.consultationBooked, 'success');
+      const msg =
+        err?.message ||
+        t(
+          'Unable to submit consultation request. Please check your connection and try again.',
+          'परामर्श अनुरोध सबमिट करने में असमर्थ। कृपया पुनः प्रयास करें।'
+        );
+      setErrorMessage(msg);
+      showToast(msg, 'alert');
     } finally {
       setSubmitting(false);
     }

@@ -49,6 +49,8 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
               <img
                 src={ASSETS.campusImage}
                 alt="Bhanu Ram Bariha Digital Technologies Innovation Campus"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-80 sm:h-96 object-cover transition-transform duration-500 group-hover:scale-102"
                 referrerPolicy="no-referrer"
               />
@@ -65,13 +67,13 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
 
             {/* Corporate Registration Strip (Unboxed metadata) */}
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <Building2 className="w-4 h-4 text-blue-700 shrink-0" />
-                <span className="font-semibold text-slate-900">{COMPANY_INFO.registration}</span>
+                <span className="font-semibold text-slate-900 break-words">{COMPANY_INFO.registration}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Award className="w-4 h-4 text-blue-700 shrink-0" />
-                <span>{t('ISO 27001 & SOC-2 Compliant Practice', 'आईएसओ 27001 व एसओसी-2 अनुपालन')}</span>
+                <span>{t('Security-First Engineering Practices (Uncertified)', 'सुरक्षा-प्रथम इंजीनियरिंग अभ्यास (अप्रमाणित)')}</span>
               </div>
             </div>
           </div>
@@ -126,10 +128,10 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
             <div className="pt-2">
               <button
                 onClick={onOpenConsultation}
-                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-700 rounded-md transition-colors cursor-pointer border border-blue-200"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-700 rounded-md transition-colors cursor-pointer border border-blue-200 text-left"
               >
                 <span>{t('Meet Our Leadership & Engineering Architects', 'हमारे लीडरशिप और आर्किटेक्ट्स से जुड़ें')}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </button>
             </div>
           </div>

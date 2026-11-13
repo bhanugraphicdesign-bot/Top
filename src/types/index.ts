@@ -198,3 +198,47 @@ export interface UploadedFileRecord {
   uploadedAt: string;
   downloadUrl: string;
 }
+
+export interface EnterpriseInvoice {
+  id: string;
+  invoiceNumber: string;
+  projectId: string;
+  projectName: string;
+  projectNameHi: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  clientCompany: string;
+  clientGstin?: string;
+  milestoneTitle: string;
+  milestoneTitleHi: string;
+  subtotal: number;
+  gstRate: number;
+  gstAmount: number;
+  totalAmount: number;
+  currency: 'INR';
+  hsnSac: string;
+  status: 'issued' | 'paid' | 'overdue' | 'cancelled';
+  issuedAt: string;
+  dueAt: string;
+  paidAt?: string;
+  paymentTxnId?: string;
+  paymentMethod?: string;
+  verificationHash: string;
+}
+
+export interface VerifiedPayment {
+  id: string;
+  orderId: string;
+  invoiceId: string;
+  clientId: string;
+  clientEmail: string;
+  amount: number;
+  currency: 'INR';
+  method: 'UPI' | 'NEFT_RTGS' | 'Corporate_Card' | 'Escrow';
+  status: 'success' | 'pending' | 'failed';
+  transactionRef: string;
+  checksum: string;
+  timestamp: string;
+  verifiedBy: string;
+}

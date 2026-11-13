@@ -53,6 +53,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
               <img
                 src={ASSETS.campusImage}
                 alt="Bhanu Ram Bariha Digital Technologies Innovation Campus"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-80 sm:h-96 object-cover"
                 referrerPolicy="no-referrer"
               />
@@ -82,8 +84,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             </h2>
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
               {language === 'hi'
-                ? 'ओडिशा के जीवंत प्रौद्योगिकी कॉरिडोर से शुरू होकर, भानु राम बरीहा डिजिटल टेक्नोलॉजीज ने भारतीय इंजीनियरिंग प्रतिभा को वैश्विक स्तर पर स्थापित किया है। हम जटिल व्यापारिक समस्याओं को हल करने के लिए वितरित आर्किटेक्चर, सख्त सुरक्षा मानकों और ऑटोनॉमस एआई का उपयोग करते हैं।'
-                : 'Rooted in the high-growth technology corridor of Odisha, India, Bhanu Ram Bariha Digital Technologies was established with an uncompromising mandate: engineering distributed enterprise platforms that run flawlessly under heavy transactional load.'}
+                ? 'गरियाबंद जिले (फिंगेश्वर बोरिद मोड़, राजिम उपखंड, छत्तीसगढ़ - 493992) से संचालित, भानु राम बरीहा डिजिटल टेक्नोलॉजीज ने भारतीय इंजीनियरिंग प्रतिभा को वैश्विक स्तर पर स्थापित करने का लक्ष्य रखा है। हम जटिल व्यापारिक समस्याओं को हल करने के लिए वितरित आर्किटेक्चर, मजबूत सुरक्षा अभ्यासों और ऑटोनॉमस एआई का उपयोग करते हैं।'
+                : 'Operating from Fingeshwar Borid Mod, Rajim Subdistrict, Gariaband District, Chhattisgarh (493992), India, Bhanu Ram Bariha Digital Technologies was established with an uncompromising mandate: engineering resilient enterprise platforms that run reliably under demanding workloads.'}
             </p>
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
               {language === 'hi'
@@ -98,9 +100,9 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                 <div className="text-[11px] text-slate-500">Go, Kotlin, React, Python</div>
               </div>
               <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <div className="text-2xl font-extrabold text-blue-700 font-mono tabular-nums">99.98%</div>
-                <div className="text-xs font-semibold text-slate-900 mt-0.5">Contractual SLA Uptime</div>
-                <div className="text-[11px] text-slate-500">Zero-downtime failover</div>
+                <div className="text-2xl font-extrabold text-blue-700 font-mono tabular-nums">HA Target</div>
+                <div className="text-xs font-semibold text-slate-900 mt-0.5">Availability Design Goal</div>
+                <div className="text-[11px] text-slate-500">Custom SLA scoped per SOW</div>
               </div>
             </div>
           </div>
@@ -122,8 +124,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
               {
                 title: 'Data Sovereignty',
                 titleHi: 'डेटा संप्रभुता',
-                desc: 'Strict compliance with Indian DPDP Act 2023, ISO 27001, and SOC-2. All data stays in your sovereign cloud perimeter.',
-                descHi: 'भारतीय DPDP अधिनियम 2023, ISO 27001 और SOC-2 का पूर्ण अनुपालन। डेटा आपकी सीमा में सुरक्षित।',
+                desc: 'Engineered with privacy-by-design practices aligned to Indian DPDP Act 2023 principles within your cloud perimeter (uncertified baseline).',
+                descHi: 'भारतीय DPDP अधिनियम 2023 के सिद्धांतों के अनुरूप प्राइवेसी-बाय-डिज़ाइन अभ्यासों के साथ निर्मित (अप्रमाणित आधारभूत डिज़ाइन)।',
               },
               {
                 title: 'Zero-Loss Guarantees',

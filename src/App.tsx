@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, Suspense, lazy } from 'react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { NavigationProvider, useNavigation } from './context/NavigationContext';
-import { AppsProvider, useApps } from './context/AppsContext';
+import { AppsProvider } from './context/AppsContext';
 import { Header } from './components/common/Header';
 import { MobileMenu } from './components/common/MobileMenu';
 import { Footer } from './components/common/Footer';
@@ -16,23 +16,37 @@ import { ContactCtaSection } from './components/home/ContactCtaSection';
 import { ConsultationModal } from './components/modals/ConsultationModal';
 import { ServiceDetailModal } from './components/modals/ServiceDetailModal';
 import { AppDetailModal } from './components/modals/AppDetailModal';
-import { AboutPage } from './pages/AboutPage';
-import { ServicesPage } from './pages/ServicesPage';
-import { AiSolutionsPage } from './pages/AiSolutionsPage';
-import { AndroidPortfolioPage } from './pages/AndroidPortfolioPage';
-import { AppDetailPage } from './pages/AppDetailPage';
-import { ProcessPage } from './pages/ProcessPage';
-import { ContactPage } from './pages/ContactPage';
-import { BlogPage } from './pages/BlogPage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import { TermsPage } from './pages/TermsPage';
-import { ClientDashboardPage } from './pages/ClientDashboardPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
 import { ToastContainer } from './components/common/ToastContainer';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AuthModal } from './components/auth/AuthModal';
 import { ServiceItem, AndroidApp } from './types';
+
+// Code-split secondary pages and protected portals to minimize initial JS payload
+const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
+const ServicesPage = lazy(() => import('./pages/ServicesPage').then((m) => ({ default: m.ServicesPage })));
+const AiSolutionsPage = lazy(() => import('./pages/AiSolutionsPage').then((m) => ({ default: m.AiSolutionsPage })));
+const AndroidPortfolioPage = lazy(() => import('./pages/AndroidPortfolioPage').then((m) => ({ default: m.AndroidPortfolioPage })));
+const AppDetailPage = lazy(() => import('./pages/AppDetailPage').then((m) => ({ default: m.AppDetailPage })));
+const ProcessPage = lazy(() => import('./pages/ProcessPage').then((m) => ({ default: m.ProcessPage })));
+const ContactPage = lazy(() => import('./pages/ContactPage').then((m) => ({ default: m.ContactPage })));
+const BlogPage = lazy(() => import('./pages/BlogPage').then((m) => ({ default: m.BlogPage })));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })));
+const TermsPage = lazy(() => import('./pages/TermsPage').then((m) => ({ default: m.TermsPage })));
+const ClientDashboardPage = lazy(() => import('./pages/ClientDashboardPage').then((m) => ({ default: m.ClientDashboardPage })));
+const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
+
+function PageLoadingFallback() {
+  const { t } = useLanguage();
+  return (
+    <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-slate-600">
+      <div className="w-8 h-8 border-3 border-blue-700 border-t-transparent rounded-full animate-spin mb-3" />
+      <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
+        {t('Loading enterprise module...', 'एंटरप्राइज मॉड्यूल लोड हो रहा है...')}
+      </p>
+    </div>
+  );
+}
 
 function MainApp() {
   const { currentRoute, navigate } = useNavigation();
@@ -142,7 +156,7 @@ function MainApp() {
         setMobileMenuOpen={setMobileMenuOpen}
       />
 
-      {/* Mobile Navigation Drawer for 10 Public Pages */}
+      {/* Mobile Navigation Drawer */}
       <MobileMenu
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
@@ -150,7 +164,9 @@ function MainApp() {
       />
 
       {/* Main Page Flow depending on currentRoute */}
-      <main className="flex-1">{renderCurrentView()}</main>
+      <main className="flex-1">
+        <Suspense fallback={<PageLoadingFallback />}>{renderCurrentView()}</Suspense>
+      </main>
 
       {/* Professional Enterprise Footer */}
       <Footer />

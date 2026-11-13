@@ -95,7 +95,7 @@ export const ProcessSection: React.FC = () => {
 
                     <div>
                       <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-2.5">
-                        {t('Guaranteed Deliverables for this Phase', 'इस चरण के प्रमुख परिणाम')}
+                        {t('Key Deliverables for this Phase', 'इस चरण के प्रमुख परिणाम')}
                       </h4>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {(language === 'hi' ? step.deliverablesHi : step.deliverables).map(

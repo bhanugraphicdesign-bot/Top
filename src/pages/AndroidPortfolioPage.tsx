@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
+import { useAuth } from '../context/AuthContext';
 import { AndroidApp, AppCategory } from '../types';
 import { Smartphone, Check, ArrowRight, ExternalLink, ShieldCheck, Download, Search, Filter, Settings, Layers } from 'lucide-react';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
+import { ASSETS } from '../data/content';
 
 interface AndroidPortfolioPageProps {
   onOpenConsultation: () => void;
@@ -14,6 +16,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
   const { language, t } = useLanguage();
   const { navigate } = useNavigation();
   const { apps } = useApps();
+  const { isAdmin } = useAuth();
 
   const [selectedCategory, setSelectedCategory] = useState<AppCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,14 +85,16 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
               </p>
             </div>
 
-            {/* Admin Management Button (Extensible architecture requirement) */}
-            <button
-              onClick={() => setAdminModalOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors cursor-pointer shrink-0 shadow-2xs self-start md:self-auto"
-            >
-              <Settings className="w-3.5 h-3.5 text-blue-700" />
-              <span>{t('Admin: Manage Portfolio Apps', 'एडमिन: पोर्टफोलियो ऐप्स प्रबंधित करें')}</span>
-            </button>
+            {/* Admin Management Button (Verified Admin Only) */}
+            {isAdmin && (
+              <button
+                onClick={() => setAdminModalOpen(true)}
+                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors cursor-pointer shrink-0 shadow-2xs self-start md:self-auto"
+              >
+                <Settings className="w-3.5 h-3.5 text-blue-700" />
+                <span>{t('Admin: Manage Portfolio Apps', 'एडमिन: पोर्टफोलियो ऐप्स प्रबंधित करें')}</span>
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -193,8 +198,14 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                   </span>
                   <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-900 h-44 sm:h-52">
                     <img
-                      src={app.screenshots[0] || '/src/assets/images/app_screenshots_mockup_1794321883195.jpg'}
+                      src={
+                        app.screenshots[0] && !app.screenshots[0].startsWith('/src/assets/')
+                          ? app.screenshots[0]
+                          : ASSETS.appMockupImage
+                      }
                       alt={`${app.name} interface preview`}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -275,11 +286,13 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
         </div>
       </div>
 
-      {/* Admin App Manager Modal */}
-      <AdminAppManagerModal
-        isOpen={adminModalOpen}
-        onClose={() => setAdminModalOpen(false)}
-      />
+      {/* Admin App Manager Modal (Verified Admin Only) */}
+      {isAdmin && (
+        <AdminAppManagerModal
+          isOpen={adminModalOpen}
+          onClose={() => setAdminModalOpen(false)}
+        />
+      )}
     </div>
   );
 };

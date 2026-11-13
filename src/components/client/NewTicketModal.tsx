@@ -10,6 +10,7 @@ interface NewTicketModalProps {
   onClose: () => void;
   onSuccess: (ticket: any) => void;
   defaultProjectCode?: string;
+  isDemoSandbox?: boolean;
 }
 
 export const NewTicketModal: React.FC<NewTicketModalProps> = ({
@@ -17,6 +18,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   onClose,
   onSuccess,
   defaultProjectCode = 'PRJ-FLT-2026',
+  isDemoSandbox = false,
 }) => {
   const { language, t, showToast } = useLanguage();
 
@@ -51,6 +53,32 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     setSubmitting(true);
     try {
       const fullDetails = `[Project: ${formData.projectCode}] [Category: ${formData.category}] [Env: ${formData.environment}]\n\n${formData.details}`;
+
+      if (isDemoSandbox) {
+        const demoTicket = {
+          id: `DEMO-TKT-${Date.now().toString().slice(-5)}`,
+          subject: formData.subject,
+          priority: formData.priority,
+          category: formData.category,
+          projectCode: formData.projectCode,
+          environment: formData.environment,
+          details: fullDetails,
+          attachment: attachment || null,
+          responses: [],
+          status: 'open',
+          createdAt: new Date().toISOString(),
+        };
+        showToast(
+          language === 'hi'
+            ? `[डेमो सैंडबॉक्स] टिकट (${formData.priority}) केवल स्थानीय पूर्वावलोकन में जोड़ा गया। लाइव Firestore हेतु साइन इन करें।`
+            : `[Demo Sandbox] Ticket (${formData.priority}) added locally for preview. Sign in for live Firestore sync.`,
+          'info'
+        );
+        onSuccess(demoTicket);
+        onClose();
+        return;
+      }
+
       const ticketId = await createSupportTicket({
         subject: formData.subject,
         priority: formData.priority,
@@ -245,11 +273,11 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             <div className="p-3 bg-blue-50/70 rounded-lg border border-blue-200 text-xs text-blue-900 flex items-start gap-2">
               <Clock className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
               <div>
-                <strong>{t('Contractual SLA Guarantee:', 'अनुबंधित SLA गारंटी:')}</strong>{' '}
-                {formData.priority === 'P1_Critical' && t('On-call architect page sent immediately. First response within 15 minutes.', 'ऑन-कॉल आर्किटेक्ट को तत्काल पेज भेजा गया। 15 मिनट के भीतर प्रतिक्रिया।')}
-                {formData.priority === 'P2_High' && t('Senior Systems Engineer assigned. Guaranteed response within 2 hours.', 'वरिष्ठ सिस्टम इंजीनियर नियुक्त। 2 घंटे के भीतर गारंटीकृत प्रतिक्रिया।')}
-                {formData.priority === 'P3_Normal' && t('Standard engineering triage. Response within 8 hours.', 'मानक इंजीनियरिंग ट्राइएज। 8 घंटे के भीतर उत्तर।')}
-                {formData.priority === 'P4_Low' && t('Non-blocking request. Response within 24 hours.', 'गैर-अवरोधक अनुरोध। 24 घंटे के भीतर उत्तर।')}
+                <strong>{t('Target Triage Window (SOW-Scoped):', 'लक्षित प्रतिक्रिया समय (अनुबंधानुसार):')}</strong>{' '}
+                {formData.priority === 'P1_Critical' && t('On-call engineering escalation logged. Target response within 15 minutes (per SOW).', 'आपातकालीन सूचना दर्ज की गई। लक्षित प्रतिक्रिया 15 मिनट के भीतर (अनुबंधानुसार)।')}
+                {formData.priority === 'P2_High' && t('Priority triage queue. Target response within 2 hours (per SOW).', 'उच्च प्राथमिकता कतार। लक्षित प्रतिक्रिया 2 घंटे के भीतर (अनुबंधानुसार)।')}
+                {formData.priority === 'P3_Normal' && t('Standard engineering triage. Target response within 8 hours.', 'मानक इंजीनियरिंग समीक्षा। लक्षित उत्तर 8 घंटे के भीतर।')}
+                {formData.priority === 'P4_Low' && t('Non-blocking request. Target response within 24 hours.', 'सामान्य अनुरोध। लक्षित उत्तर 24 घंटे के भीतर।')}
               </div>
             </div>
 

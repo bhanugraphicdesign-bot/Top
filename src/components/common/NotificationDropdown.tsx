@@ -68,7 +68,7 @@ export const NotificationDropdown: React.FC = () => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2 text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+        className="relative min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 p-1.5 sm:p-2 flex items-center justify-center text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
         title={t('Notifications', 'सूचनाएं')}
         aria-label="View notifications"
         aria-expanded={isOpen}
@@ -76,15 +76,15 @@ export const NotificationDropdown: React.FC = () => {
       >
         <Bell className="w-4 h-4" />
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-black text-white ring-2 ring-white">
+          <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[9px] font-black text-white ring-2 ring-white">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Flyout Dropdown Menu */}
+      {/* Flyout Dropdown Menu (fixed inset on mobile so it never overflows left edge) */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-xl bg-white border border-slate-200 shadow-xl z-50 overflow-hidden text-left">
+        <div className="fixed inset-x-3 top-[68px] sm:inset-x-auto sm:top-full sm:absolute sm:right-0 sm:mt-2 sm:w-96 rounded-xl bg-white border border-slate-200 shadow-xl z-50 overflow-hidden text-left">
           {/* Header */}
           <div className="p-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -155,7 +155,7 @@ export const NotificationDropdown: React.FC = () => {
           {/* Footer */}
           <div className="p-2.5 bg-slate-50/70 border-t border-slate-100 text-center">
             <span className="text-[10px] text-slate-400 font-mono">
-              REAL-TIME DISPATCH · SOC-2 SECURE
+              IN-APP DISPATCH · ROLE-PROTECTED
             </span>
           </div>
         </div>

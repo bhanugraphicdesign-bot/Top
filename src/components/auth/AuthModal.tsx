@@ -339,7 +339,7 @@ export const AuthModal: React.FC = () => {
 
           <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>SOC-2 & DPDP Act Zero-Trust Session Verification</span>
+            <span>{t('Firebase Identity & Role-Based Session Verification', 'Firebase पहचान एवं भूमिका-आधारित सत्र सत्यापन')}</span>
           </div>
         </div>
       </div>

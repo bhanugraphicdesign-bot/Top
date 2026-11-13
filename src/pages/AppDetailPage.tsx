@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
 import { Smartphone, Check, ArrowLeft, ShieldCheck, Download, ExternalLink, Activity, Layers, Cpu, Play } from 'lucide-react';
+import { ASSETS } from '../data/content';
 
 interface AppDetailPageProps {
   onOpenConsultation: (service: string) => void;
@@ -159,8 +160,14 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
               </span>
               <div className="rounded-xl overflow-hidden border border-slate-300 shadow-lg bg-slate-900">
                 <img
-                  src={app.screenshots[0] || '/src/assets/images/app_screenshots_mockup_1794321883195.jpg'}
+                  src={
+                    app.screenshots[0] && !app.screenshots[0].startsWith('/src/assets/')
+                      ? app.screenshots[0]
+                      : ASSETS.appMockupImage
+                  }
                   alt={`${app.name} interface`}
+                  loading="lazy"
+                  decoding="async"
                   className="w-full h-80 sm:h-96 object-cover"
                   referrerPolicy="no-referrer"
                 />

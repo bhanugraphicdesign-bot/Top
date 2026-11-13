@@ -18,25 +18,59 @@ googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
 
+export interface FirestoreConnectionHealth {
+  connected: boolean;
+  checkedAt: string;
+  authLocked?: boolean;
+  error?: string;
+}
+
+export let lastFirestoreHealth: FirestoreConnectionHealth = {
+  connected: false,
+  checkedAt: '',
+};
+
 /**
- * Validate Live Cloud Firestore Connection
+ * Validate Live Cloud Firestore Connection.
+ * Since /test/{docId} enforces admin-only access (Zero Public Access),
+ * a server-returned 'permission-denied' confirms Cloud Firestore is online and rules are enforced,
+ * while 'unavailable' / offline errors accurately report connectivity failure.
  */
 export async function validateFirestoreConnection(): Promise<boolean> {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
+    lastFirestoreHealth = {
+      connected: true,
+      authLocked: false,
+      checkedAt: new Date().toISOString(),
+    };
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('[Firebase] Client is offline or database instance is unreachable.');
+  } catch (error: any) {
+    const code = error?.code || '';
+    const msg = error instanceof Error ? error.message : String(error);
+
+    if (code === 'permission-denied' || msg.includes('Missing or insufficient permissions')) {
+      lastFirestoreHealth = {
+        connected: true,
+        authLocked: true,
+        checkedAt: new Date().toISOString(),
+      };
+      return true;
     }
-    // Expected if test document does not exist yet; network handshake succeeded
-    return true;
+
+    console.warn('[Firebase] Live Cloud Firestore check failed:', msg);
+    lastFirestoreHealth = {
+      connected: false,
+      checkedAt: new Date().toISOString(),
+      error: msg,
+    };
+    return false;
   }
 }
 
 // Auto-run connection health check asynchronously on boot
 validateFirestoreConnection().catch((err) => {
-  console.info('[Firebase Handshake]', err?.message || err);
+  console.warn('[Firebase Handshake]', err?.message || err);
 });
 
 export default app;

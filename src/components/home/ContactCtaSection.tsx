@@ -45,7 +45,7 @@ export const ContactCtaSection: React.FC = () => {
 
     try {
       // 1. Validate against backend endpoint
-      await fetch('/api/inquiries/validate', {
+      const valRes = await fetch('/api/inquiries/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -54,7 +54,12 @@ export const ContactCtaSection: React.FC = () => {
           serviceType: formData.serviceType,
           brief: formData.projectBrief,
         }),
-      }).catch(() => null);
+      });
+
+      if (!valRes.ok) {
+        const errData = await valRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Validation failed (HTTP ${valRes.status})`);
+      }
 
       // 2. Submit to Cloud Firestore
       await submitQuotation({
@@ -78,10 +83,15 @@ export const ContactCtaSection: React.FC = () => {
 
       setSubmitted(true);
       showToast(dict.notifications.consultationBooked, 'success');
-    } catch (err) {
-      console.warn('[Contact Quote Fallback]', err);
-      setSubmitted(true);
-      showToast(dict.notifications.consultationBooked, 'success');
+    } catch (err: any) {
+      const msg =
+        err?.message ||
+        t(
+          'Unable to save architectural inquiry right now. Please verify your inputs and retry.',
+          'अनुरोध सहेजने में समस्या हुई। कृपया अपने विवरण जांचें और पुनः प्रयास करें।'
+        );
+      setErrorMsg(msg);
+      showToast(msg, 'alert');
     } finally {
       setSubmitting(false);
     }
@@ -156,32 +166,38 @@ export const ContactCtaSection: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="flex items-center gap-3 min-w-0">
                   <Phone className="w-5 h-5 text-blue-700 shrink-0" />
-                  <div>
+                  <div className="min-w-0">
                     <div className="text-xs font-bold text-slate-900">
-                      {t('Enterprise Hotline', 'एंटरप्राइज हेल्पलाइन')}
+                      {t('Mobile / Enterprise Hotline', 'मोबाइल / हेल्पलाइन नंबर')}
                     </div>
-                    <div className="text-xs text-slate-600 font-mono">
-                      {COMPANY_INFO.phone} · {COMPANY_INFO.directLine}
-                    </div>
+                    <a
+                      href={`tel:${COMPANY_INFO.phone.replace(/\s+/g, '')}`}
+                      className="text-xs text-slate-700 hover:text-blue-700 font-mono break-words inline-block"
+                    >
+                      {COMPANY_INFO.phone}
+                    </a>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  {t('24/7 Available', '24/7 उपलब्ध')}
+                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 shrink-0">
+                  {t('Direct Desk', 'सीधा संपर्क')}
                 </span>
               </div>
 
               <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-3">
                 <Mail className="w-5 h-5 text-blue-700 shrink-0" />
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs font-bold text-slate-900">
                     {t('Direct Engineering Inquiries', 'सीधा ईमेल संपर्क')}
                   </div>
-                  <div className="text-xs text-blue-700 font-mono font-medium">
+                  <a
+                    href={`mailto:${COMPANY_INFO.email}`}
+                    className="text-xs text-blue-700 hover:underline font-mono font-medium break-all inline-block"
+                  >
                     {COMPANY_INFO.email}
-                  </div>
+                  </a>
                 </div>
               </div>
             </div>
@@ -365,16 +381,16 @@ export const ContactCtaSection: React.FC = () => {
                     onRemove={() => setAttachment(null)}
                   />
 
-                  <div className="pt-2 flex items-center justify-between">
+                  <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <span className="text-xs text-slate-500">
-                      {t('Zero spam guarantee · Direct architect response', 'शून्य स्पैम गारंटी · सीधा आर्किटेक्ट जवाब')}
+                      {t('No marketing spam · Direct architect response', 'कोई स्पैम नहीं · सीधा आर्किटेक्ट जवाब')}
                     </span>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="flex items-center gap-2 px-6 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
-                      <Send className="w-3.5 h-3.5" />
+                      <Send className="w-3.5 h-3.5 shrink-0" />
                       <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Request Architectural Scoping', 'आर्किटेक्चर स्कोप का अनुरोध करें')}</span>
                     </button>
                   </div>

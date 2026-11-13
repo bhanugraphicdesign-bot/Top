@@ -11,13 +11,14 @@ import {
   orderBy,
   limit,
   serverTimestamp,
-  Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from './config';
 import { handleFirestoreError, OperationType } from './errorHandler';
 import { AndroidApp, BlogPost, ServiceItem, AppNotification } from '../types';
 import { INITIAL_ANDROID_APPS, SERVICES_DATA } from '../data/content';
 import { BLOG_POSTS } from '../data/blogData';
+
+const ROOT_ADMIN_EMAIL = 'ssbhanu41@gmail.com';
 
 export const COLLECTIONS = {
   USERS: 'users',
@@ -37,34 +38,54 @@ export const COLLECTIONS = {
   SITE_SETTINGS: 'site_settings',
 } as const;
 
+function clampStr(val: string | undefined | null, maxLen: number): string {
+  return String(val || '').trim().slice(0, maxLen);
+}
+
+async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) return false;
+  if (
+    currentUser.emailVerified === true &&
+    currentUser.email?.toLowerCase() === ROOT_ADMIN_EMAIL
+  ) {
+    return true;
+  }
+  const role = await fetchUserRole(currentUser.uid);
+  return role === 'admin';
+}
+
 /* =========================================================================
    1. AUDIT LOGGING (SECURITY & ACCOUNTABILITY)
    ========================================================================= */
 export async function logAuditEvent(action: string, resource: string, details: string) {
   const path = COLLECTIONS.AUDIT_LOGS;
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return;
+  }
   try {
     const logId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const currentUser = auth.currentUser;
     await setDoc(doc(db, path, logId), {
       id: logId,
-      actorId: currentUser?.uid || 'system_anonymous',
-      actorEmail: currentUser?.email || 'anonymous@guest.io',
-      action,
-      resource,
-      details,
+      actorId: currentUser.uid,
+      actorEmail: clampStr(currentUser.email || 'verified-user', 160),
+      action: clampStr(action, 100),
+      resource: clampStr(resource, 200),
+      details: clampStr(details, 1000),
       ipAddress: 'client-verified',
       timestamp: new Date().toISOString(),
       createdAt: serverTimestamp(),
     });
   } catch (error) {
-    // Audit logging should not crash the primary UX flow if permissions deny
+    // Audit logging should not break primary UX flow if offline or restricted
     console.warn('[Audit Log Failed]', error);
   }
 }
 
 export async function getAuditLogs(limitCount = 20) {
   const path = COLLECTIONS.AUDIT_LOGS;
-  if (!auth.currentUser) {
+  if (!(await isCurrentUserVerifiedAdmin())) {
     return [];
   }
   try {
@@ -77,7 +98,7 @@ export async function getAuditLogs(limitCount = 20) {
 }
 
 /* =========================================================================
-   2. USERS & ROLES
+   2. USERS & ROLES (ZERO CLIENT-SIDE ROLE ESCALATION)
    ========================================================================= */
 export async function syncUserAccount(user: {
   uid: string;
@@ -86,36 +107,38 @@ export async function syncUserAccount(user: {
   photoURL: string | null;
 }) {
   const path = COLLECTIONS.USERS;
+  if (!auth.currentUser || auth.currentUser.uid !== user.uid) {
+    return;
+  }
   try {
     const userRef = doc(db, path, user.uid);
     const existing = await getDoc(userRef);
 
-    const payload = {
-      uid: user.uid,
-      email: user.email || '',
-      displayName: user.displayName || 'Enterprise User',
-      photoURL: user.photoURL || '',
-      lastLoginAt: new Date().toISOString(),
-    };
+    const safeEmail = clampStr(user.email || `${user.uid}@user.local`, 160);
+    const safeDisplayName = clampStr(user.displayName || 'Enterprise User', 160);
+    const safePhoto = clampStr(user.photoURL, 500);
+    const nowIso = new Date().toISOString();
 
     if (!existing.exists()) {
       await setDoc(userRef, {
-        ...payload,
-        createdAt: new Date().toISOString(),
-      });
-      // Check if root admin bootstrap
-      const isAdminEmail = user.email === 'ssbhanu41@gmail.com';
-      await setDoc(doc(db, COLLECTIONS.USER_ROLES, user.uid), {
         uid: user.uid,
-        role: isAdminEmail ? 'admin' : 'client',
-        assignedBy: 'system_bootstrap',
-        assignedAt: new Date().toISOString(),
+        email: safeEmail,
+        displayName: safeDisplayName,
+        photoURL: safePhoto,
+        createdAt: nowIso,
+        lastLoginAt: nowIso,
       });
+      // NOTE: Never write /user_roles from non-admin client signup.
+      // Rules restrict /user_roles to verified Admins; fetchUserRole defaults to 'client'.
     } else {
-      await updateDoc(userRef, payload);
+      await updateDoc(userRef, {
+        displayName: safeDisplayName,
+        photoURL: safePhoto,
+        lastLoginAt: nowIso,
+      });
     }
 
-    await logAuditEvent('USER_LOGIN_SYNC', `users/${user.uid}`, `User synced: ${user.email}`);
+    await logAuditEvent('USER_LOGIN_SYNC', `users/${user.uid}`, `User synced: ${safeEmail}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -123,6 +146,7 @@ export async function syncUserAccount(user: {
 
 export async function fetchUserRole(uid: string): Promise<string> {
   const path = COLLECTIONS.USER_ROLES;
+  if (!auth.currentUser) return 'client';
   try {
     const roleDoc = await getDoc(doc(db, path, uid));
     if (roleDoc.exists()) {
@@ -153,6 +177,9 @@ export async function fetchFirestoreApps(): Promise<AndroidApp[]> {
 
 export async function saveFirestoreApp(app: AndroidApp) {
   const path = COLLECTIONS.APPS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator authentication required to modify portfolio apps.');
+  }
   try {
     await setDoc(doc(db, path, app.id), {
       ...app,
@@ -166,6 +193,9 @@ export async function saveFirestoreApp(app: AndroidApp) {
 
 export async function deleteFirestoreApp(appId: string) {
   const path = COLLECTIONS.APPS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator authentication required to delete portfolio apps.');
+  }
   try {
     await deleteDoc(doc(db, path, appId));
     await logAuditEvent('APP_DELETED', `apps/${appId}`, `Deleted app ${appId}`);
@@ -198,31 +228,40 @@ export async function submitQuotation(data: {
     const quoteId = `quote-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const payload = {
       id: quoteId,
-      clientName: data.fullName,
-      clientEmail: data.email,
-      phone: data.phone || '',
-      company: data.company || '',
-      serviceType: data.serviceType,
-      timeline: data.timeline || '3-6-months',
-      estimatedBudget: data.budget || 'enterprise',
-      brief: data.brief || '',
-      attachment: data.attachment || null,
+      clientName: clampStr(data.fullName, 160),
+      clientEmail: clampStr(data.email, 160).toLowerCase(),
+      phone: clampStr(data.phone, 40),
+      company: clampStr(data.company, 160),
+      serviceType: clampStr(data.serviceType, 160),
+      timeline: clampStr(data.timeline || '3-6-months', 64),
+      estimatedBudget: clampStr(data.budget || 'enterprise', 80),
+      brief: clampStr(data.brief, 3000),
+      attachment: data.attachment
+        ? {
+            fileUrl: clampStr(data.attachment.fileUrl, 300),
+            fileName: clampStr(data.attachment.fileName, 200),
+            sha256: clampStr(data.attachment.sha256, 128),
+            fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
+          }
+        : null,
       status: 'pending',
       createdAt: new Date().toISOString(),
     };
 
     await setDoc(doc(db, path, quoteId), payload);
-    await logAuditEvent('QUOTATION_SUBMITTED', `quotations/${quoteId}`, `Submitted by ${data.email}`);
+    if (auth.currentUser) {
+      await logAuditEvent('QUOTATION_SUBMITTED', `quotations/${quoteId}`, `Submitted by ${payload.clientEmail}`);
 
-    // Dispatch real-time in-app notification to administrators
-    await createNotification({
-      title: `New Scoping Proposal: ${data.fullName}`,
-      titleHi: `नया तकनीकी परामर्श अनुरोध: ${data.fullName}`,
-      message: `${data.serviceType} | ${data.company || 'Enterprise Client'} (${data.budget || 'Custom'})`,
-      messageHi: `${data.serviceType} | ${data.company || 'एंटरप्राइज क्लाइंट'}`,
-      type: 'quote',
-      linkRoute: 'admin-dashboard',
-    });
+      await createNotification({
+        userId: auth.currentUser.uid,
+        title: `New Scoping Proposal: ${payload.clientName}`,
+        titleHi: `नया तकनीकी परामर्श अनुरोध: ${payload.clientName}`,
+        message: `${payload.serviceType} | ${payload.company || 'Enterprise Client'} (${payload.estimatedBudget || 'Custom'})`,
+        messageHi: `${payload.serviceType} | ${payload.company || 'एंटरप्राइज क्लाइंट'}`,
+        type: 'quote',
+        linkRoute: 'client-dashboard',
+      });
+    }
 
     return quoteId;
   } catch (error) {
@@ -232,7 +271,7 @@ export async function submitQuotation(data: {
 
 export async function fetchAllQuotations() {
   const path = COLLECTIONS.QUOTATIONS;
-  if (!auth.currentUser) return [];
+  if (!(await isCurrentUserVerifiedAdmin())) return [];
   try {
     const snap = await getDocs(collection(db, path));
     return snap.docs.map((d) => d.data());
@@ -243,6 +282,9 @@ export async function fetchAllQuotations() {
 
 export async function updateQuotationStatus(quoteId: string, status: string) {
   const path = COLLECTIONS.QUOTATIONS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await updateDoc(doc(db, path, quoteId), {
       status,
@@ -259,9 +301,12 @@ export async function updateQuotationStatus(quoteId: string, status: string) {
    ========================================================================= */
 export async function fetchProjectsForClient(clientId: string) {
   const path = COLLECTIONS.PROJECTS;
-  if (!auth.currentUser) return [];
+  const currentUser = auth.currentUser;
+  if (!currentUser) return [];
+  const isAdmin = await isCurrentUserVerifiedAdmin();
+  const targetClientId = isAdmin ? clientId : currentUser.uid;
   try {
-    const q = query(collection(db, path), where('clientId', '==', clientId));
+    const q = query(collection(db, path), where('clientId', '==', targetClientId));
     const snap = await getDocs(q);
     return snap.docs.map((d) => d.data());
   } catch (error) {
@@ -271,7 +316,7 @@ export async function fetchProjectsForClient(clientId: string) {
 
 export async function fetchAllProjects() {
   const path = COLLECTIONS.PROJECTS;
-  if (!auth.currentUser) return [];
+  if (!(await isCurrentUserVerifiedAdmin())) return [];
   try {
     const snap = await getDocs(collection(db, path));
     return snap.docs.map((d) => d.data());
@@ -298,33 +343,43 @@ export async function createSupportTicket(data: {
   };
 }) {
   const path = COLLECTIONS.SUPPORT_TICKETS;
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    throw new Error('Authentication required to dispatch support tickets to Cloud Firestore.');
+  }
   try {
     const ticketId = `tkt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const currentUser = auth.currentUser;
     const payload = {
       id: ticketId,
-      clientId: currentUser?.uid || 'client_anonymous',
-      clientEmail: currentUser?.email || 'enterprise-client@kalingalogistics.in',
-      subject: data.subject,
+      clientId: currentUser.uid,
+      clientEmail: clampStr(currentUser.email || 'verified-client@enterprise.in', 160),
+      subject: clampStr(data.subject, 240),
       priority: data.priority,
-      category: data.category || 'General SLA Support',
-      projectCode: data.projectCode || 'PRJ-FLT-2026',
-      environment: data.environment || 'Android 14 / Enterprise Fleet',
-      details: data.details,
-      attachment: data.attachment || null,
+      category: clampStr(data.category || 'General SLA Support', 120),
+      projectCode: clampStr(data.projectCode || 'PRJ-FLT-2026', 64),
+      environment: clampStr(data.environment || 'Android 14 / Enterprise Fleet', 160),
+      details: clampStr(data.details, 5000),
+      attachment: data.attachment
+        ? {
+            fileUrl: clampStr(data.attachment.fileUrl, 300),
+            fileName: clampStr(data.attachment.fileName, 200),
+            sha256: clampStr(data.attachment.sha256, 128),
+            fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
+          }
+        : null,
       responses: [],
       status: 'open',
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, path, ticketId), payload);
-    await logAuditEvent('TICKET_CREATED', `support_tickets/${ticketId}`, `Created ticket ${data.subject}`);
+    await logAuditEvent('TICKET_CREATED', `support_tickets/${ticketId}`, `Created ticket ${payload.subject}`);
 
-    // Dispatch real-time SLA notification
     await createNotification({
-      title: `[${data.priority}] Priority Ticket: ${data.subject}`,
-      titleHi: `[${data.priority}] प्राथमिकता टिकट: ${data.subject}`,
-      message: `${data.category || 'Technical Support'} | Project ${data.projectCode || 'Enterprise'}`,
-      messageHi: `${data.category || 'तकनीकी सहायता'} | प्रोजेक्ट ${data.projectCode || 'एंटरप्राइज'}`,
+      userId: currentUser.uid,
+      title: `[${data.priority}] Priority Ticket: ${payload.subject}`,
+      titleHi: `[${data.priority}] प्राथमिकता टिकट: ${payload.subject}`,
+      message: `${payload.category} | Project ${payload.projectCode}`,
+      messageHi: `${payload.category} | प्रोजेक्ट ${payload.projectCode}`,
       type: 'ticket',
       linkRoute: 'client-dashboard',
     });
@@ -343,8 +398,8 @@ export async function fetchSupportTickets(clientId?: string) {
   }
 
   try {
-    const isRootAdmin = currentUser.email === 'ssbhanu41@gmail.com';
-    const effectiveClientId = clientId || (!isRootAdmin ? currentUser.uid : undefined);
+    const isVerifiedAdmin = await isCurrentUserVerifiedAdmin();
+    const effectiveClientId = isVerifiedAdmin ? clientId : currentUser.uid;
 
     let q;
     if (effectiveClientId) {
@@ -361,6 +416,9 @@ export async function fetchSupportTickets(clientId?: string) {
 
 export async function updateSupportTicketStatus(ticketId: string, status: 'open' | 'in_progress' | 'resolved') {
   const path = COLLECTIONS.SUPPORT_TICKETS;
+  if (!auth.currentUser) {
+    throw new Error('Authentication required.');
+  }
   try {
     await updateDoc(doc(db, path, ticketId), {
       status,
@@ -373,16 +431,18 @@ export async function updateSupportTicketStatus(ticketId: string, status: 'open'
 }
 
 /* =========================================================================
-   7. INITIAL DATABASE SEEDER (POPULATE 15 COLLECTIONS IF EMPTY)
+   7. ADMIN DATABASE SEEDER (VERIFIED ADMIN ONLY — NEVER UNAUTHENTICATED)
    ========================================================================= */
 export async function seedInitialDatabaseIfEmpty() {
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    return { seeded: false, reason: 'admin_auth_required' };
+  }
   try {
     const appsSnap = await getDocs(collection(db, COLLECTIONS.APPS));
     if (!appsSnap.empty) {
       return { seeded: false, count: appsSnap.size };
     }
 
-    // 1. Seed Android Apps
     for (const app of INITIAL_ANDROID_APPS) {
       await setDoc(doc(db, COLLECTIONS.APPS, app.id), {
         ...app,
@@ -390,7 +450,6 @@ export async function seedInitialDatabaseIfEmpty() {
       });
     }
 
-    // 2. Seed Categories
     const categories = [
       { id: 'cat-biz', name: 'Business Apps', nameHi: 'बिजनेस ऐप्स', description: 'Enterprise operations, billing, and sales force automation.' },
       { id: 'cat-edu', name: 'Education Apps', nameHi: 'शिक्षा ऐप्स', description: 'EdTech platforms, offline learning modules, and assessment engines.' },
@@ -404,7 +463,6 @@ export async function seedInitialDatabaseIfEmpty() {
       await setDoc(doc(db, COLLECTIONS.APP_CATEGORIES, cat.id), cat);
     }
 
-    // 3. Seed Site Settings
     await setDoc(doc(db, COLLECTIONS.SITE_SETTINGS, 'global_config'), {
       id: 'global_config',
       companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
@@ -416,16 +474,7 @@ export async function seedInitialDatabaseIfEmpty() {
       updatedAt: new Date().toISOString(),
     });
 
-    // 4. Seed Root Admin Role
-    await setDoc(doc(db, COLLECTIONS.USER_ROLES, 'root-admin'), {
-      uid: 'root-admin',
-      role: 'admin',
-      assignedBy: 'system_bootstrap',
-      assignedAt: new Date().toISOString(),
-      targetEmail: 'ssbhanu41@gmail.com',
-    });
-
-    await logAuditEvent('DATABASE_SEEDED', 'system', 'Populated initial 15 collections');
+    await logAuditEvent('DATABASE_SEEDED', 'system', 'Populated initial catalog & settings collections');
     return { seeded: true, count: INITIAL_ANDROID_APPS.length };
   } catch (error) {
     console.warn('[Database Seeding Warning]', error);
@@ -434,11 +483,11 @@ export async function seedInitialDatabaseIfEmpty() {
 }
 
 /* =========================================================================
-   8. CUSTOMER & USER MANAGEMENT
+   8. CUSTOMER & USER MANAGEMENT (ADMIN-ONLY)
    ========================================================================= */
 export async function fetchAllUsers(): Promise<any[]> {
   const path = COLLECTIONS.USERS;
-  if (!auth.currentUser) return [];
+  if (!(await isCurrentUserVerifiedAdmin())) return [];
   try {
     const snap = await getDocs(collection(db, path));
     const usersList: any[] = [];
@@ -455,6 +504,9 @@ export async function fetchAllUsers(): Promise<any[]> {
 
 export async function updateUserRole(userId: string, newRole: 'admin' | 'client' | 'manager' | 'architect') {
   const path = COLLECTIONS.USER_ROLES;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Verified administrator privilege required to modify roles.');
+  }
   try {
     await setDoc(doc(db, path, userId), {
       uid: userId,
@@ -477,13 +529,16 @@ export async function saveClientRecord(userData: {
   role?: 'admin' | 'client';
 }) {
   const path = COLLECTIONS.USERS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await setDoc(doc(db, path, userData.uid), {
       uid: userData.uid,
-      email: userData.email,
-      displayName: userData.displayName,
-      companyName: userData.companyName || '',
-      phone: userData.phone || '',
+      email: clampStr(userData.email, 160),
+      displayName: clampStr(userData.displayName, 160),
+      companyName: clampStr(userData.companyName, 160),
+      phone: clampStr(userData.phone, 40),
       createdAt: new Date().toISOString(),
       lastLoginAt: new Date().toISOString(),
     }, { merge: true });
@@ -498,10 +553,13 @@ export async function saveClientRecord(userData: {
 }
 
 /* =========================================================================
-   9. PROJECT & SPRINT MANAGEMENT
+   9. PROJECT & SPRINT MANAGEMENT (ADMIN-ONLY)
    ========================================================================= */
 export async function saveProject(project: any) {
   const path = COLLECTIONS.PROJECTS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await setDoc(doc(db, path, project.id), {
       ...project,
@@ -515,6 +573,9 @@ export async function saveProject(project: any) {
 
 export async function deleteProject(projectId: string) {
   const path = COLLECTIONS.PROJECTS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await deleteDoc(doc(db, path, projectId));
     await logAuditEvent('PROJECT_DELETED', `projects/${projectId}`, `Deleted project ${projectId}`);
@@ -542,6 +603,9 @@ export async function fetchServicesCatalog(): Promise<ServiceItem[]> {
 
 export async function saveServiceItem(service: ServiceItem) {
   const path = 'services';
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await setDoc(doc(db, path, service.id), {
       ...service,
@@ -555,6 +619,9 @@ export async function saveServiceItem(service: ServiceItem) {
 
 export async function deleteServiceItem(serviceId: string) {
   const path = 'services';
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await deleteDoc(doc(db, path, serviceId));
     await logAuditEvent('SERVICE_DELETED', `services/${serviceId}`, `Deleted service ${serviceId}`);
@@ -564,10 +631,13 @@ export async function deleteServiceItem(serviceId: string) {
 }
 
 /* =========================================================================
-   11. QUOTATION & COMMERCIAL ESTIMATES MANAGEMENT
+   11. QUOTATION & COMMERCIAL ESTIMATES MANAGEMENT (ADMIN-ONLY MUTATIONS)
    ========================================================================= */
 export async function saveQuotation(quote: any) {
   const path = COLLECTIONS.QUOTATIONS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await setDoc(doc(db, path, quote.id), {
       ...quote,
@@ -581,6 +651,9 @@ export async function saveQuotation(quote: any) {
 
 export async function deleteQuotation(quoteId: string) {
   const path = COLLECTIONS.QUOTATIONS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await deleteDoc(doc(db, path, quoteId));
     await logAuditEvent('QUOTATION_DELETED', `quotations/${quoteId}`, `Deleted quote ${quoteId}`);
@@ -608,6 +681,9 @@ export async function fetchBlogPosts(): Promise<BlogPost[]> {
 
 export async function saveBlogPost(post: BlogPost) {
   const path = 'blog_posts';
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await setDoc(doc(db, path, post.id), {
       ...post,
@@ -621,6 +697,9 @@ export async function saveBlogPost(post: BlogPost) {
 
 export async function deleteBlogPost(postId: string) {
   const path = 'blog_posts';
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await deleteDoc(doc(db, path, postId));
     await logAuditEvent('BLOG_DELETED', `blog_posts/${postId}`, `Deleted blog post ${postId}`);
@@ -645,6 +724,9 @@ export async function fetchSiteSettings(): Promise<any> {
 
 export async function saveSiteSettings(settings: any) {
   const path = COLLECTIONS.SITE_SETTINGS;
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required.');
+  }
   try {
     await setDoc(doc(db, path, 'global_config'), {
       ...settings,
@@ -670,18 +752,22 @@ export async function createNotification(notif: {
   linkParams?: Record<string, string>;
 }) {
   const path = COLLECTIONS.NOTIFICATIONS;
+  const currentUser = auth.currentUser;
+  if (!currentUser) return undefined;
   try {
     const notifId = `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const isAdmin = await isCurrentUserVerifiedAdmin();
+    const targetUserId = isAdmin && notif.userId ? notif.userId : currentUser.uid;
     const payload = {
       id: notifId,
-      userId: notif.userId || 'broadcast_all',
-      title: notif.title,
-      titleHi: notif.titleHi,
-      message: notif.message,
-      messageHi: notif.messageHi,
-      type: notif.type,
+      userId: targetUserId,
+      title: clampStr(notif.title, 200),
+      titleHi: clampStr(notif.titleHi, 200),
+      message: clampStr(notif.message, 600),
+      messageHi: clampStr(notif.messageHi, 600),
+      type: clampStr(notif.type, 40),
       read: false,
-      linkRoute: notif.linkRoute || 'home',
+      linkRoute: clampStr(notif.linkRoute || 'home', 64),
       linkParams: notif.linkParams || {},
       createdAt: new Date().toISOString(),
     };
@@ -694,14 +780,21 @@ export async function createNotification(notif: {
 
 export async function fetchNotifications(userId?: string): Promise<AppNotification[]> {
   const path = COLLECTIONS.NOTIFICATIONS;
+  if (!auth.currentUser) {
+    return [];
+  }
   try {
-    const snap = await getDocs(query(collection(db, path), orderBy('createdAt', 'desc'), limit(30)));
+    const effectiveUid = auth.currentUser.uid;
+    const targetUid = userId === effectiveUid ? effectiveUid : effectiveUid;
+    const snap = await getDocs(
+      query(collection(db, path), where('userId', 'in', [targetUid, 'broadcast_all']), limit(30))
+    );
     if (snap.empty) {
       return [];
     }
     return snap.docs
       .map((d) => d.data() as AppNotification)
-      .filter((n) => !userId || n.userId === 'broadcast_all' || n.userId === userId);
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   } catch (error) {
     console.warn('[fetchNotifications fallback]', error);
     return [];
@@ -710,6 +803,7 @@ export async function fetchNotifications(userId?: string): Promise<AppNotificati
 
 export async function markNotificationAsRead(notifId: string) {
   const path = COLLECTIONS.NOTIFICATIONS;
+  if (!auth.currentUser) return;
   try {
     await updateDoc(doc(db, path, notifId), {
       read: true,
@@ -722,10 +816,11 @@ export async function markNotificationAsRead(notifId: string) {
 
 export async function markAllNotificationsAsRead(userId?: string) {
   const path = COLLECTIONS.NOTIFICATIONS;
+  if (!auth.currentUser) return;
   try {
     const notifs = await fetchNotifications(userId);
     for (const n of notifs) {
-      if (!n.read) {
+      if (!n.read && n.userId === auth.currentUser.uid) {
         await updateDoc(doc(db, path, n.id), { read: true });
       }
     }
@@ -747,6 +842,9 @@ export async function addTicketResponse(
   }
 ) {
   const path = COLLECTIONS.SUPPORT_TICKETS;
+  if (!auth.currentUser) {
+    throw new Error('Authentication required to reply to support tickets.');
+  }
   try {
     const ticketRef = doc(db, path, ticketId);
     const snap = await getDoc(ticketRef);
@@ -754,12 +852,12 @@ export async function addTicketResponse(
       throw new Error(`Ticket ${ticketId} not found`);
     }
     const currentData = snap.data();
-    const existingReplies = currentData.responses || [];
+    const existingReplies = Array.isArray(currentData.responses) ? currentData.responses : [];
     const newReply = {
       id: `resp-${Date.now()}`,
-      author: reply.author,
-      authorRole: reply.authorRole,
-      message: reply.message,
+      author: clampStr(reply.author, 120),
+      authorRole: clampStr(reply.authorRole, 120),
+      message: clampStr(reply.message, 2000),
       timestamp: new Date().toISOString(),
     };
 
@@ -774,14 +872,14 @@ export async function addTicketResponse(
     }
 
     await updateDoc(ticketRef, updates);
-    await logAuditEvent('TICKET_REPLIED', `support_tickets/${ticketId}`, `Reply by ${reply.author}`);
+    await logAuditEvent('TICKET_REPLIED', `support_tickets/${ticketId}`, `Reply by ${newReply.author}`);
 
     await createNotification({
       userId: currentData.clientId,
-      title: `Architect Response on Ticket #${ticketId}`,
-      titleHi: `टिकट #${ticketId} पर आर्किटेक्ट का जवाब`,
-      message: `${reply.author}: "${reply.message.substring(0, 80)}..."`,
-      messageHi: `${reply.author}: "${reply.message.substring(0, 80)}..."`,
+      title: `Response on Ticket #${ticketId}`,
+      titleHi: `टिकट #${ticketId} पर प्रतिक्रिया`,
+      message: `${newReply.author}: "${newReply.message.substring(0, 80)}..."`,
+      messageHi: `${newReply.author}: "${newReply.message.substring(0, 80)}..."`,
       type: 'ticket',
       linkRoute: 'client-dashboard',
     });
@@ -791,4 +889,3 @@ export async function addTicketResponse(
     handleFirestoreError(error, OperationType.UPDATE, `${path}/${ticketId}`);
   }
 }
-

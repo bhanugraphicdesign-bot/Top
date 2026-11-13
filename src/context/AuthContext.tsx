@@ -10,7 +10,9 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
-import { syncUserAccount, fetchUserRole, logAuditEvent, seedInitialDatabaseIfEmpty } from '../firebase/services';
+import { syncUserAccount, fetchUserRole, logAuditEvent } from '../firebase/services';
+
+const ROOT_ADMIN_EMAIL = 'ssbhanu41@gmail.com';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -46,11 +48,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
-  // Listen to Firebase Auth state
+  // Listen to Firebase Auth state (never grants admin without verified email or Firestore role)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
+        const isVerifiedRootAdmin =
+          user.emailVerified === true &&
+          user.email?.toLowerCase() === ROOT_ADMIN_EMAIL;
+
         try {
           await syncUserAccount({
             uid: user.uid,
@@ -59,23 +65,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             photoURL: user.photoURL,
           });
 
-          // Check if admin: either root admin email or stored role
-          const isRootEmail = user.email === 'ssbhanu41@gmail.com';
           const role = await fetchUserRole(user.uid);
-          setUserRole(isRootEmail || role === 'admin' ? 'admin' : 'client');
+          setUserRole(isVerifiedRootAdmin || role === 'admin' ? 'admin' : 'client');
         } catch (err) {
           console.warn('[Auth Sync Warning]', err);
-          const isRootEmail = user.email === 'ssbhanu41@gmail.com';
-          setUserRole(isRootEmail ? 'admin' : 'client');
+          setUserRole(isVerifiedRootAdmin ? 'admin' : 'client');
         }
       } else {
         setUserRole('client');
       }
       setIsAuthReady(true);
     });
-
-    // Seed database on boot in background if empty
-    seedInitialDatabaseIfEmpty().catch(console.warn);
 
     return () => unsubscribe();
   }, []);

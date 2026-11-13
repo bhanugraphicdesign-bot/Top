@@ -52,17 +52,23 @@ export const Header: React.FC<HeaderProps> = ({
           : 'bg-white border-b border-slate-100'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-4 lg:gap-8 h-20">
-          {/* Zone 1: Brand Wordmark */}
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-2 sm:gap-4 lg:gap-8 h-16 sm:h-20">
+          {/* Zone 1: Brand Wordmark (compact 2-line on narrow mobile, single line from sm up) */}
           <button
             onClick={(e) => handleNavClick(e, 'home')}
-            className="text-lg sm:text-2xl font-extrabold tracking-tight text-slate-950 whitespace-nowrap shrink-0 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 rounded-sm"
+            type="button"
+            className="text-xs leading-[1.15] sm:text-xl lg:text-2xl sm:leading-none font-extrabold tracking-tight text-slate-950 sm:whitespace-nowrap shrink-0 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 rounded-sm py-1"
           >
-            <span className="text-blue-700">POWER</span> WEB STUDIO <span className="text-blue-600">AI</span>
+            <span className="block sm:inline">
+              <span className="text-blue-700">POWER</span> WEB{' '}
+            </span>
+            <span className="block sm:inline">
+              STUDIO <span className="text-blue-600">AI</span>
+            </span>
           </button>
 
-          {/* Zone 2: Navigation Links */}
+          {/* Zone 2: Navigation Links (Desktop >= lg) */}
           <nav className="hidden lg:flex items-center gap-5 text-sm font-semibold text-slate-600">
             {navItems.map((item) => (
               <a
@@ -80,20 +86,20 @@ export const Header: React.FC<HeaderProps> = ({
             ))}
           </nav>
 
-          {/* Zone 3: Language Switcher + Client Portal + Primary Action + Mobile Trigger */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          {/* Zone 3: Language Switcher + Notifications + Client Portal + Auth + Primary CTA + Mobile Trigger */}
+          <div className="flex items-center gap-1 min-[390px]:gap-1.5 sm:gap-2.5 shrink-0">
             {/* Segmented Bilingual Switcher */}
             <div
               role="radiogroup"
               aria-label="Language Selector"
-              className="flex items-center border border-slate-200 rounded-md p-0.5 bg-slate-50 text-xs font-bold shadow-2xs"
+              className="flex items-center border border-slate-200 rounded-md p-0.5 bg-slate-50 text-[11px] sm:text-xs font-bold shadow-2xs shrink-0"
             >
               <button
                 type="button"
                 role="radio"
                 aria-checked={language === 'hi'}
                 onClick={() => setLanguage('hi')}
-                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
+                className={`min-h-[34px] sm:min-h-0 px-1.5 sm:px-2.5 py-1 rounded transition-all cursor-pointer whitespace-nowrap ${
                   language === 'hi'
                     ? 'bg-blue-700 text-white shadow-xs'
                     : 'text-slate-600 hover:text-blue-700'
@@ -107,7 +113,7 @@ export const Header: React.FC<HeaderProps> = ({
                 role="radio"
                 aria-checked={language === 'en'}
                 onClick={() => setLanguage('en')}
-                className={`px-2.5 py-1 rounded transition-all cursor-pointer ${
+                className={`min-h-[34px] sm:min-h-0 px-1.5 sm:px-2.5 py-1 rounded transition-all cursor-pointer whitespace-nowrap ${
                   language === 'en'
                     ? 'bg-blue-700 text-white shadow-xs'
                     : 'text-slate-600 hover:text-blue-700'
@@ -121,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* In-App Enterprise Notifications Dropdown */}
             <NotificationDropdown />
 
-            {/* Client Portal Link */}
+            {/* Client Portal Link (tablet/desktop; also in MobileMenu on small screens) */}
             <button
               onClick={(e) => handleNavClick(e, 'client-dashboard')}
               type="button"
@@ -136,22 +142,24 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Authentication State / Action */}
             {currentUser ? (
-              <div className="flex items-center gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md px-2.5 py-1 text-xs">
-                <div className="flex items-center gap-1.5 font-semibold text-slate-800">
-                  <User className="w-3.5 h-3.5 text-blue-700" />
-                  <span className="max-w-[100px] truncate sm:max-w-[140px]">
+              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md px-1.5 sm:px-2.5 py-1 text-xs min-h-[36px] sm:min-h-0">
+                <div className="flex items-center gap-1 sm:gap-1.5 font-semibold text-slate-800">
+                  <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                  <span className="hidden min-[380px]:inline max-w-[46px] min-[430px]:max-w-[70px] sm:max-w-[140px] truncate">
                     {currentUser.displayName || currentUser.email?.split('@')[0]}
                   </span>
                   {isAdmin && (
-                    <span className="text-[10px] font-black uppercase tracking-wider bg-blue-700 text-white px-1.5 py-0.2 rounded">
+                    <span className="hidden sm:inline text-[10px] font-black uppercase tracking-wider bg-blue-700 text-white px-1.5 py-0.2 rounded">
                       Admin
                     </span>
                   )}
                 </div>
                 <button
                   onClick={logout}
+                  type="button"
+                  aria-label={t('Sign Out', 'लॉग आउट')}
                   title={t('Sign Out', 'लॉग आउट')}
-                  className="p-1 text-slate-400 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                  className="p-1 text-slate-500 hover:text-rose-600 rounded transition-colors cursor-pointer"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -160,14 +168,14 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={() => openAuthModal('login')}
                 type="button"
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-md transition-all cursor-pointer whitespace-nowrap"
+                className="inline-flex items-center justify-center gap-1 min-h-[36px] sm:min-h-0 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0"
               >
-                <User className="w-3.5 h-3.5 text-blue-700" />
+                <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
                 <span>{t('Sign In', 'लॉगिन')}</span>
               </button>
             )}
 
-            {/* Primary Action Button */}
+            {/* Primary Action Button (visible sm+, inside MobileMenu below sm) */}
             <button
               onClick={onOpenConsultation}
               type="button"
@@ -184,9 +192,9 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label="Toggle navigation menu"
               aria-expanded={mobileMenuOpen}
               aria-controls="mobile-navigation-drawer"
-              className="lg:hidden p-2 text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+              className="lg:hidden min-w-[40px] min-h-[44px] flex items-center justify-center p-1.5 text-slate-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-blue-600"
             >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              {mobileMenuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
             </button>
           </div>
         </div>

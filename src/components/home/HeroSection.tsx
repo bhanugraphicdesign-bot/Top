@@ -31,7 +31,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
           <span aria-hidden="true" className="text-slate-300">·</span>
           <span>{t('Enterprise Technology Division', 'एंटरप्राइज टेक्नोलॉजी डिवीजन')}</span>
           <span aria-hidden="true" className="text-slate-300">·</span>
-          <span>{t('Odisha Tech Corridor & Global Delivery', 'ओडिशा टेक कॉरिडोर व ग्लोबल डिलीवरी')}</span>
+          <span>{t('Chhattisgarh, India & Global Delivery', 'छत्तीसगढ़, भारत व ग्लोबल डिलीवरी')}</span>
         </div>
 
         {/* 2-Column Desktop Grid */}
@@ -60,34 +60,34 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
             </p>
 
             {/* Primary & Secondary Actions */}
-            <div className="flex flex-wrap items-center gap-4 pt-2">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 pt-2">
               <button
                 onClick={onOpenConsultation}
                 type="button"
-                className="inline-flex items-center gap-2 px-6 py-3.5 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-3.5 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <span>{t('Schedule Architecture Review', 'आर्किटेक्चर समीक्षा बुक करें')}</span>
-                <ArrowRight className="w-4 h-4" />
+                <ArrowRight className="w-4 h-4 shrink-0" />
               </button>
 
               <a
                 href="#services"
-                className="inline-flex items-center gap-2 px-5 py-3.5 text-sm font-semibold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors cursor-pointer"
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors cursor-pointer"
               >
                 <span>{t('Explore Capabilities', 'तकनीकी क्षमताएं देखें')}</span>
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4 shrink-0" />
               </a>
             </div>
 
             {/* Trust Signatures (Clean inline text) */}
             <div className="pt-4 flex flex-wrap items-center gap-y-2 gap-x-6 text-xs text-slate-500 border-t border-slate-100">
               <div className="flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-blue-700" />
-                <span>{t('SOC-2 & DPDP Act Ready Architecture', 'एसओसी-2 और डीपीडीपी अनुपालन')}</span>
+                <ShieldCheck className="w-4 h-4 text-blue-700 shrink-0" />
+                <span>{t('Security-First & DPDP Aligned Architecture (Uncertified)', 'सुरक्षा-प्रथम व DPDP अनुरूप डिज़ाइन (अप्रमाणित)')}</span>
               </div>
               <div className="flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-600" />
-                <span>{t('Guaranteed 99.98% High Availability SLA', 'गारंटीकृत 99.98% अपटाइम अनुबंध')}</span>
+                <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{t('High-Availability Target Design (Contract Scoped)', 'उच्च-उपलब्धता डिज़ाइन लक्ष्य (अनुबंधानुसार)')}</span>
               </div>
             </div>
           </div>
@@ -98,6 +98,8 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
               <img
                 src={ASSETS.heroImage}
                 alt="Power Web Studio AI Enterprise Command Studio"
+                decoding="async"
+                fetchPriority="high"
                 className="w-full h-80 sm:h-96 lg:h-[420px] object-cover transition-transform duration-500 group-hover:scale-102"
                 referrerPolicy="no-referrer"
               />
@@ -106,14 +108,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
 
               {/* Bottom Card Context */}
               <div className="absolute bottom-4 left-4 right-4 p-4 rounded-lg bg-white/95 backdrop-blur-md border border-slate-200 text-slate-900 text-xs shadow-md">
-                <div className="flex items-center justify-between font-bold text-slate-900 mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-1 font-bold text-slate-900 mb-1">
                   <span>{t('Principal Engineering Pods Active', 'सक्रिय मुख्य इंजीनियरिंग पॉड्स')}</span>
-                  <span className="font-mono text-blue-700 tabular-nums">18 Squads</span>
+                  <span className="font-mono text-blue-700 tabular-nums">Dedicated Pods</span>
                 </div>
                 <p className="text-slate-600 text-[11px] leading-tight">
                   {t(
-                    'Full-stack pods architecting distributed systems with zero-loss guarantees.',
-                    'शून्य-हानि गारंटी के साथ वितरित सिस्टम बनाने वाले समर्पित इंजीनियरिंग दल।'
+                    'Full-stack pods architecting fault-tolerant distributed systems.',
+                    'लचीले और सुरक्षित वितरित सिस्टम बनाने वाले समर्पित इंजीनियरिंग दल।'
                   )}
                 </p>
               </div>
@@ -122,25 +124,25 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
         </div>
 
         {/* 4-Column Full-Width Enterprise KPI Strip Below Hero */}
-        <div className="mt-14 pt-8 border-t border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8">
+        <div className="mt-12 sm:mt-14 pt-8 border-t border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 lg:gap-8">
           <div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
-              99.98%
+            <div className="text-2xl sm:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
+              HA Design
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
-              {t('High Availability SLA', 'उच्च उपलब्धता अनुबंध')}
+              {t('Target Availability Architecture', 'लक्षित उच्च उपलब्धता डिज़ाइन')}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {t('Contractual financial backing', 'वित्तीय गारंटी द्वारा समर्थित')}
+              {t('Custom SLA defined per SOW', 'प्रोजेक्ट अनुबंध के अनुसार निर्धारित')}
             </div>
           </div>
 
           <div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
+            <div className="text-2xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
               &lt;150ms
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
-              {t('P99 Production Latency', 'पी99 प्रोडक्शन लेटेंसी')}
+              {t('Latency Target Benchmark', 'लक्षित प्रतिक्रिया समय बेंचमार्क')}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
               {t('High-concurrency microservices', 'उच्च समवर्ती माइक्रोसर्विस')}
@@ -148,7 +150,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
           </div>
 
           <div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
+            <div className="text-2xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
               100%
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
@@ -160,14 +162,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
           </div>
 
           <div>
-            <div className="text-3xl sm:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
-              4.9 / 5.0
+            <div className="text-2xl sm:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
+              Web + AI
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
-              {t('Enterprise CSAT Score', 'एंटरप्राइज ग्राहक संतुष्टि')}
+              {t('Full-Stack Delivery Focus', 'फुल-स्टैक डिलीवरी फोकस')}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {t('Across 40+ deployed platforms', '40+ तैनात प्लेटफॉर्मों में')}
+              {t('Android, Cloud & Sovereign AI', 'एंड्रॉइड, क्लाउड एवं एआई')}
             </div>
           </div>
         </div>

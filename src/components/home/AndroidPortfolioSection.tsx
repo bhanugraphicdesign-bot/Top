@@ -138,13 +138,13 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
               </div>
 
               {/* Performance Metrics Trio */}
-              <div className="pt-4 border-t border-slate-100 grid grid-cols-3 gap-3">
+              <div className="pt-4 border-t border-slate-100 grid grid-cols-1 min-[360px]:grid-cols-3 gap-2 sm:gap-3">
                 {activeApp.metrics.map((m: { label: string; labelHi: string; value: string }, i: number) => (
-                  <div key={i} className="text-center p-2 rounded bg-slate-50 border border-slate-100">
-                    <div className="text-sm sm:text-base font-extrabold text-blue-700 font-mono tabular-nums">
+                  <div key={i} className="text-center p-2 rounded bg-slate-50 border border-slate-100 min-w-0">
+                    <div className="text-sm sm:text-base font-extrabold text-blue-700 font-mono tabular-nums break-words">
                       {m.value}
                     </div>
-                    <div className="text-[11px] text-slate-500 font-medium">
+                    <div className="text-[11px] text-slate-500 font-medium break-words">
                       {language === 'hi' ? m.labelHi : m.label}
                     </div>
                   </div>
@@ -152,7 +152,7 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
               </div>
 
               {/* CTA button */}
-              <div className="pt-2 flex items-center justify-between">
+              <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-1.5">
                   {activeApp.techStack.slice(0, 3).map((tech: string) => (
                     <span
@@ -165,10 +165,10 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
                 </div>
                 <button
                   onClick={() => onRequestApkDemo(activeApp.id)}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs shrink-0"
                 >
                   <span>{t('Request Demo APK', 'डेमो एपीके का अनुरोध करें')}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  <ArrowRight className="w-3.5 h-3.5 shrink-0" />
                 </button>
               </div>
             </div>
@@ -180,6 +180,8 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
               <img
                 src={ASSETS.androidImage}
                 alt="Bhanu Ram Bariha Digital Technologies Android Apps Showcase"
+                loading="lazy"
+                decoding="async"
                 className="w-full h-80 sm:h-96 lg:h-[480px] object-cover transition-transform duration-500 group-hover:scale-102"
                 referrerPolicy="no-referrer"
               />
@@ -194,7 +196,7 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
                     '1,000+ एंड्रॉइड डिवाइस प्रोफाइल पर विश्वसनीय संचालन के लिए निर्मित।'
                   )}
                 </p>
-                <div className="mt-3 flex items-center gap-3 text-xs text-slate-300">
+                <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-300">
                   <span className="flex items-center gap-1">
                     <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
                     <span>{t('Memory Hardened', 'मेमोरी अनुकूलित')}</span>

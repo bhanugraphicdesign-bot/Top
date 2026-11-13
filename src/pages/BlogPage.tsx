@@ -56,6 +56,8 @@ export const BlogPage: React.FC = () => {
           <img
             src={ASSETS.blogImage}
             alt="Power Web Studio AI Editorial Tech Insights"
+            loading="lazy"
+            decoding="async"
             className="w-full h-64 sm:h-80 lg:h-96 object-cover opacity-45 transition-transform duration-500 group-hover:scale-102"
             referrerPolicy="no-referrer"
           />

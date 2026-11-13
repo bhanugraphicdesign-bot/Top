@@ -3,14 +3,18 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Global Safety Net (Default Deny)
+    // Global Safety Net (Default Deny Everything Else)
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helper functions
+    // Core Authentication & RBAC Helpers
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
     function isOwner(userId) {
@@ -19,142 +23,336 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'ssbhanu41@gmail.com' ||
+        (request.auth.token.email == 'ssbhanu41@gmail.com' && request.auth.token.email_verified == true) ||
         (exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // 1. Users Collection
+    function isNonEmptyString(val, maxLen) {
+      return val is string && val.size() > 0 && val.size() <= maxLen;
+    }
+
+    function isOptionalString(data, field, maxLen) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxLen);
+    }
+
+    function isValidEmailStr(val) {
+      return val is string && val.size() >= 3 && val.size() <= 160 && val.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$');
+    }
+
+    // Validation Blueprints (Standalone Entity Validators)
+    function isValidUserCreate(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName'])
+        && data.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'companyName', 'phone', 'createdAt', 'lastLoginAt'])
+        && data.uid == request.auth.uid
+        && isValidEmailStr(data.email)
+        && isNonEmptyString(data.displayName, 160)
+        && isOptionalString(data, 'photoURL', 500)
+        && isOptionalString(data, 'companyName', 160)
+        && isOptionalString(data, 'phone', 40)
+        && isOptionalString(data, 'createdAt', 64)
+        && isOptionalString(data, 'lastLoginAt', 64);
+    }
+
+    function isValidUserUpdate(incoming, existing) {
+      return incoming.keys().hasAll(['uid', 'email', 'displayName'])
+        && incoming.keys().hasOnly(['uid', 'email', 'displayName', 'photoURL', 'companyName', 'phone', 'createdAt', 'lastLoginAt'])
+        && incoming.uid == existing.uid
+        && incoming.email == existing.email
+        && (!('createdAt' in existing) || incoming.createdAt == existing.createdAt)
+        && isNonEmptyString(incoming.displayName, 160)
+        && isOptionalString(incoming, 'photoURL', 500)
+        && isOptionalString(incoming, 'companyName', 160)
+        && isOptionalString(incoming, 'phone', 40)
+        && isOptionalString(incoming, 'lastLoginAt', 64)
+        && incoming.diff(existing).affectedKeys().hasOnly(['displayName', 'photoURL', 'companyName', 'phone', 'lastLoginAt']);
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid'])
+        && data.keys().hasOnly(['uid', 'companyName', 'phone', 'designation', 'preferredLanguage', 'updatedAt'])
+        && data.uid == request.auth.uid
+        && isOptionalString(data, 'companyName', 160)
+        && isOptionalString(data, 'phone', 40)
+        && isOptionalString(data, 'designation', 120)
+        && (!('preferredLanguage' in data) || data.preferredLanguage in ['hi', 'en'])
+        && isOptionalString(data, 'updatedAt', 64);
+    }
+
+    function isValidAttachmentMap(att) {
+      return att == null || (
+        att is map
+        && att.keys().hasOnly(['fileUrl', 'fileName', 'sha256', 'fileSizeFormatted'])
+        && isOptionalString(att, 'fileUrl', 300)
+        && isOptionalString(att, 'fileName', 200)
+        && isOptionalString(att, 'sha256', 128)
+        && isOptionalString(att, 'fileSizeFormatted', 40)
+      );
+    }
+
+    function isValidQuotationCreate(data, quoteId) {
+      return data.keys().hasAll(['id', 'clientName', 'clientEmail', 'serviceType', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'clientName', 'clientEmail', 'phone', 'company', 'serviceType', 'timeline', 'estimatedBudget', 'brief', 'attachment', 'status', 'createdAt'])
+        && data.id == quoteId
+        && isNonEmptyString(data.clientName, 160)
+        && isValidEmailStr(data.clientEmail)
+        && isNonEmptyString(data.serviceType, 160)
+        && data.status == 'pending'
+        && isNonEmptyString(data.createdAt, 64)
+        && isOptionalString(data, 'phone', 40)
+        && isOptionalString(data, 'company', 160)
+        && isOptionalString(data, 'timeline', 64)
+        && isOptionalString(data, 'estimatedBudget', 80)
+        && isOptionalString(data, 'brief', 3000)
+        && (!('attachment' in data) || isValidAttachmentMap(data.attachment));
+    }
+
+    function isValidClientOrderCreate(data, orderId) {
+      return data.keys().hasAll(['id', 'clientId', 'amount', 'status'])
+        && data.keys().hasOnly(['id', 'clientId', 'serviceId', 'amount', 'currency', 'status', 'createdAt'])
+        && data.id == orderId
+        && data.clientId == request.auth.uid
+        && data.amount is number
+        && data.amount >= 0
+        && data.amount <= 100000000
+        && data.status == 'pending'
+        && isOptionalString(data, 'serviceId', 128)
+        && isOptionalString(data, 'currency', 16)
+        && isOptionalString(data, 'createdAt', 64);
+    }
+
+    function isValidTicketCreate(data, ticketId) {
+      return data.keys().hasAll(['id', 'clientId', 'subject', 'priority', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'clientId', 'clientEmail', 'subject', 'priority', 'category', 'projectCode', 'environment', 'details', 'attachment', 'responses', 'status', 'createdAt'])
+        && data.id == ticketId
+        && data.clientId == request.auth.uid
+        && isNonEmptyString(data.subject, 240)
+        && data.priority in ['P1_Critical', 'P2_High', 'P3_Normal', 'P4_Low']
+        && data.status == 'open'
+        && isNonEmptyString(data.createdAt, 64)
+        && isOptionalString(data, 'clientEmail', 160)
+        && isOptionalString(data, 'category', 120)
+        && isOptionalString(data, 'projectCode', 64)
+        && isOptionalString(data, 'environment', 160)
+        && isOptionalString(data, 'details', 5000)
+        && (!('attachment' in data) || isValidAttachmentMap(data.attachment))
+        && (!('responses' in data) || (data.responses is list && data.responses.size() == 0));
+    }
+
+    function isValidTicketClientUpdate(incoming, existing) {
+      return incoming.keys().hasAll(['id', 'clientId', 'subject', 'priority', 'status', 'createdAt'])
+        && incoming.keys().hasOnly(['id', 'clientId', 'clientEmail', 'subject', 'priority', 'category', 'projectCode', 'environment', 'details', 'attachment', 'responses', 'status', 'createdAt', 'lastRepliedAt', 'updatedAt'])
+        && incoming.id == existing.id
+        && incoming.clientId == existing.clientId
+        && incoming.subject == existing.subject
+        && incoming.priority == existing.priority
+        && incoming.createdAt == existing.createdAt
+        && incoming.status in ['open', 'in_progress', 'resolved']
+        && (!('responses' in incoming) || (incoming.responses is list && incoming.responses.size() <= 50))
+        && isOptionalString(incoming, 'lastRepliedAt', 64)
+        && incoming.diff(existing).affectedKeys().hasOnly(['status', 'responses', 'lastRepliedAt', 'updatedAt']);
+    }
+
+    function isValidUserNotificationCreate(data, notifId) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'read', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'title', 'titleHi', 'message', 'messageHi', 'type', 'read', 'linkRoute', 'linkParams', 'createdAt'])
+        && data.id == notifId
+        && data.userId == request.auth.uid
+        && data.read == false
+        && isNonEmptyString(data.title, 200)
+        && isOptionalString(data, 'titleHi', 200)
+        && isOptionalString(data, 'message', 600)
+        && isOptionalString(data, 'messageHi', 600)
+        && isOptionalString(data, 'type', 40)
+        && isOptionalString(data, 'linkRoute', 64)
+        && isNonEmptyString(data.createdAt, 64);
+    }
+
+    function isValidAuditLogCreate(data, logId) {
+      return data.keys().hasAll(['id', 'actorId', 'action', 'resource', 'timestamp'])
+        && data.keys().hasOnly(['id', 'actorId', 'actorEmail', 'action', 'resource', 'details', 'ipAddress', 'timestamp', 'createdAt'])
+        && data.id == logId
+        && data.actorId == request.auth.uid
+        && isNonEmptyString(data.action, 100)
+        && isNonEmptyString(data.resource, 200)
+        && isOptionalString(data, 'actorEmail', 160)
+        && isOptionalString(data, 'details', 1000)
+        && isOptionalString(data, 'ipAddress', 64)
+        && isNonEmptyString(data.timestamp, 64);
+    }
+
+    // 1. Users Collection (Prevent Self-Privilege Escalation & Shadow Fields)
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isAdmin();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserCreate(request.resource.data);
+      allow update: if isValidId(userId) && (
+        isAdmin() ||
+        (isOwner(userId) && isValidUserUpdate(request.resource.data, resource.data))
+      );
+      allow delete: if isValidId(userId) && isAdmin();
     }
 
-    // 2. User Roles Collection (Strict Admin-Only Mutation)
+    // 2. User Roles Collection (Strict Admin-Only Mutation — Zero Self-Promotion)
     match /user_roles/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isValidId(userId) && isAdmin();
     }
 
-    // 3. User Profiles Collection
+    // 3. User Profiles Collection (Tenant-Scoped + Schema-Validated)
     match /user_profiles/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if isAdmin();
-      allow create, update: if isOwner(userId) || isAdmin();
-      allow delete: if isAdmin();
+      allow create: if isValidId(userId) && isOwner(userId) && isValidUserProfile(request.resource.data);
+      allow update: if isValidId(userId) && (
+        isAdmin() ||
+        (isOwner(userId) && isValidUserProfile(request.resource.data) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyName', 'phone', 'designation', 'preferredLanguage', 'updatedAt']))
+      );
+      allow delete: if isValidId(userId) && isAdmin();
     }
 
-    // 4. Apps Catalog (Public Read, Admin Write)
+    // 4. Apps Catalog (Public Read, Verified Admin Write)
     match /apps/{appId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow get: if isValidId(appId);
+      allow list: if true;
+      allow create, update, delete: if isValidId(appId) && isAdmin();
     }
 
-    // 5. App Categories
+    // 5. App Categories (Public Read, Verified Admin Write)
     match /app_categories/{categoryId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow get: if isValidId(categoryId);
+      allow list: if true;
+      allow create, update, delete: if isValidId(categoryId) && isAdmin();
     }
 
-    // 6. Projects Collection
+    // 6. Projects Collection (Strict Tenant Isolation)
     match /projects/{projectId} {
-      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
+      allow get: if isValidId(projectId) && isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isValidId(projectId) && isAdmin();
     }
 
-    // 7. Project Tasks
+    // 7. Project Tasks (Relational Parent Check Against /projects/{projectId})
     match /project_tasks/{taskId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow get: if isValidId(taskId) && (
+        isAdmin() || (
+          isSignedIn() &&
+          'projectId' in resource.data &&
+          isValidId(resource.data.projectId) &&
+          exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+          get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.clientId == request.auth.uid
+        )
+      );
+      allow list: if isAdmin() || (
+        isSignedIn() &&
+        'projectId' in resource.data &&
+        isValidId(resource.data.projectId) &&
+        exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
+        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.clientId == request.auth.uid
+      );
+      allow create, update, delete: if isValidId(taskId) && isAdmin();
     }
 
     // 8. Orders Collection
     match /orders/{orderId} {
-      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
+      allow get: if isValidId(orderId) && isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && (request.resource.data.clientId == request.auth.uid || isAdmin());
-      allow update, delete: if isAdmin();
+      allow create: if isValidId(orderId) && isSignedIn() && (isAdmin() || isValidClientOrderCreate(request.resource.data, orderId));
+      allow update, delete: if isValidId(orderId) && isAdmin();
     }
 
-    // 9. Quotations / Scoping Inquiries
+    // 9. Quotations / Scoping Inquiries (Strict Schema-Validated Create, Verified Read/List, Admin Mutate)
     match /quotations/{quotationId} {
-      allow get: if isSignedIn() && (resource.data.clientEmail == request.auth.token.email || isAdmin());
+      allow get: if isValidId(quotationId) && isSignedIn() && (
+        (isVerifiedUser() && resource.data.clientEmail == request.auth.token.email) ||
+        isAdmin()
+      );
       allow list: if isAdmin();
-      allow create: if true; // Allow inbound consultation submissions
-      allow update, delete: if isAdmin();
+      allow create: if isValidId(quotationId) && isValidQuotationCreate(request.resource.data, quotationId);
+      allow update, delete: if isValidId(quotationId) && isAdmin();
     }
 
-    // 10. Invoices Collection
+    // 10. Invoices Collection (Strict Tenant Read, Admin-Only Write)
     match /invoices/{invoiceId} {
-      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
+      allow get: if isValidId(invoiceId) && isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isValidId(invoiceId) && isAdmin();
     }
 
-    // 11. Payments Collection
+    // 11. Payments Collection (Strict Tenant Read, Admin-Only Write)
     match /payments/{paymentId} {
-      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
+      allow get: if isValidId(paymentId) && isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isValidId(paymentId) && isAdmin();
     }
 
-    // 12. Support Tickets
+    // 12. Support Tickets (Strict Tenant Ownership + Action-Based Updates)
     match /support_tickets/{ticketId} {
-      allow get: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
+      allow get: if isValidId(ticketId) && isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (resource.data.clientId == request.auth.uid || isAdmin());
-      allow delete: if isAdmin();
+      allow create: if isValidId(ticketId) && isSignedIn() && isValidTicketCreate(request.resource.data, ticketId);
+      allow update: if isValidId(ticketId) && isSignedIn() && (
+        isAdmin() ||
+        (resource.data.clientId == request.auth.uid && isValidTicketClientUpdate(request.resource.data, resource.data))
+      );
+      allow delete: if isValidId(ticketId) && isAdmin();
     }
 
-    // 13. Notifications
+    // 13. Notifications (Scoped Read + Action-Based Read-Receipt Updates)
     match /notifications/{notificationId} {
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow get: if isValidId(notificationId) && isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == 'broadcast_all' || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userId == 'broadcast_all' || isAdmin());
+      allow create: if isValidId(notificationId) && isSignedIn() && (
+        isAdmin() || isValidUserNotificationCreate(request.resource.data, notificationId)
+      );
+      allow update: if isValidId(notificationId) && isSignedIn() && (
+        isAdmin() ||
+        (resource.data.userId == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']) &&
+         request.resource.data.read is bool)
+      );
+      allow delete: if isValidId(notificationId) && (isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid));
     }
 
-    // 14. Audit Logs (Immutable, Admin Read)
+    // 14. Audit Logs (Immutable, Actor-Bound Append-Only Log)
     match /audit_logs/{logId} {
-      allow get, list: if isAdmin();
-      allow create: if true; // System & client event logger
+      allow get: if isValidId(logId) && isAdmin();
+      allow list: if isAdmin();
+      allow create: if isValidId(logId) && isSignedIn() && isValidAuditLogCreate(request.resource.data, logId);
       allow update, delete: if false; // Strict immutability
     }
 
-    // 15. Site Settings
+    // 15. Site Settings (Public Read, Admin Write)
     match /site_settings/{settingId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get: if isValidId(settingId);
+      allow list: if true;
+      allow write: if isValidId(settingId) && isAdmin();
     }
 
-    // 16. Services Catalog
+    // 16. Services Catalog (Public Read, Admin Write)
     match /services/{serviceId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get: if isValidId(serviceId);
+      allow list: if true;
+      allow write: if isValidId(serviceId) && isAdmin();
     }
 
-    // 17. Blog Posts (Content Management)
+    // 17. Blog Posts (Public Read, Admin Write)
     match /blog_posts/{postId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow get: if isValidId(postId);
+      allow list: if true;
+      allow write: if isValidId(postId) && isAdmin();
     }
 
-    // Connection Health Verification Probe
+    // 18. Test Collection (Strictly Admin-Only — Zero Public Read/Write Access)
     match /test/{docId} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
   }
 }

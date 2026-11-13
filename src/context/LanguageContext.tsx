@@ -105,26 +105,31 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     document.documentElement.lang = language;
 
+    const setMeta = (selector: string, content: string) => {
+      const el = document.querySelector(selector);
+      if (el) el.setAttribute('content', content);
+    };
+
     if (language === 'hi') {
-      document.title = 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज | एंटरप्राइज सॉफ्टवेयर एवं एआई';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज: एंटरप्राइज डिस्ट्रीब्यूटेड बैकएंड, नेटिव एंड्रॉइड ऐप्स और ऑटोनॉमस एआई सिस्टम।');
-      }
-      const ogTitle = document.querySelector('meta[property="og:title"]');
-      if (ogTitle) ogTitle.setAttribute('content', 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज');
-      const ogLocale = document.querySelector('meta[property="og:locale"]');
-      if (ogLocale) ogLocale.setAttribute('content', 'hi_IN');
+      const title = 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज | एंटरप्राइज सॉफ्टवेयर एवं एआई';
+      const desc = 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज: एंटरप्राइज डिस्ट्रीब्यूटेड बैकएंड, नेटिव एंड्रॉइड ऐप्स और ऑटोनॉमस एआई सिस्टम।';
+      document.title = title;
+      setMeta('meta[name="description"]', desc);
+      setMeta('meta[property="og:title"]', 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज');
+      setMeta('meta[property="og:description"]', desc);
+      setMeta('meta[property="og:locale"]', 'hi_IN');
+      setMeta('meta[name="twitter:title"]', title);
+      setMeta('meta[name="twitter:description"]', desc);
     } else {
-      document.title = 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies | Enterprise Software & AI';
-      const metaDesc = document.querySelector('meta[name="description"]');
-      if (metaDesc) {
-        metaDesc.setAttribute('content', 'Bhanu Ram Bariha Digital Technologies: Mission-critical distributed systems, enterprise Android apps, and sovereign AI engines.');
-      }
-      const ogTitle = document.querySelector('meta[property="og:title"]');
-      if (ogTitle) ogTitle.setAttribute('content', 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies');
-      const ogLocale = document.querySelector('meta[property="og:locale"]');
-      if (ogLocale) ogLocale.setAttribute('content', 'en_US');
+      const title = 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies | Enterprise Software & AI';
+      const desc = 'Bhanu Ram Bariha Digital Technologies: Mission-critical distributed systems, enterprise Android apps, and sovereign AI engines.';
+      document.title = title;
+      setMeta('meta[name="description"]', desc);
+      setMeta('meta[property="og:title"]', 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies');
+      setMeta('meta[property="og:description"]', desc);
+      setMeta('meta[property="og:locale"]', 'en_US');
+      setMeta('meta[name="twitter:title"]', title);
+      setMeta('meta[name="twitter:description"]', desc);
     }
   }, [language]);
 

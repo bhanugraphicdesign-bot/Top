@@ -87,8 +87,8 @@ export const WhyChooseUsSection: React.FC = () => {
               </div>
 
               <div className="mt-5 pt-3 border-t border-slate-100 flex items-center gap-1.5 text-xs text-blue-700 font-semibold">
-                <Check className="w-3.5 h-3.5 text-blue-700" />
-                <span>{t('Strict Contractual Guarantee', 'सख्त संविदात्मक गारंटी')}</span>
+                <Check className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                <span>{t('Defined per Project Scope & SOW', 'परियोजना स्कोप एवं अनुबंध के अनुसार')}</span>
               </div>
             </div>
           ))}

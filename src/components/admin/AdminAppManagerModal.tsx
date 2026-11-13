@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApps } from '../../context/AppsContext';
+import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { AndroidApp, AppCategory, AppReleaseStatus } from '../../types';
 import { X, Plus, Edit2, Trash2, RotateCcw, Check, Smartphone, ShieldCheck, AlertCircle } from 'lucide-react';
@@ -12,7 +13,8 @@ interface AdminAppManagerModalProps {
 
 export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOpen, onClose, editingApp }) => {
   const { apps, addApp, updateApp, deleteApp, resetToDefaults } = useApps();
-  const { t } = useLanguage();
+  const { isAdmin } = useAuth();
+  const { t, showToast } = useLanguage();
 
   const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
     }
   }, [editingApp, isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !isAdmin) return null;
 
   const handleStartAdd = () => {
     setFormData({
@@ -106,9 +108,9 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
     setMode('edit');
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) return;
+    if (!formData.name.trim() || !isAdmin) return;
 
     const keyFeatures = formData.keyFeaturesStr.split('\n').filter((s) => s.trim().length > 0);
     const keyFeaturesHi = formData.keyFeaturesHiStr.split('\n').filter((s) => s.trim().length > 0);
@@ -122,63 +124,66 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
       published: { en: 'Google Play Release', hi: 'गूगल प्ले रिलीज' },
     };
 
-    if (mode === 'add') {
-      const newApp: AndroidApp = {
-        id: `app-${Date.now()}`,
-        name: formData.name,
-        nameHi: formData.nameHi || formData.name,
-        tagline: formData.tagline,
-        taglineHi: formData.taglineHi || formData.tagline,
-        category: formData.category,
-        categoryHi: formData.category,
-        version: formData.version,
-        architecture: formData.architecture,
-        description: formData.description,
-        descriptionHi: formData.descriptionHi || formData.description,
-        keyFeatures: keyFeatures.length > 0 ? keyFeatures : ['Production-ready Kotlin Architecture'],
-        keyFeaturesHi: keyFeaturesHi.length > 0 ? keyFeaturesHi : ['प्रोडक्शन-रेडी कोटलिन आर्किटेक्चर'],
-        techStack: techStack.length > 0 ? techStack : ['Kotlin', 'Compose'],
-        metrics: [
-          { label: 'Uptime SLA', labelHi: 'अपटाइम', value: '99.98%' },
-          { label: 'Target Latency', labelHi: 'लेटेंसी', value: '<250ms' },
-          { label: 'Crash Rate', labelHi: 'क्रैश दर', value: '0.01%' },
-        ],
-        accentColor: '#1E40AF',
-        iconName: 'Smartphone',
-        status: formData.status,
-        statusLabelEn: statusLabels[formData.status].en,
-        statusLabelHi: statusLabels[formData.status].hi,
-        downloadSize: formData.downloadSize,
-        targetSdk: formData.targetSdk,
-        screenshots: [
-          '/src/assets/images/app_screenshots_mockup_1794321883195.jpg',
-          '/src/assets/images/android_app_ecosystem_1794321127603.jpg',
-        ],
-      };
-      addApp(newApp);
-    } else if (mode === 'edit' && editingId) {
-      updateApp(editingId, {
-        name: formData.name,
-        nameHi: formData.nameHi,
-        tagline: formData.tagline,
-        taglineHi: formData.taglineHi,
-        category: formData.category,
-        version: formData.version,
-        architecture: formData.architecture,
-        description: formData.description,
-        descriptionHi: formData.descriptionHi,
-        keyFeatures,
-        keyFeaturesHi,
-        techStack,
-        status: formData.status,
-        statusLabelEn: statusLabels[formData.status].en,
-        statusLabelHi: statusLabels[formData.status].hi,
-        downloadSize: formData.downloadSize,
-        targetSdk: formData.targetSdk,
-      });
+    try {
+      if (mode === 'add') {
+        const newApp: AndroidApp = {
+          id: `app-${Date.now()}`,
+          name: formData.name,
+          nameHi: formData.nameHi || formData.name,
+          tagline: formData.tagline,
+          taglineHi: formData.taglineHi || formData.tagline,
+          category: formData.category,
+          categoryHi: formData.category,
+          version: formData.version,
+          architecture: formData.architecture,
+          description: formData.description,
+          descriptionHi: formData.descriptionHi || formData.description,
+          keyFeatures: keyFeatures.length > 0 ? keyFeatures : ['Production-ready Kotlin Architecture'],
+          keyFeaturesHi: keyFeaturesHi.length > 0 ? keyFeaturesHi : ['प्रोडक्शन-रेडी कोटलिन आर्किटेक्चर'],
+          techStack: techStack.length > 0 ? techStack : ['Kotlin', 'Compose'],
+          metrics: [
+            { label: 'Target Uptime', labelHi: 'लक्षित अपटाइम', value: 'HA Design' },
+            { label: 'Target Latency', labelHi: 'लेटेंसी', value: '<250ms' },
+            { label: 'Crash Rate', labelHi: 'क्रैश दर', value: '0.01%' },
+          ],
+          accentColor: '#1E40AF',
+          iconName: 'Smartphone',
+          status: formData.status,
+          statusLabelEn: statusLabels[formData.status].en,
+          statusLabelHi: statusLabels[formData.status].hi,
+          downloadSize: formData.downloadSize,
+          targetSdk: formData.targetSdk,
+          screenshots: [
+            '/src/assets/images/app_screenshots_mockup_1794321883195.jpg',
+            '/src/assets/images/android_app_ecosystem_1794321127603.jpg',
+          ],
+        };
+        await addApp(newApp);
+      } else if (mode === 'edit' && editingId) {
+        await updateApp(editingId, {
+          name: formData.name,
+          nameHi: formData.nameHi,
+          tagline: formData.tagline,
+          taglineHi: formData.taglineHi,
+          category: formData.category,
+          version: formData.version,
+          architecture: formData.architecture,
+          description: formData.description,
+          descriptionHi: formData.descriptionHi,
+          keyFeatures,
+          keyFeaturesHi,
+          techStack,
+          status: formData.status,
+          statusLabelEn: statusLabels[formData.status].en,
+          statusLabelHi: statusLabels[formData.status].hi,
+          downloadSize: formData.downloadSize,
+          targetSdk: formData.targetSdk,
+        });
+      }
+      setMode('list');
+    } catch (err: any) {
+      showToast(err?.message || 'Admin authorization required.', 'alert');
     }
-
-    setMode('list');
   };
 
   const categories: AppCategory[] = [

@@ -1,21 +1,23 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { UploadedFileRecord } from '../../types';
 import {
   UploadCloud,
   FileCheck,
   X,
   AlertCircle,
-  CheckCircle2,
-  FileText,
   ShieldCheck,
   RefreshCw,
+  Lock,
+  CloudOff,
 } from 'lucide-react';
 
 interface ValidatedFileUploaderProps {
   onUploadSuccess: (fileRecord: UploadedFileRecord) => void;
   onRemove?: () => void;
   category?: string;
+  projectId?: string;
   maxSizeMb?: number;
   allowedExtensions?: string[];
   label?: string;
@@ -24,10 +26,20 @@ interface ValidatedFileUploaderProps {
   descriptionHi?: string;
 }
 
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read file from local device'));
+    reader.readAsDataURL(file);
+  });
+}
+
 export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   onUploadSuccess,
   onRemove,
   category = 'general_attachment',
+  projectId,
   maxSizeMb = 25,
   allowedExtensions = ['pdf', 'docx', 'zip', 'apk', 'png', 'jpg', 'jpeg', 'txt', 'json'],
   label,
@@ -36,14 +48,32 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   descriptionHi,
 }) => {
   const { language, t, showToast } = useLanguage();
+  const { currentUser, openAuthModal } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedRecord, setUploadedRecord] = useState<UploadedFileRecord | null>(null);
-  const [clientSha256, setClientSha256] = useState('');
+  const [, setClientSha256] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  const [fileUploadEnabled, setFileUploadEnabled] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/system/capabilities')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!active) return;
+        setFileUploadEnabled(Boolean(data?.fileUploadEnabled));
+      })
+      .catch(() => {
+        if (active) setFileUploadEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Calculate SHA-256 in browser via Web Cryptography API
   const computeClientHash = async (file: File): Promise<string> => {
@@ -59,6 +89,28 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
 
   const processFile = async (file: File) => {
     setErrorMessage('');
+
+    if (fileUploadEnabled !== true) {
+      const storageErr = t(
+        'File upload is safely disabled until Google Cloud Storage (GCS_BUCKET) is configured.',
+        'Google Cloud Storage (GCS_BUCKET) कॉन्फ़िगर न होने तक फ़ाइल अपलोड सुरक्षित रूप से बंद है।'
+      );
+      setErrorMessage(storageErr);
+      showToast(storageErr, 'info');
+      return;
+    }
+
+    if (!currentUser) {
+      const authErr = t(
+        'Sign in with a verified account to upload files to encrypted enterprise storage.',
+        'सुरक्षित फ़ाइल अपलोड करने के लिए कृपया अपने खाते से साइन इन करें।'
+      );
+      setErrorMessage(authErr);
+      showToast(authErr, 'alert');
+      openAuthModal('login');
+      return;
+    }
+
     const ext = file.name.split('.').pop()?.toLowerCase() || '';
 
     if (!allowedExtensions.includes(ext)) {
@@ -87,54 +139,60 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
       // 1. Calculate local cryptographic SHA-256
       const hash = await computeClientHash(file);
       setClientSha256(hash);
-      setUploadProgress(50);
+      setUploadProgress(45);
 
-      // 2. Read file as base64
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const base64Data = reader.result as string;
-        setUploadProgress(75);
+      // 2. Read file as base64 cleanly inside awaited Promise
+      const base64Data = await readFileAsDataUrl(file);
+      setUploadProgress(70);
 
-        // 3. Post to backend storage endpoint
-        const response = await fetch('/api/files/upload', {
+      const postUpload = async (forceRefresh: boolean) => {
+        const idToken = await currentUser.getIdToken(forceRefresh);
+        return fetch('/api/files/upload', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
           body: JSON.stringify({
             fileName: file.name,
             fileType: file.type || `application/${ext}`,
             fileData: base64Data,
             category,
+            ...(projectId ? { projectId } : {}),
           }),
         });
+      };
 
-        setUploadProgress(95);
+      // 3. Post to backend authenticated storage endpoint (refresh token once if expired)
+      let response = await postUpload(false);
+      if (response.status === 401) {
+        response = await postUpload(true);
+      }
 
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Server responded with HTTP ${response.status}`);
+      setUploadProgress(95);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          openAuthModal('login');
         }
+        throw new Error(errData.error || `Server responded with HTTP ${response.status}`);
+      }
 
-        const data = await response.json();
-        setUploadProgress(100);
-        setUploadedRecord(data.file);
-        onUploadSuccess(data.file);
+      const data = await response.json();
+      setUploadProgress(100);
+      setUploadedRecord(data.file);
+      onUploadSuccess(data.file);
 
-        showToast(
-          language === 'hi'
-            ? `फ़ाइल "${file.name}" सफलतापूर्वक अपलोड एवं सत्यापित हुई।`
-            : `File "${file.name}" verified & saved to enterprise vault.`,
-          'success'
-        );
-      };
-
-      reader.onerror = () => {
-        throw new Error('Failed to read file from local device');
-      };
-
-      reader.readAsDataURL(file);
+      showToast(
+        language === 'hi'
+          ? `फ़ाइल "${file.name}" सफलतापूर्वक अपलोड एवं सत्यापित हुई।`
+          : `File "${file.name}" verified & saved to enterprise vault.`,
+        'success'
+      );
     } catch (err: any) {
       console.error('[Upload Failed]', err);
-      const msg = err.message || 'File upload failed';
+      const msg = err?.message || 'File upload failed';
       setErrorMessage(msg);
       showToast(msg, 'alert');
     } finally {
@@ -193,8 +251,53 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
         </div>
       )}
 
-      {/* Uploaded State Card */}
-      {uploadedRecord ? (
+      {/* Safe Disabled Storage State (When GCS_BUCKET is Not Configured) */}
+      {fileUploadEnabled === false ? (
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-3 text-xs">
+          <div className="w-8 h-8 rounded bg-slate-200/70 text-slate-600 flex items-center justify-center shrink-0">
+            <CloudOff className="w-4 h-4" />
+          </div>
+          <div className="space-y-1">
+            <div className="font-bold text-slate-800">
+              {t(
+                'File Upload Safely Disabled (Cloud Storage Not Configured)',
+                'फ़ाइल अपलोड सुरक्षित रूप से बंद है (Cloud Storage सेट नहीं है)'
+              )}
+            </div>
+            <p className="text-slate-600 leading-relaxed">
+              {t(
+                'Google Cloud Storage (GCS_BUCKET) is not configured yet in this preview environment. No local or fake uploads are simulated — you can submit the form cleanly without attachments.',
+                'इस Preview मोड में Google Cloud Storage (GCS_BUCKET) अभी कॉन्फ़िगर नहीं है। कोई नकली अपलोड नहीं दिखाया जा रहा है — आप बिना फ़ाइल जोड़े ही फॉर्म या टिकट सुरक्षित रूप से भेज सकते हैं।'
+              )}
+            </p>
+          </div>
+        </div>
+      ) : fileUploadEnabled === null ? (
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-2.5 text-xs text-slate-500">
+          <RefreshCw className="w-4 h-4 animate-spin text-blue-700 shrink-0" />
+          <span>{t('Checking Cloud Storage status...', 'Cloud Storage स्थिति की जांच हो रही है...')}</span>
+        </div>
+      ) : !currentUser ? (
+        <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-start sm:items-center gap-2.5 text-slate-700">
+            <Lock className="w-4 h-4 text-blue-700 shrink-0 mt-0.5 sm:mt-0" />
+            <span>
+              {t(
+                'Authenticated session required to upload RFP specs or diagnostic files.',
+                'दस्तावेज़ अपलोड करने के लिए सुरक्षित खाता लॉगिन अनिवार्य है।'
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => openAuthModal('login')}
+            className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shrink-0"
+          >
+            {t('Sign In to Attach File', 'फ़ाइल अपलोड हेतु साइन इन करें')}
+          </button>
+        </div>
+      ) : uploadedRecord ? (
+        /* Uploaded State Card */
         <div className="p-3.5 bg-emerald-50/60 border border-emerald-300 rounded-lg flex items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2.5 overflow-hidden">
             <div className="w-8 h-8 rounded bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">

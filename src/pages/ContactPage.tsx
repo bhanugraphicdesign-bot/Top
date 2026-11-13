@@ -60,25 +60,39 @@ export const ContactPage: React.FC = () => {
           <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2">
             <Phone className="w-6 h-6 text-blue-700 mb-2" />
             <h3 className="text-sm font-bold text-slate-900">
-              {t('Telephone & WhatsApp Hotlines', 'टेलीफोन और हॉटलाइन')}
+              {t('Mobile & Direct Hotline', 'मोबाइल एवं सीधा संपर्क')}
             </h3>
             <div className="text-xs text-slate-600 font-mono space-y-1">
-              <div>Landline: {COMPANY_INFO.phone}</div>
-              <div>Direct Squad: {COMPANY_INFO.directLine}</div>
+              <div>
+                Mobile:{' '}
+                <a
+                  href={`tel:${COMPANY_INFO.phone.replace(/\s+/g, '')}`}
+                  className="text-blue-700 hover:underline font-semibold"
+                >
+                  {COMPANY_INFO.phone}
+                </a>
+              </div>
             </div>
             <p className="text-[11px] text-emerald-700 font-semibold pt-1">
-              {t('24/7 P1 Incident Response SLA', '24/7 गंभीर घटना प्रतिक्रिया')}
+              {t('Direct Inquiry & Support Desk', 'सीधी पूछताछ एवं सहायता डेस्क')}
             </p>
           </div>
 
           <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2">
             <Mail className="w-6 h-6 text-blue-700 mb-2" />
             <h3 className="text-sm font-bold text-slate-900">
-              {t('Official Corporate Channels', 'आधिकारिक ईमेल चैनल')}
+              {t('Official Corporate Email', 'आधिकारिक ईमेल पता')}
             </h3>
-            <div className="text-xs text-slate-600 font-mono space-y-1">
-              <div>General: {COMPANY_INFO.email}</div>
-              <div>Enterprise: {COMPANY_INFO.supportEmail}</div>
+            <div className="text-xs text-slate-600 font-mono space-y-1 break-all">
+              <div>
+                Email:{' '}
+                <a
+                  href={`mailto:${COMPANY_INFO.email}`}
+                  className="text-blue-700 hover:underline font-semibold"
+                >
+                  {COMPANY_INFO.email}
+                </a>
+              </div>
             </div>
             <p className="text-[11px] text-slate-500 pt-1">
               {t('Signed NDA provided upon request', 'अनुरोध पर हस्ताक्षरित एनडीए उपलब्ध')}

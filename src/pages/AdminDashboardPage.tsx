@@ -3,7 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useApps } from '../context/AppsContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '../context/NavigationContext';
-import { AndroidApp, BlogPost, ServiceItem } from '../types';
+import { AndroidApp, BlogPost, EnterpriseInvoice, ServiceItem } from '../types';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
 import { CustomerManagerModal } from '../components/admin/CustomerManagerModal';
 import { ProjectManagerModal } from '../components/admin/ProjectManagerModal';
@@ -72,7 +72,90 @@ import {
   Paperclip,
   Download,
   ShieldCheck,
+  Receipt,
+  AlertTriangle,
 } from 'lucide-react';
+
+const DEMO_ADMIN_INVOICES: EnterpriseInvoice[] = [
+  {
+    id: 'inv-2026-0814',
+    invoiceNumber: 'INV-2026-0814',
+    projectId: 'proj-1',
+    projectName: 'Bharat Fleet ERP & Distributed Telematics',
+    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
+    clientId: 'kalinga-client-id',
+    clientName: 'Rajiv Sengupta',
+    clientEmail: 'kalinga@enterprise.in',
+    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
+    clientGstin: '21AAACK1924L1ZZ',
+    milestoneTitle: 'Milestone 03 — BLE Soundbox & Dynamic QR Payment Reconciliation',
+    milestoneTitleHi: 'माइलस्टोन 03 — BLE साउंडबॉक्स एवं डायनामिक QR भुगतान समाधान',
+    subtotal: 450000,
+    gstRate: 18,
+    gstAmount: 81000,
+    totalAmount: 531000,
+    currency: 'INR',
+    hsnSac: '998313',
+    status: 'paid',
+    issuedAt: '2026-10-25T10:00:00Z',
+    dueAt: '2026-11-09T18:00:00Z',
+    paidAt: '2026-11-09T14:30:00Z',
+    paymentTxnId: 'TXN-UPI-NPCI-88921102',
+    paymentMethod: 'UPI',
+    verificationHash: '9a7c3b2e5f1d4a8e6b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a',
+  },
+  {
+    id: 'inv-2026-0899',
+    invoiceNumber: 'INV-2026-0899',
+    projectId: 'proj-1',
+    projectName: 'Bharat Fleet ERP & Distributed Telematics',
+    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
+    clientId: 'kalinga-client-id',
+    clientName: 'Rajiv Sengupta',
+    clientEmail: 'kalinga@enterprise.in',
+    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
+    clientGstin: '21AAACK1924L1ZZ',
+    milestoneTitle: 'Milestone 04 — Release Candidate v2.4.1 Fleet Rollout & Security Review',
+    milestoneTitleHi: 'माइलस्टोन 04 — रिलीज कैंडिडेट v2.4.1 फ्लीट रोलआउट एवं सुरक्षा समीक्षा',
+    subtotal: 500000,
+    gstRate: 18,
+    gstAmount: 90000,
+    totalAmount: 590000,
+    currency: 'INR',
+    hsnSac: '998313',
+    status: 'issued',
+    issuedAt: '2026-11-10T10:00:00Z',
+    dueAt: '2026-11-25T18:00:00Z',
+    verificationHash: '1c4e7f9a2b5d8e0c3a6f9b2d5e8a1c4f7b0d3e6a9c2f5b8e1d4a7c0f3b6e9a2d',
+  },
+  {
+    id: 'inv-2026-0912',
+    invoiceNumber: 'INV-2026-0912',
+    projectId: 'proj-2',
+    projectName: 'Odisha Krushak Mandee Multi-Tenant Core',
+    projectNameHi: 'ओडिशा कृषक मंडी मल्टी-टेनेंट कोर',
+    clientId: 'utkal-client-id',
+    clientName: 'Er. Debi Prasad Mishra',
+    clientEmail: 'utkal@odisha.gov.in',
+    clientCompany: 'Utkal Agro Infrastructure Directorate',
+    clientGstin: '21GVDPM9910A1Z5',
+    milestoneTitle: 'Milestone 01 — Vernacular Voice AI Engine & Mandee Price Sync',
+    milestoneTitleHi: 'माइलस्टोन 01 — स्थानीय ध्वनि AI इंजन एवं मंडी मूल्य समन्वय',
+    subtotal: 320000,
+    gstRate: 18,
+    gstAmount: 57600,
+    totalAmount: 377600,
+    currency: 'INR',
+    hsnSac: '998313',
+    status: 'paid',
+    issuedAt: '2026-10-15T11:00:00Z',
+    dueAt: '2026-10-30T18:00:00Z',
+    paidAt: '2026-10-28T16:15:00Z',
+    paymentTxnId: 'TXN-RTGS-RBI-29004128',
+    paymentMethod: 'NEFT_RTGS',
+    verificationHash: '4b7d0a3c6e9f2b5a8d1c4e7f0b3d6a9c2e5f8b1d4a7c0e3f6b9d2a5c8e1f4b7a',
+  },
+];
 
 interface InboundLead {
   id: string;
@@ -95,23 +178,39 @@ export const AdminDashboardPage: React.FC = () => {
   const { currentUser, isAdmin, openAuthModal } = useAuth();
   const { navigate } = useNavigation();
 
-  // Admin access gate: allow root email, isAdmin from Firestore, or demo evaluation mode
+  // Admin access gate: strictly distinguish live verified Admin vs Demo Evaluation Sandbox
   const [demoAdminMode, setDemoAdminMode] = useState<boolean>(() => {
     return sessionStorage.getItem('pws_demo_admin') === 'true';
   });
 
-  const isAuthorizedAdmin =
-    isAdmin ||
-    currentUser?.email === 'ssbhanu41@gmail.com' ||
-    demoAdminMode;
+  const isRealAdmin =
+    Boolean(currentUser) &&
+    (isAdmin || (currentUser?.emailVerified === true && currentUser?.email?.toLowerCase() === 'ssbhanu41@gmail.com'));
+  const isDemoSandbox = !isRealAdmin && demoAdminMode;
+  const isAuthorizedAdmin = isRealAdmin || isDemoSandbox;
 
   const [activeTab, setActiveTab] = useState<
-    'customers' | 'leads' | 'projects' | 'services' | 'portfolio' | 'quotations' | 'support' | 'content' | 'telemetry'
+    'customers' | 'leads' | 'projects' | 'services' | 'portfolio' | 'quotations' | 'billing' | 'support' | 'content' | 'telemetry'
   >('customers');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isSeeding, setIsSeeding] = useState(false);
   const [serverHealth, setServerHealth] = useState<any>(null);
+  const [telemetryData, setTelemetryData] = useState<any>(null);
+
+  // Invoices & Billing Generator state
+  const [invoicesList, setInvoicesList] = useState<EnterpriseInvoice[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [creatingInvoice, setCreatingInvoice] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({
+    clientName: 'Rajiv Sengupta',
+    clientEmail: 'kalinga@enterprise.in',
+    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
+    clientGstin: '21AAACK1924L1ZZ',
+    projectName: 'Bharat Fleet ERP & Distributed Telematics',
+    milestoneTitle: 'Sprint 15 Deliverable — Edge Telemetry Reconciliation',
+    subtotal: '250000',
+  });
 
   // Modals state
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -308,11 +407,11 @@ export const AdminDashboardPage: React.FC = () => {
     companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
     brandName: 'POWER WEB STUDIO AI',
     cin: 'CIN: U72900OR2024PTC045812',
-    contactEmail: 'contact@powerwebstudio.ai',
-    contactPhone: '+91 (0674) 298-4412',
+    contactEmail: 'powerusertopuser@gmail.com',
+    contactPhone: '+91 8305457717',
     maintenanceMode: false,
-    slaTarget: '99.98%',
-    headquarters: 'Bhubaneswar / Sambalpur Tech Corridor, Odisha, India',
+    slaTarget: 'SOW Scoped',
+    headquarters: 'Fingeshwar Borid Mod, Rajim Subdistrict, Gariaband District, Chhattisgarh - 493992',
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
@@ -322,7 +421,7 @@ export const AdminDashboardPage: React.FC = () => {
       actorEmail: 'ssbhanu41@gmail.com',
       action: 'SYSTEM_BOOTSTRAP',
       resource: 'firestore/all_collections',
-      details: 'SOC-2 ABAC rules verified & 15 collections synchronized',
+      details: 'RBAC security rules verified & 15 collections synchronized (Sample)',
       timestamp: '2026-11-10T12:00:00Z',
     },
     {
@@ -427,6 +526,13 @@ export const AdminDashboardPage: React.FC = () => {
       })
       .catch(() => {});
 
+    fetch('/api/telemetry')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setTelemetryData(data);
+      })
+      .catch(() => {});
+
     fetchServicesCatalog()
       .then((services) => {
         if (services && services.length > 0) setServicesList(services);
@@ -445,10 +551,32 @@ export const AdminDashboardPage: React.FC = () => {
       })
       .catch(() => {});
 
-    // Only load protected admin collections if user is an authorized authenticated administrator
-    if (!currentUser || !isAuthorizedAdmin) {
+    if (isDemoSandbox) {
+      setInvoicesList(DEMO_ADMIN_INVOICES);
       return;
     }
+
+    // Only load protected admin collections if user is a real verified Firebase Admin
+    if (!currentUser || !isRealAdmin) {
+      return;
+    }
+
+    setLoadingInvoices(true);
+    currentUser
+      .getIdToken()
+      .then((idToken) =>
+        fetch('/api/invoices', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+      )
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.invoices)) {
+          setInvoicesList(data.invoices);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingInvoices(false));
 
     // Attempt to load Firestore data for authorized admin
     fetchAllUsers()
@@ -490,7 +618,7 @@ export const AdminDashboardPage: React.FC = () => {
         if (logs && logs.length > 0) setAuditLogs(logs);
       })
       .catch(() => {});
-  }, [currentUser, isAuthorizedAdmin]);
+  }, [currentUser, isRealAdmin, isDemoSandbox]);
 
   // Enter / Exit Demo Admin Mode
   const handleToggleDemoMode = (enable: boolean) => {
@@ -513,13 +641,23 @@ export const AdminDashboardPage: React.FC = () => {
   };
 
   const handleSeedDatabase = async () => {
+    if (isDemoSandbox) {
+      showToast(
+        t(
+          '[Demo Sandbox] Live Cloud Firestore synchronization requires signing in as verified Root Admin (ssbhanu41@gmail.com).',
+          '[डेमो सैंडबॉक्स] लाइव Cloud Firestore सिंक्रनाइज़ेशन के लिए सत्यापित रूट एडमिन (ssbhanu41@gmail.com) के रूप में साइन इन आवश्यक है।'
+        ),
+        'info'
+      );
+      return;
+    }
     try {
       setIsSeeding(true);
       const res = await seedInitialDatabaseIfEmpty();
       showToast(
         language === 'hi'
-          ? `Cloud Firestore 15 संग्रह सफलतापूर्वक सिंक्रनाइज़ हुए (${res.count} ऐप्स)`
-          : `Cloud Firestore 15 collections synchronized (${res.count} apps)`,
+          ? `Cloud Firestore संग्रह सफलतापूर्वक सिंक्रनाइज़ हुए (${res.count} ऐप्स)`
+          : `Cloud Firestore collections synchronized (${res.count} apps)`,
         'success'
       );
     } catch (err: any) {
@@ -531,6 +669,19 @@ export const AdminDashboardPage: React.FC = () => {
 
   // Customers: promote/demote role
   const handleRoleChange = async (userId: string, newRole: 'admin' | 'client' | 'architect' | 'manager') => {
+    if (isDemoSandbox) {
+      setUsersList((prev) =>
+        prev.map((u) => (u.uid === userId ? { ...u, role: newRole } : u))
+      );
+      showToast(
+        t(
+          `[Demo Sandbox] Simulated role change to "${newRole}" locally.`,
+          `[डेमो सैंडबॉक्स] भूमिका परिवर्तन "${newRole}" केवल स्थानीय पूर्वावलोकन में सहेजा गया।`
+        ),
+        'info'
+      );
+      return;
+    }
     try {
       await updateUserRole(userId, newRole);
       setUsersList((prev) =>
@@ -605,6 +756,11 @@ export const AdminDashboardPage: React.FC = () => {
   // Delete Handlers with confirmation
   const handleDeleteProject = async (id: string, name: string) => {
     if (window.confirm(language === 'hi' ? `क्या आप प्रोजेक्ट "${name}" को हटाना चाहते हैं?` : `Delete project "${name}"?`)) {
+      if (isDemoSandbox) {
+        setProjectsList((prev) => prev.filter((p) => p.id !== id));
+        showToast(t('[Demo Sandbox] Project removed locally.', '[डेमो सैंडबॉक्स] प्रोजेक्ट स्थानीय रूप से हटाया गया।'), 'info');
+        return;
+      }
       try {
         await deleteProject(id);
         setProjectsList((prev) => prev.filter((p) => p.id !== id));
@@ -617,6 +773,11 @@ export const AdminDashboardPage: React.FC = () => {
 
   const handleDeleteService = async (id: string, title: string) => {
     if (window.confirm(language === 'hi' ? `क्या आप सेवा "${title}" को कैटलॉग से हटाना चाहते हैं?` : `Delete service "${title}"?`)) {
+      if (isDemoSandbox) {
+        setServicesList((prev) => prev.filter((s) => s.id !== id));
+        showToast(t('[Demo Sandbox] Service removed locally.', '[डेमो सैंडबॉक्स] सेवा स्थानीय रूप से हटाई गई।'), 'info');
+        return;
+      }
       try {
         await deleteServiceItem(id);
         setServicesList((prev) => prev.filter((s) => s.id !== id));
@@ -629,6 +790,11 @@ export const AdminDashboardPage: React.FC = () => {
 
   const handleDeleteQuotation = async (id: string) => {
     if (window.confirm(language === 'hi' ? `क्या आप कोटेशन "${id}" को हटाना चाहते हैं?` : `Delete quotation "${id}"?`)) {
+      if (isDemoSandbox) {
+        setQuotationsList((prev) => prev.filter((q) => q.id !== id));
+        showToast(t('[Demo Sandbox] Quotation removed locally.', '[डेमो सैंडबॉक्स] कोटेशन स्थानीय रूप से हटाई गई।'), 'info');
+        return;
+      }
       try {
         await deleteQuotation(id);
         setQuotationsList((prev) => prev.filter((q) => q.id !== id));
@@ -641,6 +807,11 @@ export const AdminDashboardPage: React.FC = () => {
 
   const handleDeleteBlogPost = async (id: string, title: string) => {
     if (window.confirm(language === 'hi' ? `क्या आप लेख "${title}" को हटाना चाहते हैं?` : `Delete article "${title}"?`)) {
+      if (isDemoSandbox) {
+        setBlogList((prev) => prev.filter((b) => b.id !== id));
+        showToast(t('[Demo Sandbox] Article removed locally.', '[डेमो सैंडबॉक्स] लेख स्थानीय रूप से हटाया गया।'), 'info');
+        return;
+      }
       try {
         await deleteBlogPost(id);
         setBlogList((prev) => prev.filter((b) => b.id !== id));
@@ -653,6 +824,16 @@ export const AdminDashboardPage: React.FC = () => {
 
   const handleSaveSiteSettings = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemoSandbox) {
+      showToast(
+        t(
+          '[Demo Sandbox] Global settings preview updated locally. Sign in as Admin to persist to Cloud Firestore.',
+          '[डेमो सैंडबॉक्स] सेटिंग्स केवल स्थानीय पूर्वावलोकन में सहेजी गईं।'
+        ),
+        'info'
+      );
+      return;
+    }
     setSavingSettings(true);
     try {
       await saveSiteSettings(siteSettings);
@@ -666,6 +847,129 @@ export const AdminDashboardPage: React.FC = () => {
       showToast(err.message || 'Failed to save settings', 'alert');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  // Authenticated attachment download helper (sends Bearer ID token for /api/files/*)
+  const handleAdminDownloadAttachment = async (url?: string, fileName?: string) => {
+    if (!url || url === '#') return;
+    if (isDemoSandbox) {
+      showToast(
+        t(
+          '[Demo Sandbox] Sign in as verified Admin to download protected client file artifacts.',
+          '[डेमो सैंडबॉक्स] सुरक्षित क्लाइंट फ़ाइल डाउनलोड करने के लिए सत्यापित एडमिन के रूप में साइन इन करें।'
+        ),
+        'info'
+      );
+      return;
+    }
+    try {
+      const headers: Record<string, string> = {};
+      if (currentUser && url.startsWith('/api/files/')) {
+        headers['Authorization'] = `Bearer ${await currentUser.getIdToken()}`;
+      }
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Download failed (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = fileName || 'enterprise-artifact';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch (err: any) {
+      showToast(err?.message || t('Unable to download attachment.', 'संलग्नक डाउनलोड विफल।'), 'alert');
+    }
+  };
+
+  // Issue Official GST Invoice (server calculates 18% GST and persists)
+  const handleGenerateInvoice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numericSubtotal = Number(invoiceForm.subtotal);
+    if (!Number.isFinite(numericSubtotal) || numericSubtotal <= 0) {
+      showToast(t('Enter a valid positive subtotal in INR.', 'कृपया INR में मान्य सकारात्मक राशि दर्ज करें।'), 'alert');
+      return;
+    }
+
+    if (isDemoSandbox) {
+      const gstAmount = Math.round(numericSubtotal * 0.18);
+      const demoInv: EnterpriseInvoice = {
+        id: `inv-demo-${Date.now()}`,
+        invoiceNumber: `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        projectId: 'proj-demo',
+        projectName: invoiceForm.projectName.trim(),
+        projectNameHi: invoiceForm.projectName.trim(),
+        clientId: 'demo-client',
+        clientName: invoiceForm.clientName.trim(),
+        clientEmail: invoiceForm.clientEmail.trim().toLowerCase(),
+        clientCompany: invoiceForm.clientCompany.trim(),
+        clientGstin: invoiceForm.clientGstin.trim() || '21AAACK0000A1Z0',
+        milestoneTitle: invoiceForm.milestoneTitle.trim(),
+        milestoneTitleHi: invoiceForm.milestoneTitle.trim(),
+        subtotal: numericSubtotal,
+        gstRate: 18,
+        gstAmount,
+        totalAmount: numericSubtotal + gstAmount,
+        currency: 'INR',
+        hsnSac: '998313',
+        status: 'issued',
+        issuedAt: new Date().toISOString(),
+        dueAt: new Date(Date.now() + 15 * 86400 * 1000).toISOString(),
+        verificationHash: 'demo_sandbox_preview_hash',
+      };
+      setInvoicesList((prev) => [demoInv, ...prev]);
+      showToast(
+        t(
+          `[Demo Sandbox] Invoice ${demoInv.invoiceNumber} previewed locally.`,
+          `[डेमो सैंडबॉक्स] चालान ${demoInv.invoiceNumber} स्थानीय रूप से तैयार किया गया।`
+        ),
+        'info'
+      );
+      return;
+    }
+
+    if (!currentUser) {
+      openAuthModal('login');
+      return;
+    }
+
+    setCreatingInvoice(true);
+    try {
+      const idToken = await currentUser.getIdToken();
+      const res = await fetch('/api/invoices/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          ...invoiceForm,
+          subtotal: numericSubtotal,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || `Invoice generation failed (HTTP ${res.status})`);
+      }
+      if (data.invoice) {
+        setInvoicesList((prev) => [data.invoice, ...prev]);
+      }
+      showToast(
+        t(
+          `Official GST Invoice ${data.invoice?.invoiceNumber} issued (Total: INR ${data.invoice?.totalAmount?.toLocaleString('en-IN')}).`,
+          `आधिकारिक GST चालान ${data.invoice?.invoiceNumber} जारी किया गया।`
+        ),
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err?.message || t('Invoice generation failed.', 'चालान निर्माण विफल रहा।'), 'alert');
+    } finally {
+      setCreatingInvoice(false);
     }
   };
 
@@ -751,9 +1055,36 @@ export const AdminDashboardPage: React.FC = () => {
       return;
     }
     const statusChange = adminReplyStatuses[ticketId] || 'in_progress';
+    const author = currentUser?.displayName || 'Er. Bhanu Ram Bariha (Lead Architect)';
+
+    if (isDemoSandbox) {
+      const replyObj = {
+        id: `resp-${Date.now()}`,
+        author,
+        authorRole: 'Lead Platform Architect',
+        message: text,
+        timestamp: new Date().toISOString(),
+      };
+      setTicketsList((prev) =>
+        prev.map((t) =>
+          t.id === ticketId
+            ? { ...t, status: statusChange, responses: [...(t.responses || []), replyObj] }
+            : t
+        )
+      );
+      setAdminReplyTexts((prev) => ({ ...prev, [ticketId]: '' }));
+      showToast(
+        t(
+          `[Demo Sandbox] Reply simulated locally (${statusChange}).`,
+          `[डेमो सैंडबॉक्स] उत्तर केवल स्थानीय पूर्वावलोकन में दर्ज किया गया।`
+        ),
+        'info'
+      );
+      return;
+    }
+
     setSubmittingAdminReply((prev) => ({ ...prev, [ticketId]: true }));
     try {
-      const author = currentUser?.displayName || 'Er. Bhanu Ram Bariha (Lead Architect)';
       const reply = await addTicketResponse(ticketId, {
         author,
         authorRole: 'Lead Platform Architect',
@@ -798,6 +1129,19 @@ export const AdminDashboardPage: React.FC = () => {
   };
 
   const handleAdminChangeTicketStatus = async (ticketId: string, newStatus: 'open' | 'in_progress' | 'resolved') => {
+    if (isDemoSandbox) {
+      setTicketsList((prev) =>
+        prev.map((t) => (t.id === ticketId ? { ...t, status: newStatus } : t))
+      );
+      showToast(
+        t(
+          `[Demo Sandbox] Ticket status simulated as "${newStatus}".`,
+          `[डेमो सैंडबॉक्स] टिकट स्थिति "${newStatus}" के रूप में अनुकरण की गई।`
+        ),
+        'info'
+      );
+      return;
+    }
     try {
       await updateSupportTicketStatus(ticketId, newStatus);
       setTicketsList((prev) =>
@@ -847,7 +1191,7 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500">{t('Security Policy:', 'सुरक्षा नीति:')}</span>
-              <span className="text-blue-400 font-bold">SOC-2 ABAC / Default Deny</span>
+              <span className="text-blue-400 font-bold">Role-Based RBAC / Default Deny</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500">{t('Current Session:', 'वर्तमान सत्र:')}</span>
@@ -897,25 +1241,33 @@ export const AdminDashboardPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Demo Mode Notice Banner if enabled */}
-        {demoAdminMode && (
+        {/* Demo Sandbox Evaluation Notice Banner if unauthenticated */}
+        {isDemoSandbox && (
           <div className="mb-6 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
             <div className="flex items-center gap-2 font-medium">
-              <span className="w-2 h-2 rounded-full bg-amber-600 animate-ping"></span>
+              <Shield className="w-4 h-4 text-amber-700 shrink-0" />
               <span>
-                <strong>{t('DEMO ADMIN EVALUATION ACTIVE:', 'डेमो एडमिन मूल्यांकन सक्रिय:')}</strong>{' '}
+                <strong>{t('LOCAL DEMO SANDBOX ACTIVE (UNAUTHENTICATED):', 'स्थानीय डेमो सैंडबॉक्स सक्रिय (अप्रमाणीकृत):')}</strong>{' '}
                 {t(
-                  'All 7 management modules (Customers, Leads, Projects, Services, Apps, Quotes, Content) are unlocked with full CRUD capabilities.',
-                  'सभी 7 प्रबंधन मॉड्यूल (ग्राहक, लीड्स, प्रोजेक्ट्स, सेवाएं, ऐप्स, कोट्स, कंटेंट) पूर्ण संपादन के साथ सक्रिय हैं।'
+                  'Modules display seeded sample data locally. Sign in with verified admin credentials (ssbhanu41@gmail.com) for live Cloud Firestore & GST Invoice ledger writes.',
+                  'मॉड्यूल केवल स्थानीय नमूना डेटा दिखाते हैं। लाइव Cloud Firestore और GST चालान लेखन के लिए सत्यापित एडमिन (ssbhanu41@gmail.com) से साइन इन करें।'
                 )}
               </span>
             </div>
-            <button
-              onClick={() => handleToggleDemoMode(false)}
-              className="px-2.5 py-1 text-xs font-bold text-amber-950 bg-amber-200/80 hover:bg-amber-300 rounded border border-amber-400/50 transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
-            >
-              {t('Exit Demo Mode', 'डेमो मोड से बाहर निकलें')}
-            </button>
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
+              <button
+                onClick={() => openAuthModal('login')}
+                className="px-2.5 py-1 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors cursor-pointer"
+              >
+                {t('Sign In Live', 'लाइव लॉगिन')}
+              </button>
+              <button
+                onClick={() => handleToggleDemoMode(false)}
+                className="px-2.5 py-1 text-xs font-bold text-amber-950 bg-amber-200/80 hover:bg-amber-300 rounded border border-amber-400/50 transition-colors cursor-pointer"
+              >
+                {t('Exit Demo Mode', 'डेमो बंद करें')}
+              </button>
+            </div>
           </div>
         )}
 
@@ -923,13 +1275,14 @@ export const AdminDashboardPage: React.FC = () => {
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 sm:p-8 text-white shadow-md mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-800">
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
                 <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-900/60 text-blue-300 border border-blue-700/60 uppercase tracking-wider">
                   {t('Studio Admin Console', 'स्टूडियो एडमिनिस्ट्रेशन कंसोल')}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  {t('Production Node: BBSR-DC-01', 'उत्पादन नोड: BBSR-DC-01')}
+                  {isRealAdmin
+                    ? t('Verified Firebase Admin Session', 'सत्यापित फायरबेस एडमिन सत्र')
+                    : t('Evaluation Sandbox (Local State)', 'मूल्यांकन सैंडबॉक्स (स्थानीय)')}
                 </span>
                 {currentUser?.email && (
                   <span className="text-xs text-slate-400 font-mono hidden sm:inline">
@@ -1123,8 +1476,23 @@ export const AdminDashboardPage: React.FC = () => {
           >
             <FileText className="w-4 h-4" />
             <span>{t('Quotations', 'प्रस्ताव एवं कोटेशन')}</span>
-            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold tabular-nums">
               {quotationsList.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'billing'
+                ? 'border-blue-700 text-blue-700'
+                : 'border-transparent text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>{t('GST Billing & Invoices', 'GST बिलिंग एवं चालान')}</span>
+            <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold tabular-nums">
+              {invoicesList.length}
             </span>
           </button>
 
@@ -1743,16 +2111,20 @@ export const AdminDashboardPage: React.FC = () => {
                         <div>{q.serviceType}</div>
                         {(q.attachedFileName || q.attachment?.fileName) && (
                           <div className="pt-1">
-                            <a
-                              href={q.attachedFileUrl || q.attachment?.fileUrl || q.attachment?.downloadUrl || '#'}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-100 transition-colors"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleAdminDownloadAttachment(
+                                  q.attachedFileUrl || q.attachment?.fileUrl || q.attachment?.downloadUrl,
+                                  q.attachedFileName || q.attachment?.fileName
+                                )
+                              }
+                              className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded hover:bg-blue-100 transition-colors cursor-pointer"
                             >
                               <Paperclip className="w-3 h-3" />
                               <span className="truncate max-w-[130px]">{q.attachedFileName || q.attachment?.fileName}</span>
                               <Download className="w-2.5 h-2.5" />
-                            </a>
+                            </button>
                           </div>
                         )}
                       </td>
@@ -1800,6 +2172,245 @@ export const AdminDashboardPage: React.FC = () => {
         )}
 
         {/* =====================================================================
+           TAB 6B: GST BILLING & TAX INVOICE LEDGER
+           ===================================================================== */}
+        {activeTab === 'billing' && (
+          <div className="space-y-6">
+            {/* Revenue & Tax Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  {t('Total Billed Value (Incl. 18% GST)', 'कुल बिल राशि (18% GST सहित)')}
+                </div>
+                <div className="mt-1.5 text-2xl font-black font-mono text-slate-950 tabular-nums">
+                  ₹{invoicesList.reduce((acc, inv) => acc + (inv.totalAmount || 0), 0).toLocaleString('en-IN')}
+                </div>
+                <div className="mt-1 text-[11px] text-slate-500 font-mono">
+                  HSN/SAC 998313 · {invoicesList.length} {t('Invoices', 'चालान')}
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+                  {t('Verified Escrow Settled', 'सत्यापित भुगतान प्राप्त')}
+                </div>
+                <div className="mt-1.5 text-2xl font-black font-mono text-emerald-700 tabular-nums">
+                  ₹
+                  {invoicesList
+                    .filter((i) => i.status === 'paid')
+                    .reduce((acc, inv) => acc + (inv.totalAmount || 0), 0)
+                    .toLocaleString('en-IN')}
+                </div>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {t('HMAC-SHA256 Server Verified', 'HMAC-SHA256 सर्वर सत्यापित')}
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+                  {t('Outstanding Receivables', 'बकाया प्राप्य राशि')}
+                </div>
+                <div className="mt-1.5 text-2xl font-black font-mono text-amber-700 tabular-nums">
+                  ₹
+                  {invoicesList
+                    .filter((i) => i.status !== 'paid' && i.status !== 'cancelled')
+                    .reduce((acc, inv) => acc + (inv.totalAmount || 0), 0)
+                    .toLocaleString('en-IN')}
+                </div>
+                <div className="mt-1 text-[11px] text-slate-500">
+                  {t('Awaiting Client Settlement', 'ग्राहक भुगतान प्रतीक्षित')}
+                </div>
+              </div>
+            </div>
+
+            {/* Issue GST Invoice Form */}
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-bold text-slate-950 flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-blue-700" />
+                    <span>{t('Issue Authoritative GST Tax Invoice', 'आधिकारिक GST कर चालान जारी करें')}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {t(
+                      'Server automatically computes 18% IGST/CGST+SGST, assigns HSN/SAC 998313, and commits cryptographic verification hash.',
+                      'सर्वर स्वतः 18% GST और HSN/SAC 998313 की गणना करता है और सत्यापन हैश दर्ज करता है।'
+                    )}
+                  </p>
+                </div>
+                <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200">
+                  POST /api/invoices/generate
+                </span>
+              </div>
+
+              <form onSubmit={handleGenerateInvoice} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Client Name', 'ग्राहक का नाम')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={invoiceForm.clientName}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, clientName: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Client Email', 'ग्राहक ईमेल')}</label>
+                  <input
+                    type="email"
+                    required
+                    value={invoiceForm.clientEmail}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, clientEmail: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Client Organization', 'संस्था का नाम')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={invoiceForm.clientCompany}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, clientCompany: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Client GSTIN', 'ग्राहक GSTIN')}</label>
+                  <input
+                    type="text"
+                    value={invoiceForm.clientGstin}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, clientGstin: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Project Engagement', 'प्रोजेक्ट नाम')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={invoiceForm.projectName}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, projectName: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Milestone Deliverable', 'माइलस्टोन विवरण')}</label>
+                  <input
+                    type="text"
+                    required
+                    value={invoiceForm.milestoneTitle}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, milestoneTitle: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">{t('Base Amount (INR, Excl. GST)', 'मूल राशि (INR)')}</label>
+                  <input
+                    type="number"
+                    min={100}
+                    required
+                    value={invoiceForm.subtotal}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, subtotal: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono tabular-nums"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 lg:col-span-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                  <div className="text-xs text-slate-600 font-mono tabular-nums">
+                    {t('Calculated Preview:', 'अनुमानित गणना:')} ₹{Number(invoiceForm.subtotal || 0).toLocaleString('en-IN')} + 18% GST (₹
+                    {Math.round(Number(invoiceForm.subtotal || 0) * 0.18).toLocaleString('en-IN')}) ={' '}
+                    <strong className="text-slate-950">
+                      ₹{Math.round(Number(invoiceForm.subtotal || 0) * 1.18).toLocaleString('en-IN')}
+                    </strong>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={creatingInvoice}
+                    className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1.5 self-start sm:self-auto"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>{creatingInvoice ? t('Issuing Invoice...', 'चालान जारी हो रहा है...') : t('Issue Official GST Invoice', 'आधिकारिक GST चालान जारी करें')}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Invoices Registry Table */}
+            <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-bold text-slate-950">
+                  {t('Enterprise GST Tax Invoice Ledger', 'एंटरप्राइज GST कर चालान बहीखाता')}
+                </h3>
+                {loadingInvoices && (
+                  <span className="text-xs text-slate-500 font-mono">{t('Syncing ledger...', 'सिंक हो रहा है...')}</span>
+                )}
+              </div>
+
+              {serverHealth?.storage?.ephemeralDiskWarning && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <span>{serverHealth.storage.ephemeralDiskWarning}</span>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-3">{t('Invoice #', 'चालान #')}</th>
+                      <th className="py-3 px-3">{t('Client & GSTIN', 'ग्राहक एवं GSTIN')}</th>
+                      <th className="py-3 px-3">{t('Project / Milestone', 'प्रोजेक्ट / माइलस्टोन')}</th>
+                      <th className="py-3 px-3 text-right">{t('Total (Incl. 18% GST)', 'कुल राशि (GST सहित)')}</th>
+                      <th className="py-3 px-3">{t('Status & Settlement', 'स्थिति एवं निपटान')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {invoicesList.map((inv) => (
+                      <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                          <div>{inv.invoiceNumber}</div>
+                          <div className="text-[10px] font-normal text-slate-500">{formatDate(inv.issuedAt)}</div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="font-bold text-slate-900">{inv.clientCompany}</div>
+                          <div className="text-[11px] text-slate-500 font-mono">
+                            {inv.clientEmail} · {inv.clientGstin || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 max-w-xs">
+                          <div className="font-semibold text-slate-800 truncate">{inv.projectName}</div>
+                          <div className="text-[11px] text-slate-500 truncate">{inv.milestoneTitle}</div>
+                        </td>
+                        <td className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap">
+                          <div className="font-black text-slate-950">₹{inv.totalAmount.toLocaleString('en-IN')}</div>
+                          <div className="text-[10px] text-slate-500">
+                            Base ₹{inv.subtotal.toLocaleString('en-IN')} + ₹{inv.gstAmount.toLocaleString('en-IN')} GST
+                          </div>
+                        </td>
+                        <td className="py-3 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                              inv.status === 'paid'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : 'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}
+                          >
+                            {inv.status}
+                          </span>
+                          {inv.paymentTxnId && (
+                            <div className="text-[10px] font-mono text-slate-500 mt-1">{inv.paymentTxnId}</div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =====================================================================
            TAB 7: SLA SUPPORT TICKETS & ARCHITECT TRIAGE
            ===================================================================== */}
         {activeTab === 'support' && (
@@ -1820,7 +2431,7 @@ export const AdminDashboardPage: React.FC = () => {
 
               <div className="flex items-center gap-2 text-xs font-mono">
                 <span className="px-2.5 py-1 rounded bg-slate-100 text-slate-700 font-bold border border-slate-200">
-                  {t('SLA Target:', 'SLA लक्ष्य:')} 99.98%
+                  {t('SLA Scope:', 'SLA नीति:')} SOW Scoped
                 </span>
                 <span className="px-2.5 py-1 rounded bg-emerald-50 text-emerald-800 font-bold border border-emerald-200">
                   {t('MTTR:', 'समाधान समय:')} &lt; 18 min
@@ -1988,15 +2599,19 @@ export const AdminDashboardPage: React.FC = () => {
                             </div>
 
                             {(attachment.downloadUrl || attachment.fileUrl) && (
-                              <a
-                                href={attachment.downloadUrl || attachment.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleAdminDownloadAttachment(
+                                    attachment.downloadUrl || attachment.fileUrl,
+                                    attachment.fileName
+                                  )
+                                }
                                 className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-white hover:bg-blue-50 border border-blue-300 rounded transition-colors inline-flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
                               >
                                 <Download className="w-3.5 h-3.5" />
                                 <span>{t('Download Attached Diagnostic', 'संलग्न डायग्नोस्टिक डाउनलोड करें')}</span>
-                              </a>
+                              </button>
                             )}
                           </div>
                         )}
@@ -2323,7 +2938,7 @@ export const AdminDashboardPage: React.FC = () => {
 
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        {t('Target SLA Uptime Guarantee', 'लक्ष्य SLA अपटाइम गारंटी')}
+                        {t('Availability Benchmark Target (SOW)', 'उपलब्धता लक्ष्य (SOW अनुसार)')}
                       </label>
                       <input
                         type="text"
@@ -2396,32 +3011,55 @@ export const AdminDashboardPage: React.FC = () => {
           <div className="space-y-6">
             {/* Live Node.js Diagnostics */}
             <div className="bg-slate-950 border border-slate-800 rounded-xl p-6 font-mono text-xs text-slate-300 shadow-lg space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
                 <div className="flex items-center gap-2 text-emerald-400">
                   <Terminal className="w-4 h-4" />
                   <span className="font-bold">BHANU_RAM_BARIHA_TECH // SYSTEM_TELEMETRY_DAEMON</span>
                 </div>
-                <span className="text-[11px] text-slate-500">HEALTH_POLL: 200 OK · TLS 1.3</span>
+                <span className="text-[11px] text-slate-400">
+                  HEALTH: {serverHealth?.status || 'POLLING'} · BEARER: {serverHealth?.security?.bearerTokenVerification || 'FIREBASE_RS256'}
+                </span>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-slate-400">
                 <div className="bg-slate-900/60 p-3 rounded border border-slate-800">
                   <span className="text-slate-500 block text-[10px] uppercase">Node Runtime</span>
-                  <span className="text-emerald-400 font-bold">{serverHealth?.runtime || 'Node.js v22.x'}</span>
+                  <span className="text-emerald-400 font-bold tabular-nums">
+                    {telemetryData?.nodeVersion || serverHealth?.deployment?.nodeVersion || 'Checking...'}
+                  </span>
                 </div>
                 <div className="bg-slate-900/60 p-3 rounded border border-slate-800">
-                  <span className="text-slate-500 block text-[10px] uppercase">Memory RSS</span>
-                  <span className="text-blue-400 font-bold">{serverHealth?.memory?.rss || '48.2 MB'}</span>
+                  <span className="text-slate-500 block text-[10px] uppercase">Memory RSS / Heap</span>
+                  <span className="text-blue-400 font-bold tabular-nums">
+                    {telemetryData?.memory?.rssMb != null
+                      ? `${telemetryData.memory.rssMb} MB (Heap ${telemetryData.memory.heapUsedMb} MB)`
+                      : 'Checking...'}
+                  </span>
                 </div>
                 <div className="bg-slate-900/60 p-3 rounded border border-slate-800">
                   <span className="text-slate-500 block text-[10px] uppercase">Firestore Status</span>
-                  <span className="text-emerald-400 font-bold">15 / 15 Collections</span>
+                  <span
+                    className={`font-bold tabular-nums ${
+                      serverHealth?.database?.status === 'CONNECTED' ? 'text-emerald-400' : 'text-amber-400'
+                    }`}
+                  >
+                    {serverHealth?.database?.status || 'CHECKING'} · 17 Collections
+                    {serverHealth?.database?.probeLatencyMs != null ? ` (${serverHealth.database.probeLatencyMs}ms)` : ''}
+                  </span>
                 </div>
                 <div className="bg-slate-900/60 p-3 rounded border border-slate-800">
-                  <span className="text-slate-500 block text-[10px] uppercase">Security Policy</span>
-                  <span className="text-purple-400 font-bold">SOC-2 ABAC Rules</span>
+                  <span className="text-slate-500 block text-[10px] uppercase">Security & Storage</span>
+                  <span className="text-purple-400 font-bold">
+                    RBAC Default Deny · {serverHealth?.security?.paymentSecretConfigured ? 'PAYMENT_SECRET SET' : 'EPHEMERAL HMAC'}
+                  </span>
                 </div>
               </div>
+
+              {serverHealth?.storage?.ephemeralDiskWarning && (
+                <div className="p-3 rounded bg-amber-950/50 border border-amber-800/70 text-amber-200 text-[11px] leading-relaxed">
+                  <strong>[CLOUD RUN STORAGE NOTICE]</strong> {serverHealth.storage.ephemeralDiskWarning}
+                </div>
+              )}
             </div>
 
             {/* Immutable Firestore Audit Log Stream */}
@@ -2483,7 +3121,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
         onSuccess={() => {
-          fetchAllUsers().then((u) => u && setUsersList(u));
+          if (isRealAdmin) {
+            fetchAllUsers().then((u) => u && setUsersList(u));
+          }
         }}
         customer={editingCustomer}
       />
@@ -2493,7 +3133,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={projectModalOpen}
         onClose={() => setProjectModalOpen(false)}
         onSuccess={() => {
-          fetchAllProjects().then((p) => p && setProjectsList(p));
+          if (isRealAdmin) {
+            fetchAllProjects().then((p) => p && setProjectsList(p));
+          }
         }}
         project={editingProject}
       />
@@ -2503,7 +3145,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={serviceModalOpen}
         onClose={() => setServiceModalOpen(false)}
         onSuccess={() => {
-          fetchServicesCatalog().then((s) => s && setServicesList(s));
+          if (isRealAdmin) {
+            fetchServicesCatalog().then((s) => s && setServicesList(s));
+          }
         }}
         service={editingService}
       />
@@ -2513,7 +3157,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={quotationModalOpen}
         onClose={() => setQuotationModalOpen(false)}
         onSuccess={() => {
-          fetchAllQuotations().then((q) => q && setQuotationsList(q));
+          if (isRealAdmin) {
+            fetchAllQuotations().then((q) => q && setQuotationsList(q));
+          }
         }}
         quotation={editingQuotation}
       />
@@ -2523,7 +3169,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={blogModalOpen}
         onClose={() => setBlogModalOpen(false)}
         onSuccess={() => {
-          fetchBlogPosts().then((b) => b && setBlogList(b));
+          if (isRealAdmin) {
+            fetchBlogPosts().then((b) => b && setBlogList(b));
+          }
         }}
         post={editingBlog}
       />

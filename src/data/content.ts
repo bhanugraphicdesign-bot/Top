@@ -1,12 +1,16 @@
 import { ServiceItem, AndroidApp, AiSolution, ProcessStep, WhyChooseUsPillar } from '../types';
+import heroEnterpriseImg from '../assets/images/hero_enterprise_tech_1794321127395.jpg';
+import companyHqImg from '../assets/images/company_headquarters_1794321127887.jpg';
+import androidEcosystemImg from '../assets/images/android_app_ecosystem_1794321127603.jpg';
+import aiNeuralImg from '../assets/images/ai_neural_architecture_1794321127723.jpg';
 
 export const ASSETS = {
-  heroImage: '/src/assets/images/hero_enterprise_tech_1794321127395.jpg',
-  campusImage: '/src/assets/images/company_headquarters_1794321127887.jpg',
-  androidImage: '/src/assets/images/android_app_ecosystem_1794321127603.jpg',
-  aiImage: '/src/assets/images/ai_neural_architecture_1794321127723.jpg',
-  appMockupImage: '/src/assets/images/app_screenshots_mockup_1794321883195.jpg',
-  blogImage: '/src/assets/images/blog_tech_insights_1794321883064.jpg',
+  heroImage: heroEnterpriseImg,
+  campusImage: companyHqImg,
+  androidImage: androidEcosystemImg,
+  aiImage: aiNeuralImg,
+  appMockupImage: androidEcosystemImg,
+  blogImage: aiNeuralImg,
 };
 
 export const COMPANY_INFO = {
@@ -15,12 +19,12 @@ export const COMPANY_INFO = {
   brand: 'POWER WEB STUDIO AI',
   registration: 'CIN: U72900OR2024PTC045812',
   founded: '2024',
-  headquarters: 'Bhubaneswar / Sambalpur Tech Corridor, Odisha, India',
-  email: 'contact@powerwebstudio.ai',
-  supportEmail: 'enterprise@barihadigital.com',
-  phone: '+91 (0674) 298-4412',
-  directLine: '+91 98610 54321',
-  slaUptime: '99.98%',
+  headquarters: 'Fingeshwar Borid Mod, Rajim Subdistrict, Gariaband District, Chhattisgarh - 493992',
+  email: 'powerusertopuser@gmail.com',
+  supportEmail: 'powerusertopuser@gmail.com',
+  phone: '+91 8305457717',
+  directLine: '+91 8305457717',
+  slaUptime: 'SOW Scoped',
   clientSatisfaction: '4.9/5.0',
   activeSquads: '18+',
 };
@@ -52,7 +56,7 @@ export const INITIAL_ANDROID_APPS: AndroidApp[] = [
     ],
     techStack: ['Kotlin', 'Jetpack Compose', 'SQLCipher', 'Coroutines', 'Bluetooth LE', 'Retrofit'],
     metrics: [
-      { label: 'Merchant Uptime', labelHi: 'मर्चेंट अपटाइम', value: '99.99%' },
+      { label: 'Target Uptime', labelHi: 'लक्षित अपटाइम', value: 'HA Design' },
       { label: 'Transactions Daily', labelHi: 'दैनिक लेनदेन', value: '450K+' },
       { label: 'Audio Latency', labelHi: 'ऑडियो लेटेंसी', value: '<350ms' },
     ],
@@ -447,13 +451,13 @@ export const SERVICES_DATA: ServiceItem[] = [
     fullDescHi: 'हम धीमे पुराने पोर्टल्स को अत्यधिक उत्तरदायी, सुलभ वेब अनुभवों से बदलते हैं। सर्वर-ड्रिवेन यूआई और बंडल अनुकूलन के साथ, आपके प्लेटफॉर्म तुरंत लोड होते हैं।',
     deliverables: [
       'Sub-Second First Contentful Paint (<0.8s)',
-      'WCAG 2.1 AA Certified Design System & Tokens',
+      'WCAG 2.1 AA Aligned Design System & Tokens',
       'Complex Real-Time Data Dashboards & Visualizations',
       'Offline-Ready Progressive Web Capabilities',
     ],
     deliverablesHi: [
       'सब-सेकंड फर्स्ट कंटेंटफुल पेंट (<0.8 सेकंड)',
-      'डब्ल्यूसीएजी 2.1 एए प्रमाणित डिज़ाइन सिस्टम और टोकन',
+      'डब्ल्यूसीएजी 2.1 एए अनुरूप डिज़ाइन सिस्टम और टोकन',
       'जटिल रीयल-टाइम डेटा डैशबोर्ड और विज़ुअलाइज़ेशन',
       'ऑफलाइन-रेडी प्रोग्रेसिव वेब क्षमताएं',
     ],
@@ -546,9 +550,9 @@ export const SERVICES_DATA: ServiceItem[] = [
     ],
     techStack: ['Terraform', 'Kubernetes', 'AWS', 'Google Cloud', 'GitHub Actions', 'ArgoCD'],
     icon: 'Cloud',
-    metric: '99.98%',
-    metricLabel: 'Platform Availability SLA',
-    metricLabelHi: 'प्लेटफॉर्म उपलब्धता एसएलए',
+    metric: 'HA Goal',
+    metricLabel: 'Target Availability Architecture',
+    metricLabelHi: 'लक्षित उपलब्धता आर्किटेक्चर',
   },
   {
     id: 'api-security-gateway',
@@ -696,13 +700,13 @@ export const PROCESS_STEPS: ProcessStep[] = [
     deliverables: [
       'System Architecture Blueprint (C4 Model)',
       'Data Entity Relationship & Event Flow Models',
-      'Security Compliance Matrix (SOC-2 / ISO)',
+      'Security & Privacy Controls Checklist (Internal)',
       'Deterministic Sprint Roadmap & Cost Modeling',
     ],
     deliverablesHi: [
       'सिस्टम आर्किटेक्चर ब्लूप्रिंट (C4 मॉडल)',
       'डेटा एंटिटी रिलेशनशिप और इवेंट फ्लो मॉडल',
-      'सुरक्षा अनुपालन मैट्रिक्स (एसओसी-2 / आईएसओ)',
+      'सुरक्षा व गोपनीयता नियंत्रण चेकलिस्ट (आंतरिक)',
       'स्प्रिंट रोडमैप और लागत मॉडलिंग',
     ],
   },
@@ -799,13 +803,13 @@ export const PROCESS_STEPS: ProcessStep[] = [
     description: 'Our partnership continues after launch. We provide round-the-clock site reliability engineering, proactive security patching, and ongoing performance tuning.',
     descriptionHi: 'लॉन्च के बाद भी हमारी साझेदारी जारी रहती है। हम 24 घंटे साइट विश्वसनीयता इंजीनियरिंग, सक्रिय सुरक्षा पैचिंग और प्रदर्शन ट्यूनिंग प्रदान करते हैं।',
     deliverables: [
-      'Guaranteed 99.98% High Availability SLA Agreement',
+      'SOW-Scoped Support & Uptime Commitment',
       '15-Minute Critical Incident P1 Response Window',
       'Monthly Security Patches & Dependency Audits',
       'Quarterly Architecture & Performance Optimization Reviews',
     ],
     deliverablesHi: [
-      'गारंटीकृत 99.98% उच्च उपलब्धता एसएलए समझौता',
+      'अनुबंध (SOW) अनुसार सपोर्ट और उपलब्धता शर्तें',
       '15-मिनट गंभीर घटना P1 प्रतिक्रिया विंडो',
       'मासिक सुरक्षा पैच और निर्भरता ऑडिट',
       'त्रैमासिक आर्किटेक्चर और प्रदर्शन अनुकूलन समीक्षाएं',
@@ -816,10 +820,10 @@ export const PROCESS_STEPS: ProcessStep[] = [
 export const WHY_CHOOSE_US_PILLARS: WhyChooseUsPillar[] = [
   {
     id: 'security-compliance',
-    title: 'Bank-Grade Security & Data Sovereignty',
-    titleHi: 'बैंक-ग्रेड सुरक्षा और डेटा संप्रभुता',
-    description: 'All code and data remain 100% within your corporate boundaries. We build with strict compliance with Indian DPDP Act, GDPR, ISO 27001, and SOC-2 Type II standards.',
-    descriptionHi: 'सभी कोड और डेटा 100% आपकी कॉर्पोरेट सीमाओं के भीतर रहते हैं। हम भारतीय डीपीडीपी अधिनियम, जीडीपीआर, आईएसओ 27001 और एसओसी-2 मानकों का पालन करते हैं।',
+    title: 'Security-First Architecture & Data Sovereignty',
+    titleHi: 'सुरक्षा-प्रथम आर्किटेक्चर और डेटा संप्रभुता',
+    description: 'All code and data remain within your designated corporate boundaries. Engineered with privacy-by-design practices aligned to DPDP Act principles (no external SOC-2/ISO certification claimed).',
+    descriptionHi: 'सभी कोड और डेटा आपकी निर्धारित कॉर्पोरेट सीमाओं के भीतर रहते हैं। DPDP अधिनियम सिद्धांतों के अनुरूप प्राइवेसी-बाय-डिज़ाइन अभ्यासों के साथ निर्मित (कोई बाह्य SOC-2/ISO प्रमाणन दावा नहीं)।',
     metric: '100%',
     metricLabel: 'Data Sovereignty',
     metricLabelHi: 'डेटा संप्रभुता',
@@ -838,13 +842,13 @@ export const WHY_CHOOSE_US_PILLARS: WhyChooseUsPillar[] = [
   },
   {
     id: 'high-availability-sla',
-    title: '99.98% Uptime SLA Guarantee',
-    titleHi: '99.98% अपटाइम एसएलए गारंटी',
-    description: 'Backed by financial contractual SLAs. Our multi-zone distributed clusters and automated failovers ensure your services remain accessible without interruptions.',
-    descriptionHi: 'वित्तीय अनुबंध आधारित एसएलए द्वारा समर्थित। हमारे मल्टी-ज़ोन क्लस्टर्स और स्वचालित फेलओवर सुनिश्चित करते हैं कि आपकी सेवाएं बिना रुकावट के उपलब्ध रहें।',
-    metric: '99.98%',
-    metricLabel: 'Uptime Contract',
-    metricLabelHi: 'अपटाइम अनुबंध',
+    title: 'High-Availability Architecture Design',
+    titleHi: 'उच्च-उपलब्धता आर्किटेक्चर डिज़ाइन',
+    description: 'Designed around multi-zone deployments and automated health checks to maximize availability; formal SLA targets are agreed separately in your project SOW.',
+    descriptionHi: 'उच्च उपलब्धता के लिए मल्टी-ज़ोन परिनियोजन और स्वचालित स्वास्थ्य जांच के साथ डिज़ाइन किया गया; औपचारिक SLA लक्ष्य आपके प्रोजेक्ट SOW में तय होते हैं।',
+    metric: 'SOW SLA',
+    metricLabel: 'Contract Scoped',
+    metricLabelHi: 'अनुबंध अनुसार',
     icon: 'Activity',
   },
   {
@@ -873,8 +877,8 @@ export const WHY_CHOOSE_US_PILLARS: WhyChooseUsPillar[] = [
     id: 'global-delivery',
     title: 'Indian Tech Excellence, Global Reach',
     titleHi: 'भारतीय तकनीक उत्कृष्टता, वैश्विक पहुंच',
-    description: 'Headquartered in the vibrant technology corridor of Odisha, India, providing high-efficiency engineering value with world-class communication and global time-zone coverage.',
-    descriptionHi: 'ओडिशा, भारत के जीवंत प्रौद्योगिकी कॉरिडोर में मुख्यालय, विश्व स्तरीय संचार और वैश्विक समय-क्षेत्र कवरेज के साथ उच्च दक्षता प्रदान करता है।',
+    description: 'Headquartered at Fingeshwar Borid Mod, Rajim Subdistrict, Gariaband District, Chhattisgarh (493992), delivering high-efficiency engineering with clear communication across time zones.',
+    descriptionHi: 'फिंगेश्वर बोरिद मोड़, राजिम उपखंड, गरियाबंद जिला, छत्तीसगढ़ (493992) में मुख्यालय, स्पष्ट संवाद और वैश्विक समय-क्षेत्र कवरेज के साथ उच्च तकनीकी दक्षता प्रदान करता है।',
     metric: '24/7',
     metricLabel: 'Global Timezone Support',
     metricLabelHi: 'ग्लोबल टाइमज़ोन सपोर्ट',

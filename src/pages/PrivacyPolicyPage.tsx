@@ -23,8 +23,8 @@ export const PrivacyPolicyPage: React.FC = () => {
             </h1>
             <p className="mt-4 text-base sm:text-lg text-slate-600 leading-relaxed">
               {t(
-                'Formal compliance declaration under the Digital Personal Data Protection (DPDP) Act 2023 (India) and ISO/IEC 27001 security standards.',
-                'डिजिटल पर्सनल डेटा प्रोटेक्शन (DPDP) अधिनियम 2023 (भारत) एवं ISO/IEC 27001 मानकों के अंतर्गत औपचारिक अनुपालन घोषणा।'
+                'Operational privacy and data-handling practices aligned with the Digital Personal Data Protection (DPDP) Act 2023 (India). No external ISO/IEC 27001 or SOC-2 certification is claimed.',
+                'डिजिटल पर्सनल डेटा प्रोटेक्शन (DPDP) अधिनियम 2023 (भारत) के सिद्धांतों के अनुरूप डेटा गोपनीयता अभ्यास। कोई बाह्य ISO/IEC 27001 या SOC-2 प्रमाणन का दावा नहीं किया जाता।'
               )}
             </p>
             <div className="mt-4 text-xs text-slate-500 font-mono">
@@ -105,8 +105,9 @@ export const PrivacyPolicyPage: React.FC = () => {
           <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 font-mono space-y-1">
             <div>Office of the Data Protection Officer</div>
             <div>Bhanu Ram Bariha Digital Technologies</div>
-            <div>Email: legal@powerwebstudio.ai</div>
-            <div>Hotline: {COMPANY_INFO.phone}</div>
+            <div>Email: {COMPANY_INFO.email}</div>
+            <div>Mobile: {COMPANY_INFO.phone}</div>
+            <div>Address: {COMPANY_INFO.headquarters}</div>
           </div>
         </section>
       </div>

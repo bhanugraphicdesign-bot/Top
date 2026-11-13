@@ -145,6 +145,8 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
               <img
                 src={ASSETS.aiImage}
                 alt="AI Neural Architecture Studio"
+                loading="lazy"
+                decoding="async"
                 className="absolute inset-0 w-full h-full object-cover opacity-35"
                 referrerPolicy="no-referrer"
               />

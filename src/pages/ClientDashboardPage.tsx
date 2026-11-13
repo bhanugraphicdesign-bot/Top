@@ -7,8 +7,9 @@ import {
   fetchSupportTickets,
   updateSupportTicketStatus,
   addTicketResponse,
-  fetchProjectsForClient,
 } from '../firebase/services';
+import { EnterpriseInvoice } from '../types';
+import { COMPANY_INFO } from '../data/content';
 import { DocumentDetailModal, EnterpriseDocument } from '../components/client/DocumentDetailModal';
 import { NewTicketModal } from '../components/client/NewTicketModal';
 import {
@@ -17,34 +18,26 @@ import {
   Layers,
   Clock,
   Download,
-  ExternalLink,
   CheckCircle2,
   PhoneCall,
   FileText,
   Activity,
   ArrowRight,
-  Terminal,
-  Cpu,
-  Smartphone,
   Lock,
   LifeBuoy,
   Plus,
-  AlertCircle,
-  FileCheck,
   Check,
   Calendar,
-  Building2,
   User,
-  Shield,
   Eye,
   RefreshCw,
-  Search,
-  Filter,
   MessageSquare,
   Send,
   Paperclip,
   ChevronDown,
   ChevronUp,
+  CreditCard,
+  Receipt,
 } from 'lucide-react';
 
 interface SprintTask {
@@ -86,22 +79,77 @@ interface ProjectUpdate {
   tag: string;
 }
 
+const DEMO_SAMPLE_INVOICES: EnterpriseInvoice[] = [
+  {
+    id: 'inv-2026-0814',
+    invoiceNumber: 'INV-2026-0814',
+    projectId: 'proj-1',
+    projectName: 'Bharat Fleet ERP & Distributed Telematics',
+    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
+    clientId: 'kalinga-client-id',
+    clientName: 'Rajiv Sengupta',
+    clientEmail: 'kalinga@enterprise.in',
+    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
+    clientGstin: '21AAACK1924L1ZZ',
+    milestoneTitle: 'Milestone 03 — BLE Soundbox & Dynamic QR Payment Reconciliation',
+    milestoneTitleHi: 'माइलस्टोन 03 — BLE साउंडबॉक्स एवं डायनामिक QR भुगतान समाधान',
+    subtotal: 450000,
+    gstRate: 18,
+    gstAmount: 81000,
+    totalAmount: 531000,
+    currency: 'INR',
+    hsnSac: '998313',
+    status: 'paid',
+    issuedAt: '2026-10-25T10:00:00Z',
+    dueAt: '2026-11-09T18:00:00Z',
+    paidAt: '2026-11-09T14:30:00Z',
+    paymentTxnId: 'TXN-UPI-NPCI-88921102',
+    paymentMethod: 'UPI',
+    verificationHash: '9a7c3b2e5f1d4a8e6b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a',
+  },
+  {
+    id: 'inv-2026-0899',
+    invoiceNumber: 'INV-2026-0899',
+    projectId: 'proj-1',
+    projectName: 'Bharat Fleet ERP & Distributed Telematics',
+    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
+    clientId: 'kalinga-client-id',
+    clientName: 'Rajiv Sengupta',
+    clientEmail: 'kalinga@enterprise.in',
+    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
+    clientGstin: '21AAACK1924L1ZZ',
+    milestoneTitle: 'Milestone 04 — Release Candidate v2.4.1 Fleet Rollout & Security Checklist',
+    milestoneTitleHi: 'माइलस्टोन 04 — रिलीज कैंडिडेट v2.4.1 फ्लीट रोलआउट एवं सुरक्षा समीक्षा',
+    subtotal: 500000,
+    gstRate: 18,
+    gstAmount: 90000,
+    totalAmount: 590000,
+    currency: 'INR',
+    hsnSac: '998313',
+    status: 'issued',
+    issuedAt: '2026-11-10T10:00:00Z',
+    dueAt: '2026-11-25T18:00:00Z',
+    verificationHash: '1c4e7f9a2b5d8e0c3a6f9b2d5e8a1c4f7b0d3e6a9c2f5b8e1d4a7c0f3b6e9a2d',
+  },
+];
+
 export const ClientDashboardPage: React.FC = () => {
-  const { language, t, dict, formatDate, showToast } = useLanguage();
+  const { language, t, formatDate, showToast } = useLanguage();
   const { navigate } = useNavigation();
   const { currentUser, openAuthModal } = useAuth();
 
-  // Client workspace demo mode (for evaluator without credentials)
+  // Strictly distinguish real authenticated Firebase session vs unauthenticated Demo Sandbox
   const [demoClientMode, setDemoClientMode] = useState<boolean>(() => {
     return sessionStorage.getItem('pws_demo_client') === 'true';
   });
+  const isRealClient = Boolean(currentUser);
+  const isDemoSandbox = !isRealClient && demoClientMode;
+  const isAuthorizedClient = isRealClient || isDemoSandbox;
 
   const [activePersona, setActivePersona] = useState<'kalinga' | 'utkal'>('kalinga');
 
-  const isAuthorizedClient = Boolean(currentUser) || demoClientMode;
-
   const [activeTab, setActiveTab] = useState<
-    'tracking' | 'milestones' | 'updates' | 'documents' | 'support' | 'sla'
+    'tracking' | 'milestones' | 'updates' | 'documents' | 'invoices' | 'support' | 'sla'
   >('tracking');
 
   // Selected project engagement
@@ -111,6 +159,32 @@ export const ClientDashboardPage: React.FC = () => {
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
   const [docModalOpen, setDocModalOpen] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<EnterpriseDocument | null>(null);
+
+  // Invoices & Payments state
+  const [invoicesList, setInvoicesList] = useState<EnterpriseInvoice[]>([]);
+  const [loadingInvoices, setLoadingInvoices] = useState(false);
+  const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(false);
+  const [activeCheckoutInvoice, setActiveCheckoutInvoice] = useState<EnterpriseInvoice | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'NEFT_RTGS' | 'Corporate_Card' | 'Escrow'>('UPI');
+  const [paymentRefInput, setPaymentRefInput] = useState('');
+  const [processingPayment, setProcessingPayment] = useState(false);
+
+  React.useEffect(() => {
+    let active = true;
+    fetch('/api/system/capabilities')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active) {
+          setPaymentGatewayEnabled(Boolean(data?.paymentGatewayEnabled));
+        }
+      })
+      .catch(() => {
+        if (active) setPaymentGatewayEnabled(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Filter states
   const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'resolved'>('all');
@@ -235,14 +309,14 @@ export const ClientDashboardPage: React.FC = () => {
     },
     {
       id: 'task-5',
-      title: 'SOC-2 Type II third-party penetration testing remediation',
-      titleHi: 'SOC-2 टाइप II थर्ड-पार्टी पेनेट्रेशन टेस्टिंग सुधार',
-      category: 'Compliance & Audit',
+      title: 'Internal security checklist & RBAC rules verification (Sample)',
+      titleHi: 'आंतरिक सुरक्षा चेकलिस्ट एवं RBAC नियम सत्यापन (सैंपल)',
+      category: 'Security Review',
       status: 'review',
       statusHi: 'समीक्षाधीन',
       assignee: 'SecOps Team',
       estimatedHours: '32h',
-      deliverable: 'Independent vulnerability sign-off with 0 critical or high-risk findings.',
+      deliverable: 'Sample milestone: Firestore rules verification and endpoint auth gate review.',
     },
   ], []);
 
@@ -321,13 +395,13 @@ export const ClientDashboardPage: React.FC = () => {
       statusHi: 'प्रगति पर (90%)',
       deliverables: [
         'Mutual TLS (mTLS) 1.3 cryptographic enforcement',
-        'Third-party penetration testing remediation pass',
-        'India DPDP Act 2023 sovereign data residency certificate',
+        'Internal penetration checklist remediation review',
+        'Data residency topology review notes (DPDP aligned)',
       ],
       deliverablesHi: [
         'म्युचुअल TLS (mTLS) 1.3 क्रिप्टोग्राफ़िक प्रवर्तन',
-        'थर्ड-पार्टी पेन-टेस्टिंग सुधारात्मक प्रमाणन',
-        'भारत DPDP अधिनियम 2023 संप्रभु डेटा स्थानीयकरण प्रमाण पत्र',
+        'आंतरिक सुरक्षा चेकलिस्ट सुधारात्मक समीक्षा',
+        'डेटा स्थानीयकरण टोपोलॉजी समीक्षा नोट्स (DPDP अनुरूप)',
       ],
       completion: 90,
     },
@@ -401,15 +475,15 @@ export const ClientDashboardPage: React.FC = () => {
     },
     {
       id: 'up-3',
-      title: 'Completed SOC-2 Type II External Penetration Audit',
-      titleHi: 'SOC-2 टाइप II बाह्य पेनेट्रेशन ऑडिट पूर्ण',
-      summary: 'Independent security firm confirmed 0 critical vulnerabilities. SQLite cipher hardware keystore passed all extraction resistance tests.',
-      summaryHi: 'स्वतंत्र सुरक्षा एजेंसी द्वारा 0 गंभीर कमजोरियों की पुष्टि। SQLite साइफर हार्डवेयर कीस्टोर ने सभी परीक्षण पास किए।',
-      author: 'SecOps Compliance Team',
+      title: 'Internal Security Checklist Review Completed (Sample)',
+      titleHi: 'आंतरिक सुरक्षा चेकलिस्ट समीक्षा पूर्ण (सैंपल)',
+      summary: 'Sample update: Automated security rules lint passed and SQLite cipher keystore checks completed in staging.',
+      summaryHi: 'सैंपल अपडेट: स्टेजिंग में स्वचालित सुरक्षा नियम जांच और SQLite कीस्टोर सत्यापन पूर्ण।',
+      author: 'SecOps Review Team',
       authorRole: 'Security Principal',
       timestamp: '2026-11-02T14:40:00Z',
       category: 'Security',
-      tag: 'SOC-2 Certified',
+      tag: 'Sample Security Log',
     },
     {
       id: 'up-4',
@@ -456,8 +530,8 @@ export const ClientDashboardPage: React.FC = () => {
       sha256: '9f8a2c1b849e7284b2e81192e20bba81c9a87ef874100e4b1765ad84f881b29a',
       format: 'PDF',
       signatories: ['BHANU RAM BARIHA DIGITAL TECHNOLOGIES', 'Kalinga Logistics Infrastructure Ltd.'],
-      description: 'Defines delivery cadence, sprint commitments, 99.98% SLA backing, financial penalties, and intellectual property allocation.',
-      descriptionHi: 'वितरण गति, स्प्रिंट प्रतिबद्धताएं, 99.98% SLA सुरक्षा, और बौद्धिक संपदा आवंटन को परिभाषित करता है।',
+      description: 'Sample MSA template outlining delivery cadence, sprint commitments, SOW-scoped SLA targets, and intellectual property allocation.',
+      descriptionHi: 'सैंपल MSA दस्तावेज़ जो वितरण गति, स्प्रिंट प्रतिबद्धताएं, SOW-आधारित SLA लक्ष्य और बौद्धिक संपदा आवंटन को परिभाषित करता है।',
     },
     {
       id: 'doc-ip',
@@ -493,19 +567,19 @@ export const ClientDashboardPage: React.FC = () => {
     },
     {
       id: 'doc-soc2',
-      title: 'SOC-2 Type II Penetration Testing Audit Report',
-      titleHi: 'SOC-2 टाइप II पेनेट्रेशन टेस्टिंग ऑडिट रिपोर्ट',
-      category: 'Security & Compliance Certificate',
-      categoryHi: 'सुरक्षा एवं अनुपालन प्रमाण पत्र',
+      title: 'Internal Security Review Checklist (Sample Document)',
+      titleHi: 'आंतरिक सुरक्षा समीक्षा चेकलिस्ट (सैंपल दस्तावेज़)',
+      category: 'Security Checklist (Sample)',
+      categoryHi: 'सुरक्षा चेकलिस्ट (सैंपल)',
       executedDate: '2026-11-02',
-      status: 'Clean Audit / Grade A',
-      statusHi: 'सत्यापित ऑडिट / ग्रेड A',
+      status: 'Sample Sandbox Record',
+      statusHi: 'सैंपल सैंडबॉक्स रिकॉर्ड',
       fileSize: '4.6 MB',
       sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
       format: 'PDF',
-      signatories: ['Certifying Security Assessor (CREST Certified)', 'SecOps Team'],
-      description: 'Third-party independent penetration audit covering Android APK obfuscation, API gateway rate limiting, and zero-trust ABAC rule integrity.',
-      descriptionHi: 'एंड्रॉइड एपीके ऑब्फस्केशन, एपीआई गेटवे और ज़ीरो-ट्रस्ट सुरक्षा नियमों का स्वतंत्र तृतीय-पक्ष सुरक्षा ऑडिट।',
+      signatories: ['Internal Engineering Review Team (Sample Placeholder)', 'SecOps Team'],
+      description: 'Sample sandbox checklist covering Android APK hardening, API rate limiting, and Firestore RBAC rule verification (not an external certification).',
+      descriptionHi: 'एंड्रॉइड एपीके सुरक्षा, एपीआई रेट लिमिटिंग और Firestore RBAC नियम सत्यापन की सैंपल चेकलिस्ट (कोई बाह्य प्रमाणन नहीं)।',
     },
     {
       id: 'doc-apk',
@@ -586,9 +660,16 @@ export const ClientDashboardPage: React.FC = () => {
     },
   ]);
 
-  // Load Firestore tickets when user is authenticated
+  // Load Firestore tickets & authoritative server invoices when authenticated (or demo samples in sandbox)
   useEffect(() => {
-    if (!currentUser) return;
+    if (isDemoSandbox) {
+      setInvoicesList(DEMO_SAMPLE_INVOICES);
+      return;
+    }
+    if (!currentUser) {
+      setInvoicesList([]);
+      return;
+    }
 
     fetchSupportTickets(currentUser.uid)
       .then((tickets) => {
@@ -604,8 +685,30 @@ export const ClientDashboardPage: React.FC = () => {
           });
         }
       })
-      .catch(() => {});
-  }, [currentUser]);
+      .catch((err) => {
+        console.warn('[Client Tickets Load]', err?.message || err);
+      });
+
+    setLoadingInvoices(true);
+    currentUser
+      .getIdToken()
+      .then((idToken) =>
+        fetch('/api/invoices', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+      )
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        setInvoicesList(Array.isArray(data.invoices) ? data.invoices : []);
+      })
+      .catch((err) => {
+        console.warn('[Client Invoices Load]', err?.message || err);
+      })
+      .finally(() => setLoadingInvoices(false));
+  }, [currentUser, isDemoSandbox]);
 
   // Filtered support tickets
   const filteredTickets = useMemo(() => {
@@ -628,7 +731,7 @@ export const ClientDashboardPage: React.FC = () => {
       const certificateContent = `================================================================================
 BHANU RAM BARIHA DIGITAL TECHNOLOGIES // ENTERPRISE VERIFICATION CERTIFICATE
 BRAND: POWER WEB STUDIO AI | CIN: U72900OR2024PTC045812
-HEADQUARTERS: Bhubaneswar / Sambalpur Tech Corridor, Odisha, India
+HEADQUARTERS: ${COMPANY_INFO.headquarters}
 ================================================================================
 
 DOCUMENT TITLE: ${doc.title}
@@ -681,6 +784,144 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
     }
   };
 
+  // Authenticated attachment download helper (sends Bearer ID token for /api/files/*)
+  const handleDownloadAttachment = async (attachment: any) => {
+    const url = attachment?.downloadUrl || attachment?.fileUrl;
+    if (!url) return;
+    if (isDemoSandbox) {
+      showToast(
+        t(
+          'Demo Sandbox: Sign in with a verified client account to download protected binary artifacts.',
+          'डेमो सैंडबॉक्स: सुरक्षित फ़ाइल डाउनलोड करने के लिए सत्यापित खाते से साइन इन करें।'
+        ),
+        'info'
+      );
+      return;
+    }
+    try {
+      const headers: Record<string, string> = {};
+      if (currentUser && url.startsWith('/api/files/')) {
+        headers['Authorization'] = `Bearer ${await currentUser.getIdToken()}`;
+      }
+      const res = await fetch(url, { headers });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Download failed (HTTP ${res.status})`);
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = objUrl;
+      a.download = attachment.fileName || 'enterprise-artifact';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objUrl);
+    } catch (err: any) {
+      showToast(err?.message || t('Unable to download attachment.', 'संलग्नक डाउनलोड विफल।'), 'alert');
+    }
+  };
+
+  // Server-verified invoice settlement workflow (client never supplies payment amount)
+  const handleSettleInvoice = async (invoice: EnterpriseInvoice) => {
+    if (invoice.status === 'paid') return;
+
+    if (isDemoSandbox) {
+      const demoPaid: EnterpriseInvoice = {
+        ...invoice,
+        status: 'paid',
+        paidAt: new Date().toISOString(),
+        paymentMethod,
+        paymentTxnId: paymentRefInput.trim() || `DEMO_TXN_${Date.now().toString().slice(-6)}`,
+      };
+      setInvoicesList((prev) => prev.map((inv) => (inv.id === invoice.id ? demoPaid : inv)));
+      setActiveCheckoutInvoice(null);
+      setPaymentRefInput('');
+      showToast(
+        t(
+          '[Demo Sandbox] Simulated invoice settlement locally. Sign in for live server-verified escrow settlement.',
+          '[डेमो सैंडबॉक्स] चालान निपटान केवल स्थानीय पूर्वावलोकन में अनुकरण किया गया।'
+        ),
+        'info'
+      );
+      return;
+    }
+
+    if (!currentUser) {
+      openAuthModal('login');
+      return;
+    }
+
+    if (!paymentGatewayEnabled) {
+      showToast(
+        t(
+          'Payment Gateway is in Optional Mode (not configured yet). Invoices remain safely viewable.',
+          'पेमेंट गेटवे अभी वैकल्पिक (Optional) मोड में है। आप अपने चालान सुरक्षित रूप से देख सकते हैं।'
+        ),
+        'info'
+      );
+      return;
+    }
+
+    setProcessingPayment(true);
+    try {
+      const idToken = await currentUser.getIdToken();
+
+      // Step 1: Request authoritative server payment intent (server looks up amount)
+      const intentRes = await fetch('/api/payments/create-intent', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ invoiceId: invoice.id }),
+      });
+      const intentData = await intentRes.json().catch(() => ({}));
+      if (!intentRes.ok) {
+        throw new Error(intentData.error || `Intent creation failed (HTTP ${intentRes.status})`);
+      }
+
+      // Step 2: Verify cryptographic HMAC checksum and commit ledger entry
+      const verifyRes = await fetch('/api/payments/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          orderId: intentData.orderId,
+          invoiceId: intentData.invoiceId,
+          checksum: intentData.checksum,
+          method: paymentMethod,
+          transactionRef: paymentRefInput.trim() || undefined,
+        }),
+      });
+      const verifyData = await verifyRes.json().catch(() => ({}));
+      if (!verifyRes.ok) {
+        throw new Error(verifyData.error || `Payment verification failed (HTTP ${verifyRes.status})`);
+      }
+
+      if (verifyData.invoice) {
+        setInvoicesList((prev) =>
+          prev.map((inv) => (inv.id === invoice.id ? verifyData.invoice : inv))
+        );
+      }
+      setActiveCheckoutInvoice(null);
+      setPaymentRefInput('');
+      showToast(
+        t(
+          `Invoice ${invoice.invoiceNumber} verified and settled (Ref: ${verifyData.payment?.transactionRef}).`,
+          `चालान ${invoice.invoiceNumber} सत्यापित और भुगतान पूर्ण (Ref: ${verifyData.payment?.transactionRef})।`
+        ),
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err?.message || t('Payment settlement failed.', 'भुगतान सत्यापन विफल रहा।'), 'alert');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
   // Sign off milestone (client interactive capability)
   const handleSignOffMilestone = (milestoneId: string) => {
     setMilestonesList((prev) =>
@@ -691,23 +932,43 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             status: 'completed',
             statusHi: 'पूर्ण एवं सत्यापित',
             completion: 100,
-            signOffBy: `${activePersona === 'kalinga' ? 'Rajiv Sengupta' : 'Dr. Anita Mohanty'} (Client VP)`,
+            signOffBy: `${
+              isDemoSandbox
+                ? `${activePersona === 'kalinga' ? 'Rajiv Sengupta' : 'Dr. Anita Mohanty'} (Demo Sandbox)`
+                : currentUser?.displayName || currentUser?.email || 'Verified Client'
+            }`,
           };
         }
         return m;
       })
     );
     showToast(
-      language === 'hi'
+      isDemoSandbox
+        ? t('[Demo Sandbox] Milestone sign-off simulated locally.', '[डेमो सैंडबॉक्स] माइलस्टोन स्वीकृति स्थानीय रूप से अनुकरण की गई।')
+        : language === 'hi'
         ? 'माइलस्टोन स्वीकृति सफलतापूर्वक दर्ज की गई। इंजीनियरिंग दल को सूचित किया गया।'
         : 'Milestone sign-off recorded. Lead Architect notified.',
-      'success'
+      isDemoSandbox ? 'info' : 'success'
     );
   };
 
   // Toggle ticket status
   const handleToggleTicketStatus = async (ticketId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'resolved' ? 'open' : 'resolved';
+    if (isDemoSandbox) {
+      setSupportTickets((prev) =>
+        prev.map((t) => (t.id === ticketId ? { ...t, status: nextStatus } : t))
+      );
+      showToast(
+        t(
+          `[Demo Sandbox] Local ticket status preview updated to "${nextStatus}".`,
+          `[डेमो सैंडबॉक्स] स्थानीय टिकट स्थिति "${nextStatus}" पर अपडेट हुई।`
+        ),
+        'info'
+      );
+      return;
+    }
+
     try {
       await updateSupportTicketStatus(ticketId, nextStatus as any);
       setSupportTickets((prev) =>
@@ -719,14 +980,8 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           : `Ticket status updated to "${nextStatus}".`,
         'success'
       );
-    } catch {
-      setSupportTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: nextStatus } : t))
-      );
-      showToast(
-        language === 'hi' ? 'टिकट स्थिति अपडेट हुई।' : 'Ticket status updated.',
-        'success'
-      );
+    } catch (err: any) {
+      showToast(err?.message || t('Unable to update ticket status.', 'टिकट स्थिति अपडेट विफल।'), 'alert');
     }
   };
 
@@ -740,20 +995,31 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
     setSubmittingReply((prev) => ({ ...prev, [ticketId]: true }));
     try {
-      const authorName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Client Representative';
-      const newReply = await addTicketResponse(ticketId, {
-        author: authorName,
-        authorRole: 'client',
-        message: text,
-      });
+      const authorName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Demo Evaluator';
+      let replyObj: any;
 
-      const replyObj = newReply || {
-        id: `resp-${Date.now()}`,
-        author: authorName,
-        authorRole: 'client',
-        message: text,
-        timestamp: new Date().toISOString(),
-      };
+      if (isDemoSandbox) {
+        replyObj = {
+          id: `demo-resp-${Date.now()}`,
+          author: `${authorName} (Demo Sandbox)`,
+          authorRole: 'client',
+          message: text,
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        const newReply = await addTicketResponse(ticketId, {
+          author: authorName,
+          authorRole: 'client',
+          message: text,
+        });
+        replyObj = newReply || {
+          id: `resp-${Date.now()}`,
+          author: authorName,
+          authorRole: 'client',
+          message: text,
+          timestamp: new Date().toISOString(),
+        };
+      }
 
       setSupportTickets((prev) =>
         prev.map((t) => {
@@ -771,10 +1037,12 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
       setReplyTexts((prev) => ({ ...prev, [ticketId]: '' }));
       showToast(
-        language === 'hi'
+        isDemoSandbox
+          ? t('[Demo Sandbox] Follow-up reply added locally for evaluation.', '[डेमो सैंडबॉक्स] उत्तर केवल स्थानीय पूर्वावलोकन में जोड़ा गया।')
+          : language === 'hi'
           ? 'आपका संदेश सफलतापूर्वक भेजा गया। मुख्य आर्किटेक्ट को सूचित किया गया।'
           : 'Follow-up message dispatched. Lead Architect notified.',
-        'success'
+        isDemoSandbox ? 'info' : 'success'
       );
     } catch (err: any) {
       showToast(err.message || 'Failed to dispatch reply', 'alert');
@@ -785,6 +1053,17 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
   // Emergency Lead Architect Dispatch
   const handleEmergencyHotline = async () => {
+    if (isDemoSandbox) {
+      showToast(
+        t(
+          '[Demo Sandbox] Emergency P1 Escalation simulated. Sign in to dispatch real Cloud Firestore P1 tickets.',
+          '[डेमो सैंडबॉक्स] आपातकालीन P1 एस्केलेशन अनुकरण। वास्तविक अलर्ट हेतु साइन इन करें।'
+        ),
+        'info'
+      );
+      return;
+    }
+
     try {
       await createSupportTicket({
         subject: `[EMERGENCY SLA ESCALATION] Priority Dispatch from ${activeProject.code}`,
@@ -797,11 +1076,10 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           : 'Emergency P1 SLA Alert triggered in Firestore. Lead Architect response guaranteed < 15 mins.',
         'alert'
       );
-    } catch {
+    } catch (err: any) {
       showToast(
-        language === 'hi'
-          ? 'आपातकालीन अलर्ट प्रेषित हुआ। प्रधान आर्किटेक्ट संपर्क में हैं।'
-          : 'Emergency alert dispatched to Lead Architect hotline.',
+        err?.message ||
+          t('Failed to trigger P1 ticket in Firestore.', 'Firestore में P1 टिकट दर्ज करने में त्रुटि।'),
         'alert'
       );
     }
@@ -854,13 +1132,13 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           </div>
 
           <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-left space-y-2 text-xs font-mono text-slate-300">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">{t('Security Protocol:', 'सुरक्षा प्रोटोकॉल:')}</span>
-              <span className="text-emerald-400 font-bold">SOC-2 Type II / DPDP 2023 Compliant</span>
+              <span className="text-emerald-400 font-bold text-right">DPDP-Aligned Practices (Uncertified)</span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-2">
               <span className="text-slate-500">{t('Contract Availability:', 'अनुबंध उपलब्धता:')}</span>
-              <span className="text-blue-400 font-bold">99.98% High Availability SLA</span>
+              <span className="text-blue-400 font-bold text-right">SOW-Scoped Availability Target</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500">{t('Codebase Ownership:', 'कोडबेस स्वामित्व:')}</span>
@@ -908,16 +1186,16 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Demo Mode Notice Banner if active */}
-        {demoClientMode && (
+        {/* Explicit Demo Sandbox Mode Notice Banner (only when not signed into Firebase) */}
+        {isDemoSandbox && (
           <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-900">
             <div className="flex items-center gap-2 font-medium">
-              <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
+              <Eye className="w-4 h-4 text-blue-700 shrink-0" />
               <span>
-                <strong>{t('DEMO CLIENT WORKSPACE ACTIVE:', 'डेमो क्लाइंट कार्यक्षेत्र सक्रिय:')}</strong>{' '}
+                <strong>{t('DEMO EVALUATION SANDBOX (UNAUTHENTICATED PREVIEW):', 'डेमो मूल्यांकन सैंडबॉक्स (असत्यापित पूर्वावलोकन):')}</strong>{' '}
                 {t(
-                  'Viewing enterprise portal as Rajiv Sengupta (VP Systems & Engineering, Kalinga Logistics Infrastructure Ltd.). All project tracking, milestones, and ticket submissions are live.',
-                  'राजीव सेनगुप्ता (वीपी सिस्टम्स, कलिंगा लॉजिस्टिक्स) के रूप में देखा जा रहा है। सभी ट्रैकिंग, माइलस्टोन्स और टिकट प्रणाली पूर्णतः सक्रिय हैं।'
+                  'Viewing simulated data as Rajiv Sengupta. Local sandbox interactions do not write to Cloud Firestore or settle live invoices until you sign in.',
+                  'राजीव सेनगुप्ता के रूप में सिमुलेटेड डेटा देखा जा रहा है। लाइव डेटाबेस लेखन व चालान निपटान के लिए साइन इन करें।'
                 )}
               </span>
             </div>
@@ -948,7 +1226,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                  {t('SOC-2 Type II Certified · NDA Perpetual', 'SOC-2 प्रमाणित · स्थायी NDA')}
+                  {t('Role-Isolated Access · Sample Sandbox', 'रोल-आधारित सुरक्षा · सैंपल सैंडबॉक्स')}
                 </span>
                 <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                   CIN: U72900OR2024PTC045812
@@ -1038,10 +1316,10 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
               <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
                 <Server className="w-4 h-4 text-blue-700" />
-                <span>{t('High Availability SLA', 'उच्च उपलब्धता SLA')}</span>
+                <span>{t('Target Availability', 'लक्षित उपलब्धता')}</span>
               </div>
-              <div className="text-2xl font-black text-emerald-700">99.98%</div>
-              <div className="text-xs text-slate-500 mt-1">{t('Zero Outage Past 90 Days', 'विगत 90 दिनों में शून्य रुकावट')}</div>
+              <div className="text-2xl font-black text-emerald-700">SOW Target</div>
+              <div className="text-xs text-slate-500 mt-1">{t('Sample Sandbox Placeholder', 'सैंपल सैंडबॉक्स डेटा')}</div>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
@@ -1103,7 +1381,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
           <button
             onClick={() => setActiveTab('documents')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'documents'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1111,14 +1389,29 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           >
             <FileText className="w-4 h-4" />
             <span>{t('Document & Artifact Vault', 'दस्तावेज़ एवं आर्टिफैक्ट वॉल्ट')}</span>
-            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded-full font-bold">
-              {enterpriseDocuments.length}
+            <span className="text-[11px] font-mono tabular-nums text-slate-500">
+              ({enterpriseDocuments.length})
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('invoices')}
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'invoices'
+                ? 'border-blue-700 text-blue-700'
+                : 'border-transparent text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <Receipt className="w-4 h-4" />
+            <span>{t('Invoices & Payments', 'चालान एवं भुगतान')}</span>
+            <span className="text-[11px] font-mono tabular-nums text-slate-500">
+              ({invoicesList.length})
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('support')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'support'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1126,14 +1419,14 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           >
             <LifeBuoy className="w-4 h-4" />
             <span>{t('Support Requests & SLA', 'सहायता अनुरोध एवं SLA')}</span>
-            <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-bold">
-              {supportTickets.length}
+            <span className="text-[11px] font-mono tabular-nums text-slate-500">
+              ({supportTickets.length})
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('sla')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'sla'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1536,6 +1829,211 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
         )}
 
         {/* =====================================================================
+           TAB 4B: INVOICES & SERVER-VERIFIED PAYMENTS
+           ===================================================================== */}
+        {activeTab === 'invoices' && (
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-950">
+                  {t('GST Tax Invoices & Verified Escrow Settlement', 'GST कर चालान एवं सत्यापित भुगतान')}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {t(
+                    'All invoice totals, 18% GST (HSN 998313), and payment intents are strictly derived and verified server-side.',
+                    'सभी चालान राशि, 18% GST (HSN 998313) एवं भुगतान इंटेंट पूरी तरह सर्वर द्वारा सत्यापित होते हैं।'
+                  )}
+                </p>
+              </div>
+              <div className="text-xs font-mono tabular-nums text-slate-600">
+                {t('Outstanding:', 'बकाया राशि:')}{' '}
+                <span className="font-bold text-slate-950">
+                  INR{' '}
+                  {invoicesList
+                    .filter((inv) => inv.status !== 'paid')
+                    .reduce((sum, inv) => sum + inv.totalAmount, 0)
+                    .toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {!paymentGatewayEnabled && !isDemoSandbox && (
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-3 text-xs">
+                <Lock className="w-4 h-4 text-blue-700 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-slate-900">
+                    {t(
+                      'Payment Gateway: Safe Optional Mode (Online Checkout Disabled)',
+                      'पेमेंट गेटवे: सुरक्षित वैकल्पिक मोड (ऑनलाइन भुगतान अभी बंद है)'
+                    )}
+                  </div>
+                  <p className="text-slate-600 leading-relaxed">
+                    {t(
+                      'Online payment processing is optional and currently disabled because PAYMENT_SECRET / a live gateway is not configured. All GST invoices remain viewable below with zero fake payment transactions.',
+                      'ऑनलाइन भुगतान वैकल्पिक है और PAYMENT_SECRET / लाइव पेमेंट गेटवे सेट न होने के कारण अभी बंद है। आप नीचे सभी GST चालान देख सकते हैं — कोई नकली भुगतान प्रक्रिया नहीं चलाई जाती।'
+                    )}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {loadingInvoices ? (
+              <div className="p-8 text-center text-xs text-slate-500">
+                {t('Loading verified billing ledger...', 'सत्यापित बिलिंग खाता लोड हो रहा है...')}
+              </div>
+            ) : invoicesList.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                {t(
+                  'No invoices issued for your signed-in account email/UID yet.',
+                  'आपके साइन-इन खाते के लिए अभी तक कोई चालान जारी नहीं हुआ है।'
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {invoicesList.map((inv) => (
+                  <div
+                    key={inv.id}
+                    className="p-5 rounded-xl border border-slate-200 bg-white space-y-3"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                      <div>
+                        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
+                          <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>HSN {inv.hsnSac}</span>
+                          <span aria-hidden="true">·</span>
+                          <span
+                            className={`font-bold uppercase ${
+                              inv.status === 'paid' ? 'text-emerald-700' : 'text-amber-700'
+                            }`}
+                          >
+                            {inv.status === 'paid' ? t('Settled', 'भुगतान पूर्ण') : t('Payment Due', 'देय')}
+                          </span>
+                        </div>
+                        <h4 className="text-sm font-bold text-slate-950 mt-1">
+                          {language === 'hi' && inv.milestoneTitleHi ? inv.milestoneTitleHi : inv.milestoneTitle}
+                        </h4>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          {language === 'hi' && inv.projectNameHi ? inv.projectNameHi : inv.projectName}
+                        </div>
+                      </div>
+
+                      <div className="text-left sm:text-right font-mono tabular-nums">
+                        <div className="text-lg font-extrabold text-slate-950">
+                          INR {inv.totalAmount.toLocaleString('en-IN')}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {t('Base:', 'मूल:')} INR {inv.subtotal.toLocaleString('en-IN')} + {inv.gstRate}% GST (INR{' '}
+                          {inv.gstAmount.toLocaleString('en-IN')})
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="text-slate-500 font-mono space-y-0.5">
+                        <div>
+                          {t('Issued:', 'जारी तिथि:')} {formatDate(inv.issuedAt)} · {t('Due:', 'अंतिम तिथि:')}{' '}
+                          {formatDate(inv.dueAt)}
+                        </div>
+                        {inv.paymentTxnId && (
+                          <div className="text-emerald-700 font-semibold">
+                            {t('TXN Ref:', 'लेनदेन संदर्भ:')} {inv.paymentTxnId} ({inv.paymentMethod})
+                          </div>
+                        )}
+                      </div>
+
+                      {inv.status !== 'paid' && (
+                        isDemoSandbox || paymentGatewayEnabled ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveCheckoutInvoice(inv)}
+                            className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          >
+                            <CreditCard className="w-3.5 h-3.5" />
+                            <span>{t('Initiate Verified Settlement', 'सत्यापित भुगतान प्रारंभ करें')}</span>
+                          </button>
+                        ) : (
+                          <span className="px-3.5 py-2 text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                            <Lock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{t('Optional Mode — Gateway Offline', 'वैकल्पिक मोड — गेटवे बंद')}</span>
+                          </span>
+                        )
+                      )}
+                    </div>
+
+                    {activeCheckoutInvoice?.id === inv.id && (
+                      <div className="mt-3 p-4 rounded-lg bg-slate-50 border border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-900">
+                          <span>
+                            {t(
+                              `Confirm Server-Verified Settlement (${inv.invoiceNumber})`,
+                              `सर्वर-सत्यापित भुगतान पुष्टि (${inv.invoiceNumber})`
+                            )}
+                          </span>
+                          <span className="font-mono tabular-nums text-blue-700">
+                            INR {inv.totalAmount.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">
+                              {t('Settlement Rail', 'भुगतान माध्यम')}
+                            </label>
+                            <select
+                              value={paymentMethod}
+                              onChange={(e) => setPaymentMethod(e.target.value as any)}
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded bg-white text-slate-900"
+                            >
+                              <option value="UPI">NPCI UPI 2.0 Enterprise</option>
+                              <option value="NEFT_RTGS">NEFT / RTGS Bank Transfer</option>
+                              <option value="Corporate_Card">Corporate Credit Card</option>
+                              <option value="Escrow">Milestone Escrow Release</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block font-semibold text-slate-700 mb-1">
+                              {t('UTR / Bank Reference (Optional)', 'UTR / बैंक संदर्भ संख्या (वैकल्पिक)')}
+                            </label>
+                            <input
+                              type="text"
+                              value={paymentRefInput}
+                              onChange={(e) => setPaymentRefInput(e.target.value)}
+                              placeholder="e.g. UTR-631829012"
+                              className="w-full px-3 py-1.5 border border-slate-300 rounded bg-white text-slate-900 font-mono"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setActiveCheckoutInvoice(null)}
+                            className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 cursor-pointer"
+                          >
+                            {t('Cancel', 'रद्द करें')}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={processingPayment}
+                            onClick={() => handleSettleInvoice(inv)}
+                            className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded cursor-pointer"
+                          >
+                            {processingPayment
+                              ? t('Verifying Checksum...', 'सत्यापन जारी...')
+                              : t('Verify & Settle Payment', 'सत्यापित करें व भुगतान पूर्ण करें')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =====================================================================
            TAB 5: SUPPORT REQUESTS & SLA TICKETS
            ===================================================================== */}
         {activeTab === 'support' && (
@@ -1701,15 +2199,14 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                           </div>
 
                           {(attachment.downloadUrl || attachment.fileUrl) && (
-                            <a
-                              href={attachment.downloadUrl || attachment.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadAttachment(attachment)}
                               className="px-3 py-1.5 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition-colors inline-flex items-center gap-1.5 shrink-0 self-start sm:self-auto cursor-pointer"
                             >
                               <Download className="w-3.5 h-3.5" />
                               <span>{t('Download Attachment', 'संलग्नक डाउनलोड करें')}</span>
-                            </a>
+                            </button>
                           )}
                         </div>
                       )}
@@ -1808,7 +2305,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                           />
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-[11px] text-slate-400">
-                              {t('Guaranteed SLA response under contractual terms.', 'अनुबंधित शर्तों के तहत गारंटीकृत SLA प्रतिक्रिया।')}
+                              {t('Target response governed by your project SOW.', 'प्रतिक्रिया समय आपके प्रोजेक्ट SOW द्वारा निर्धारित होता है।')}
                             </span>
                             <button
                               onClick={() => handleSendTicketReply(ticket.id)}
@@ -1841,32 +2338,32 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <div className="flex items-center gap-2 text-slate-950 font-bold text-base pb-2 border-b border-slate-100">
                 <Server className="w-5 h-5 text-blue-700" />
-                <span>{t('Contractual High Availability SLA', 'अनुबंधित उच्च उपलब्धता SLA')}</span>
+                <span>{t('Target Availability & Telemetry (Sample)', 'लक्षित उपलब्धता एवं टेलीमेट्री (सैंपल)')}</span>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
                 {t(
-                  'Bhanu Ram Bariha Digital Technologies guarantees 99.98% platform availability with financial penalty backing on enterprise contracts.',
-                  'भानु राम बरीहा डिजिटल टेक्नोलॉजीज एंटरप्राइज अनुबंधों पर वित्तीय दंड संरक्षण के साथ 99.98% प्लेटफॉर्म उपलब्धता की गारंटी देती है।'
+                  'Sample placeholder telemetry panel. Production availability targets and SLA commitments are defined per executed client Statement of Work (SOW).',
+                  'सैंपल पूर्वावलोकन पैनल। प्रोडक्शन उपलब्धता लक्ष्य और SLA शर्तें प्रत्येक क्लाइंट के हस्ताक्षरित SOW के अनुसार तय होती हैं।'
                 )}
               </p>
 
               <div className="space-y-3 font-mono text-xs">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <span className="text-slate-600 font-sans">{t('Current Month Availability', 'वर्तमान माह उपलब्धता')}</span>
-                  <span className="font-bold text-emerald-700">99.991%</span>
+                  <span className="text-slate-600 font-sans">{t('Sample Benchmark (Preview)', 'सैंपल बेंचमार्क (पूर्वावलोकन)')}</span>
+                  <span className="font-bold text-emerald-700">HA Target (SOW)</span>
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <span className="text-slate-600 font-sans">{t('Average P99 API Latency', 'औसत P99 एपीआई लेटेंसी')}</span>
-                  <span className="font-bold text-slate-950">38ms</span>
+                  <span className="text-slate-600 font-sans">{t('Target P99 Latency Goal', 'लक्षित P99 लेटेंसी गोल')}</span>
+                  <span className="font-bold text-slate-950">&lt;150ms goal</span>
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <span className="text-slate-600 font-sans">{t('Mean Time To Resolution (MTTR)', 'औसत समाधान समय (MTTR)')}</span>
-                  <span className="font-bold text-slate-950">&lt; 18 mins</span>
+                  <span className="text-slate-600 font-sans">{t('Incident Response Target', 'घटना प्रतिक्रिया लक्ष्य')}</span>
+                  <span className="font-bold text-slate-950">Defined in SOW</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-600 font-sans">{t('Disaster Recovery RPO / RTO', 'आपदा रिकवरी RPO / RTO')}</span>
-                  <span className="font-bold text-slate-950">RPO: 0s / RTO: 28s</span>
+                  <span className="text-slate-600 font-sans">{t('Backup Strategy Goal', 'बैकअप रणनीति लक्ष्य')}</span>
+                  <span className="font-bold text-slate-950">Point-in-Time Recovery</span>
                 </div>
               </div>
             </div>
@@ -1874,28 +2371,28 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <div className="flex items-center gap-2 text-slate-950 font-bold text-base pb-2 border-b border-slate-100">
                 <Lock className="w-5 h-5 text-blue-700" />
-                <span>{t('Security & Regulatory Compliance', 'सुरक्षा एवं विनियामक अनुपालन')}</span>
+                <span>{t('Security & Privacy Engineering Practices', 'सुरक्षा एवं गोपनीयता इंजीनियरिंग अभ्यास')}</span>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
                 {t(
-                  'Continuous automated vulnerability audits and cryptographic signature verification on all distributed microservices.',
-                  'सभी वितरित माइक्रोसर्विस पर निरंतर स्वचालित भेद्यता ऑडिट और क्रिप्टोग्राफ़िक हस्ताक्षर सत्यापन।'
+                  'Internal security controls and role-based access protections applied across portal routes (no external SOC-2 or ISO certification claimed).',
+                  'पोर्टल रूट्स पर लागू आंतरिक सुरक्षा नियंत्रण एवं भूमिका-आधारित एक्सेस सुरक्षा (कोई बाह्य SOC-2 या ISO प्रमाणन दावा नहीं)।'
                 )}
               </p>
 
               <div className="space-y-2.5">
                 <div className="flex items-center gap-2 text-xs text-slate-700 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t('India DPDP Act 2023 Sovereign Data Residency Compliant', 'भारत DPDP अधिनियम 2023 संप्रभु डेटा स्थानीयकरण अनुपालन')}</span>
+                  <span>{t('India DPDP Act 2023 Aligned Data Handling (Uncertified)', 'भारत DPDP अधिनियम 2023 अनुरूप डेटा सुरक्षा अभ्यास (अप्रमाणित)')}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-700 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t('TLS 1.3 Strict Mutual Authentication with Mutual TLS (mTLS)', 'mTLS के साथ TLS 1.3 सख्त दोतरफा प्रमाणीकरण')}</span>
+                  <span>{t('Firebase Auth ID Token & Role-Based Route Guards', 'Firebase Auth ID टोकन एवं भूमिका-आधारित रूट सुरक्षा')}</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-slate-700 p-2.5 bg-slate-50 rounded-lg border border-slate-100">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t('Automated Static Code Analysis (SonarQube Grade A)', 'स्वचालित स्थैतिक कोड विश्लेषण (सोनारक्विब ग्रेड A)')}</span>
+                  <span>{t('Automated TypeScript & Firestore Security Rules Lint', 'स्वचालित TypeScript एवं Firestore सुरक्षा नियम जांच')}</span>
                 </div>
               </div>
             </div>
@@ -1910,6 +2407,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
         isOpen={ticketModalOpen}
         onClose={() => setTicketModalOpen(false)}
         defaultProjectCode={activeProject.code}
+        isDemoSandbox={isDemoSandbox}
         onSuccess={(newTkt) => {
           setSupportTickets((prev) => [newTkt, ...prev]);
         }}
