@@ -75,11 +75,17 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 space-y-2">
-              <div className="flex items-center justify-between font-mono">
-                <span className="font-bold text-slate-900">{siteContact.registration}</span>
-                <span>Est. {COMPANY_INFO.founded}</span>
+              <div className="flex items-center justify-between gap-2 font-mono">
+                <span className="font-bold text-slate-900">
+                  {siteContact.companyRegistration || siteContact.name}
+                </span>
+                <span className="shrink-0">Est. {COMPANY_INFO.founded}</span>
               </div>
-              <div>{t('Governed under Ministry of Corporate Affairs, Government of India.', 'कॉर्पोरेट कार्य मंत्रालय, भारत सरकार के अंतर्गत पंजीकृत।')}</div>
+              {siteContact.companyRegistration ? (
+                <div>{t('Official corporate registration identifier.', 'आधिकारिक कॉर्पोरेट पंजीकरण विवरण।')}</div>
+              ) : (
+                <div>{siteContact.location}</div>
+              )}
             </div>
           </div>
 
@@ -100,7 +106,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
 
             <div className="grid grid-cols-2 gap-4 pt-2">
               <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <div className="text-2xl font-extrabold text-blue-700 font-mono tabular-nums">18+</div>
+                <div className="text-2xl font-extrabold text-blue-700 font-mono tabular-nums">Full-Stack</div>
                 <div className="text-xs font-semibold text-slate-900 mt-0.5">Dedicated Engineering Pods</div>
                 <div className="text-[11px] text-slate-500">Go, Kotlin, React, Python</div>
               </div>
@@ -112,6 +118,69 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             </div>
           </div>
         </div>
+
+        {/* Founder & Leadership Section */}
+        <section className="border-t border-slate-200 pt-16" aria-labelledby="founder-leadership-heading">
+          <div className="max-w-3xl mb-8">
+            <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
+              {t('FOUNDER & LEADERSHIP', 'संस्थापक एवं नेतृत्व')}
+            </div>
+            <h2 id="founder-leadership-heading" className="text-2xl sm:text-3xl font-bold text-slate-900">
+              {t('Architectural Leadership', 'तकनीकी और कार्यकारी नेतृत्व')}
+            </h2>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-6 sm:p-8 lg:p-10 shadow-xs">
+            <div className="flex flex-col md:flex-row items-center gap-6 sm:gap-8 lg:gap-12">
+              {/* Softly Rounded Professional Portrait Frame */}
+              <div className="shrink-0">
+                <div className="w-52 h-52 sm:w-60 sm:h-60 rounded-2xl p-1.5 bg-white border border-blue-200 shadow-lg ring-1 ring-blue-100">
+                  <OptimizedImage
+                    assetKey="founderImage"
+                    alt="Bhanu Ram Bariha — Founder & Principal Architect"
+                    altHi="भानु राम बरीहा — संस्थापक एवं प्रमुख आर्किटेक्ट"
+                    width={1024}
+                    height={1024}
+                    loading="lazy"
+                    sizes="(max-width: 640px) 208px, 240px"
+                    className="w-full h-full rounded-xl object-cover object-top"
+                  />
+                </div>
+              </div>
+
+              {/* Bilingual Founder Profile Details */}
+              <div className="flex-1 text-center md:text-left space-y-3.5">
+                <div>
+                  <h3 className="text-xl sm:text-2xl font-extrabold text-slate-950 tracking-tight">
+                    {t('Bhanu Ram Bariha', 'भानु राम बरीहा')}
+                  </h3>
+                  <p className="text-sm sm:text-base font-bold text-blue-700 mt-1">
+                    {t('Founder & Principal Architect', 'संस्थापक एवं प्रमुख आर्किटेक्ट')}
+                  </p>
+                </div>
+
+                <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-2xl">
+                  {t(
+                    'Founder of Bhanu Ram Bariha Digital Technologies (POWER WEB STUDIO AI). Building enterprise-grade distributed systems, native Android ecosystems, and sovereign AI platforms for modern businesses.',
+                    'भानु राम बरीहा डिजिटल टेक्नोलॉजीज (POWER WEB STUDIO AI) के संस्थापक। आधुनिक व्यवसायों के लिए एंटरप्राइज-ग्रेड वितरित सिस्टम, नेटिव एंड्रॉइड इकोसिस्टम और सॉवरेन एआई प्लेटफॉर्म का निर्माण।'
+                  )}
+                </p>
+
+                <div className="pt-2 flex flex-wrap items-center justify-center md:justify-start gap-2 text-xs text-slate-600">
+                  <span className="px-3 py-1 rounded-md bg-white border border-slate-200 font-semibold text-slate-800">
+                    {t('Distributed Systems', 'वितरित सिस्टम')}
+                  </span>
+                  <span className="px-3 py-1 rounded-md bg-white border border-slate-200 font-semibold text-slate-800">
+                    {t('Native Android Ecosystems', 'नेटिव एंड्रॉइड इकोसिस्टम')}
+                  </span>
+                  <span className="px-3 py-1 rounded-md bg-white border border-slate-200 font-semibold text-slate-800">
+                    {t('Sovereign AI Platforms', 'सॉवरेन एआई प्लेटफॉर्म')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Leadership Values */}
         <div className="border-t border-slate-200 pt-16">
@@ -147,8 +216,8 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
               {
                 title: 'Full IP Handover',
                 titleHi: 'पूर्ण आईपी स्वामित्व',
-                desc: '100% source code, documentation, deployment scripts, and architectural blueprints belong completely to the client.',
-                descHi: '100% स्रोत कोड, दस्तावेज़ और डिप्लॉयमेंट स्क्रिप्ट्स पूरी तरह से ग्राहक के स्वामित्व में होते हैं।',
+                desc: 'Complete source code, documentation, deployment scripts, and architectural blueprints belong to the client.',
+                descHi: 'संपूर्ण स्रोत कोड, दस्तावेज़ और डिप्लॉयमेंट स्क्रिप्ट्स पूरी तरह से ग्राहक के स्वामित्व में होते हैं।',
               },
             ].map((pillar, idx) => (
               <div

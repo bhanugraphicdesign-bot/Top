@@ -6,6 +6,7 @@ import { Phone, Mail, MapPin, Send, CheckCircle, ShieldCheck, Award, ArrowUp } f
 import { PageRoute } from '../../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { extractBilingualApiError } from '../../utils/formProtection';
+import { getAppCheckTokenHeader } from '../../firebase/appCheck';
 
 export const Footer: React.FC = () => {
   const { language, t, showToast } = useLanguage();
@@ -33,9 +34,13 @@ export const Footer: React.FC = () => {
     setSubscribeError('');
     setSubscribing(true);
     try {
+      const appCheckHeaders = await getAppCheckTokenHeader();
       const res = await fetch('/api/newsletter/subscribe', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...appCheckHeaders,
+        },
         body: JSON.stringify({ email: trimmed, language, _hp: honeypot }),
       });
       const data = await res.json().catch(() => ({}));
@@ -100,7 +105,9 @@ export const Footer: React.FC = () => {
             </p>
 
             <div className="text-xs text-slate-300 space-y-2 pt-2 break-words">
-              <div className="font-mono text-slate-400">{siteContact.registration}</div>
+              {siteContact.companyRegistration && (
+                <div className="font-mono text-slate-400">{siteContact.companyRegistration}</div>
+              )}
               <div className="flex items-start gap-2">
                 <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
                 <span>{siteContact.location}</span>

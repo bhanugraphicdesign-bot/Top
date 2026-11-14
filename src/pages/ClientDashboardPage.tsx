@@ -11,6 +11,7 @@ import {
 } from '../firebase/services';
 import { EnterpriseInvoice } from '../types';
 import { COMPANY_INFO } from '../data/content';
+import { useSiteContact } from '../hooks/useSiteContact';
 import { DocumentDetailModal, EnterpriseDocument } from '../components/client/DocumentDetailModal';
 import { NewTicketModal } from '../components/client/NewTicketModal';
 import {
@@ -198,6 +199,7 @@ export const ClientDashboardPage: React.FC = () => {
   const { language, t, formatDate, showToast } = useLanguage();
   const { navigate } = useNavigation();
   const { currentUser, openAuthModal } = useAuth();
+  const siteContact = useSiteContact();
 
   // Strictly distinguish real authenticated Firebase session vs unauthenticated Demo Sandbox
   const [demoClientMode, setDemoClientMode] = useState<boolean>(() => {
@@ -802,7 +804,7 @@ export const ClientDashboardPage: React.FC = () => {
     try {
       const certificateContent = `================================================================================
 BHANU RAM BARIHA DIGITAL TECHNOLOGIES // ENTERPRISE VERIFICATION CERTIFICATE
-BRAND: POWER WEB STUDIO AI | CIN: U72900OR2024PTC045812
+BRAND: POWER WEB STUDIO AI${siteContact.companyRegistration ? ` | ${siteContact.companyRegistration}` : ''}
 HEADQUARTERS: ${COMPANY_INFO.headquarters}
 ================================================================================
 
@@ -1086,7 +1088,9 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
         });
         replyObj = newReply || {
           id: `resp-${Date.now()}`,
-          author: authorName,
+          author: currentUser?.uid || 'client',
+          authorName,
+          role: 'client',
           authorRole: 'client',
           message: text,
           timestamp: new Date().toISOString(),
@@ -1100,7 +1104,6 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             return {
               ...t,
               responses: [...existing, replyObj],
-              status: t.status === 'resolved' ? 'open' : t.status,
             };
           }
           return t;
@@ -1325,9 +1328,11 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                     ? t('Role-Isolated Access · Sample Sandbox', 'रोल-आधारित सुरक्षा · सैंपल सैंडबॉक्स')
                     : t('Role-Isolated Verified Session', 'रोल-आधारित सत्यापित सत्र')}
                 </span>
-                <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                  CIN: U72900OR2024PTC045812
-                </span>
+                {siteContact.companyRegistration && (
+                  <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+                    {siteContact.companyRegistration}
+                  </span>
+                )}
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
@@ -2357,7 +2362,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                         ) : (
                           <div className="space-y-2.5">
                             {responses.map((resp: any, idx: number) => {
-                              const isArchitect = resp.authorRole !== 'client';
+                              const isArchitect = (resp.role || resp.authorRole) !== 'client';
                               return (
                                 <div
                                   key={resp.id || idx}
@@ -2369,7 +2374,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                                 >
                                   <div className="flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-1.5">
-                                      <span className="font-bold text-slate-900">{resp.author}</span>
+                                      <span className="font-bold text-slate-900">{resp.authorName || resp.author}</span>
                                       <span
                                         className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
                                           isArchitect

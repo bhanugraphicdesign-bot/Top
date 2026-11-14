@@ -103,6 +103,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       return;
     }
 
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return;
+    }
+
     try {
       const live = await fetchNotifications(currentUser.uid);
       const readBroadcasts = loadReadBroadcastIds(currentUser.uid);
@@ -116,9 +120,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   }, [currentUser?.uid]);
 
   useEffect(() => {
-    refreshNotifications();
-    const interval = setInterval(refreshNotifications, 30000);
-    return () => clearInterval(interval);
+    void refreshNotifications();
+    const interval = setInterval(() => {
+      if (
+        (typeof document === 'undefined' || document.visibilityState === 'visible') &&
+        (typeof navigator === 'undefined' || navigator.onLine !== false)
+      ) {
+        void refreshNotifications();
+      }
+    }, 30000);
+    const handleOnline = () => {
+      void refreshNotifications();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+    };
   }, [refreshNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;

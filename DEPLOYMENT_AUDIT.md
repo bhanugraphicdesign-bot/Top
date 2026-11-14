@@ -2,8 +2,8 @@
 **Company:** BHANU RAM BARIHA DIGITAL TECHNOLOGIES  
 **Brand:** POWER WEB STUDIO AI  
 **Author:** Senior Enterprise Software Architect & DevOps Lead  
-**Timestamp:** 2026-11-12T15:15:00Z  
-**Phase:** Phase 9 — Production Deployment Preparation & Pre-Flight Review  
+**Timestamp:** 2026-11-14T16:00:00Z  
+**Phase:** Production Readiness Review (Parts 1–4 Completed)  
 **Deployment State:** **READY FOR PRODUCTION REVIEW (NO DEPLOYMENT EXECUTED PENDING APPROVAL)**
 
 ---
@@ -16,11 +16,12 @@
 | **Port Binding** | `process.env.PORT` (defaults to 3000 in dev, 8080 in Cloud Run) | **VERIFIED** | `parseInt(process.env.PORT \|\| '3000', 10)` |
 | **Proxy Trust** | Google Cloud Load Balancer (GCLB) upstream proxy | **VERIFIED** | `app.set('trust proxy', true)` |
 | **Container Lifecycle** | Graceful shutdown on `SIGTERM` / `SIGINT` | **IMPLEMENTED** | Drains in-flight requests with 15s force-kill safety |
-| **Production Command** | `"start": "node server.ts"` in `package.json` | **VERIFIED** | Native TypeScript execution in Node v22.23.2 |
-| **Production Build** | `"build": "vite build"` producing `/dist` | **VERIFIED** | `dist/index.html` (1.41 kB), CSS (61.3 kB), JS chunks |
-| **Static Cache Policy** | In-memory / HTTP browser caching | **CONFIGURED** | `express.static(distPath, { maxAge: '1h' })` |
-| **Live Database** | Google Cloud Firestore (Enterprise Edition) | **CONNECTED** | Project: `turnkey-invention-70z9n` |
-| **Security Rules** | Attribute-Based Access Control (ABAC) & Default Deny | **DEPLOYED** | 17 collections secured via `firestore.rules` |
+| **Production Command** | `"start": "node server.ts"` in `package.json` | **VERIFIED** | Native TypeScript execution in Node v22+ |
+| **Routing & SPA** | Clean History API routes (`/about`, `/services`, `/apps/:id`, etc.) with legacy `#/` redirects | **VERIFIED** | `NavigationContext.tsx` + `server.ts` SPA `index.html` fallback |
+| **Verification Gate** | `"check": "npm run typecheck && npm run lint && npm run build"` | **VERIFIED** | ESLint (TS/React/Hooks + Firestore Rules), `tsc --noEmit`, Vite build |
+| **Live Database** | Google Cloud Firestore (Enterprise Edition) via `firebase-admin` | **CONNECTED** | Project: `turnkey-invention-70z9n` |
+| **Persistent State** | Invoices, payments, audit logs, and newsletter subscribers stored in Firestore | **VERIFIED** | No local ephemeral JSON state; uploads stored solely in GCS |
+| **Security Rules** | Attribute-Based Access Control (ABAC) & Default Deny | **DEPLOYED** | Secured via `firestore.rules` (`allow read, write: if false;` root) |
 
 ---
 
@@ -30,16 +31,19 @@
 |---|---|---|---|---|
 | `PORT` | Container Runtime | Injected by Cloud Run (8080) | Public Runtime Var | HTTP port for incoming web traffic |
 | `NODE_ENV` | Container Runtime | `production` in Cloud Run | Public Runtime Var | Switches from Vite dev middleware to `/dist` static serving |
-| `APP_URL` | Container Runtime | Injected by AI Studio Cloud Run URL | Safe URI | Base URL for self-referential links, sitemap, and CORS allowlist |
-| `GEMINI_API_KEY` | Server-Side Only | AI Studio Secret Panel | **Confidential Secret** | Proxy route AI calls (never exposed to client UI) |
-| `PAYMENT_SECRET` | Server-Side Only | Cloud Run Secret / Env (Optional in dev) | **Confidential Secret** | HMAC-SHA256 signing secret for `/api/payments/*` (returns HTTP 503 `PAYMENT_GATEWAY_OPTIONAL_MODE` when unset) |
-| `GCS_BUCKET` | Server-Side Only | Cloud Storage Bucket Name (Optional in dev) | Runtime Configuration | Private GCS bucket for `/api/files/*` (returns HTTP 503 `STORAGE_NOT_CONFIGURED` when unset) |
+| `SITE_URL` | Container & Build | Set to live domain (e.g. `https://YOUR-DOMAIN.com`) | Public Runtime Var | Single source of truth for `<link rel="canonical">`, `og:url`, `sitemap.xml`, `robots.txt`, and CORS allowlist |
+| `VITE_RECAPTCHA_SITE_KEY` | Client Build Runtime | Google reCAPTCHA v3 Site Key | Public Key | Enables Firebase App Check tokens verified server-side on quotation, contact, and newsletter forms |
+| `GCS_BUCKET` | Server-Side Only | Private Cloud Storage Bucket Name | Runtime Configuration | Exclusive persistence backend for `/api/files/*` (returns HTTP 503 `STORAGE_NOT_CONFIGURED` when unset; never writes local disk) |
+| `ADMIN_EMAIL` | Local Admin CLI Only | Used by `scripts/create-admin.ts` | Operational Setup Var | Grants initial `user_roles/{uid}` (`role: "admin"`) and custom admin claim via Admin SDK (not hardcoded in runtime code) |
+| `GEMINI_API_KEY` | Server-Side Only | AI Studio / Cloud Run Secret | **Confidential Secret** | Proxy route AI calls (`/api/ai/*`, never exposed to client UI) |
+| `PAYMENT_SECRET` | Server-Side Only | Cloud Run Secret / Env | **Confidential Secret** | HMAC-SHA256 signing secret for `/api/payments/*` (returns HTTP 503 `PAYMENT_GATEWAY_OPTIONAL_MODE` when unset) |
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | Server-Side Only | Optional Service Account JSON | **Confidential Secret** | Explicit Admin SDK credentials outside GCP ADC environments |
-| `CORS_ALLOWED_ORIGINS` | Server-Side Only | Comma-separated origin allowlist | Runtime Configuration | Additional trusted browser origins beyond default allowlist |
-| `K_SERVICE` | Cloud Run Runtime | Injected by Google Cloud Run | System Metadata | Service name identifier |
-| `K_REVISION` | Cloud Run Runtime | Injected by Google Cloud Run | System Metadata | Active container deployment revision |
+| `CORS_ALLOWED_ORIGINS` | Server-Side Only | Comma-separated origin allowlist | Runtime Configuration | Additional trusted browser origins beyond `SITE_URL` |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Client Build Runtime | Google Analytics 4 ID | Public Key | Optional Firebase Analytics measurement ID |
+| `FORM_RATE_LIMIT_MAX` | Server-Side Only | Number (default `8`) | Runtime Configuration | Max form submissions per IP per 15-minute window |
+| `K_SERVICE` / `K_REVISION` | Cloud Run Runtime | Injected by Google Cloud Run | System Metadata | Cloud Run service and active revision identifiers |
 
-*Validation Rule:* No secrets or confidential keys are hardcoded in git repositories or exposed in client bundles.
+*Validation Rule:* No secrets, service account keys, or hardcoded administrator emails are stored in frontend bundles, `firestore.rules`, or runtime source files.
 
 ---
 
@@ -48,9 +52,8 @@
 - **Project ID:** `turnkey-invention-70z9n`
 - **Firestore Database ID:** `ai-studio-powerwebstudioai-4b6a19ad-e6d7-4bd0-a968-9c08eb07a897`
 - **Auth Domain:** `turnkey-invention-70z9n.firebaseapp.com`
-- **Storage Bucket:** `turnkey-invention-70z9n.firebasestorage.app`
-- **OAuth Client ID:** `724375766901-q0pbmuh6anduvs27oknqoli2dahopdmc.apps.googleusercontent.com`
 - **Boot Handshake:** When the app initializes, `validateFirestoreConnection()` performs an end-to-end handshake via `getDocFromServer(doc(db, 'test', 'connection'))`.
+- **Admin Provisioning (`scripts/create-admin.ts`):** First admin role is granted via CLI (`ADMIN_EMAIL=owner@domain.com npx tsx scripts/create-admin.ts`), writing `user_roles/{uid}` (`role: "admin"`) and setting Firebase Auth custom claims (`admin: true, role: "admin"`).
 
 ---
 
@@ -66,88 +69,47 @@ service cloud.firestore {
 }
 ```
 
-1. **Default Deny:** Catch-all block at the root of Firestore blocks all unauthenticated and arbitrary reads/writes.
-2. **Root Administrator Guarantee:**
-   `ssbhanu41@gmail.com` (verified email required) is checked in `firestore.rules` helper `isAdmin()`, granting administrative triage rights while preventing non-admin modification.
-3. **User Roles Protection (`/user_roles/{userId}`):**
-   Clients can only read their own role (`allow get: if isOwner(userId) || isAdmin()`). Mutation (`create, update, delete`) is restricted strictly to verified admins.
-4. **Tenant Isolation:**
-   Projects, Orders, Invoices, Payments, and Support Tickets evaluate `resource.data.clientId == request.auth.uid || isAdmin()`. Unauthorized tenants cannot scrape or query competitor data.
-5. **Audit Log Immutability (`/audit_logs/{logId}`):**
-   `allow create: if isValidId(logId) && isSignedIn() && isValidAuditLogCreate(request.resource.data, logId);` enforces authenticated actor attribution, while `allow update, delete: if false;` guarantees log immutability.
+1. **Default Deny:** Catch-all root match blocks all unauthenticated and unspecified collection reads/writes.
+2. **RBAC / Claims-Only Admin (`isAdmin()`):** Checks Firebase Auth custom claims (`admin: true` or `role == 'admin'`) and `user_roles/{uid}.role == 'admin'`. Zero hardcoded admin emails exist in rules or code.
+3. **User Roles Protection (`/user_roles/{userId}`):** Owners can read their own document (`allow get`); all mutations (`create, update, delete`) are strictly limited to verified admins.
+4. **Quotations & Server Intake (`/quotations/{quoteId}`):** Client `create` is set to `false`; public submissions route through `POST /api/quotations` (enforcing App Check verification, honeypot validation, IP rate limiting, Zod validation, and Admin SDK persistence).
+5. **Support Tickets Append-Only Reply Rule (`/support_tickets/{ticketId}`):** Clients may only append exactly one response (`responses.size() == existing.responses.size() + 1`, prior messages immutable, `author == request.auth.uid`, `role == 'client'`, unchanged `status`).
+6. **Server-Authored Audit Logs (`/audit_logs/{logId}`):** Client `create, update, delete` are set to `false`. Events are written strictly via Admin SDK (`POST /api/audit-events` or server routes), deriving `ipAddress` exclusively from trusted server headers.
+7. **Tenant Isolation:** Projects, invoices, payments, and support tickets restrict client queries to `resource.data.clientId == request.auth.uid || isAdmin()`.
 
 ---
 
-## 5. HTTPS, Network Security & HTTP Response Headers
+## 5. HTTP Security Headers, Helmet CSP & Payload Bounds
 
-When running behind Google Cloud Load Balancer on Cloud Run, TLS/HTTPS is terminated at the edge with managed SSL certificates.
-
-`server.ts` injects the following security headers on every response:
-- `X-Content-Type-Options: nosniff` (Mitigates MIME confusion attacks)
-- `X-XSS-Protection: 1; mode=block` (Reflective XSS protection for legacy browsers)
-- `Referrer-Policy: strict-origin-when-cross-origin` (Protects query strings on outbound links)
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HSTS enforced on all HTTPS traffic)
+`server.ts` disables `X-Powered-By` and configures `helmet` + custom middleware:
+- **Content-Security-Policy (CSP):** Strictly permits Firebase (`*.firebaseio.com`, `*.googleapis.com`, `*.firebaseapp.com`), Google Sign-In (`accounts.google.com`, `apis.google.com`), reCAPTCHA (`www.google.com/recaptcha/`, `www.gstatic.com/recaptcha/`), and Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`).
+- **Cross-Origin-Opener-Policy:** `same-origin-allow-popups` (preserves Google OAuth popup sign-in compatibility).
+- **Security Headers:** `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy`.
+- **Body Size Limits:** Global JSON/urlencoded limit lowered to **`1mb`**, with an explicit route-scoped **`15mb`** JSON limit solely on `POST /api/files/upload` (for base64 up to 10 MB files).
 
 ---
 
-## 6. Logging, Telemetry & Audit Trails
+## 6. Logging, Telemetry, SEO & Assets
 
-1. **Node.js Process Telemetry (`/api/telemetry`):**
-   Returns real-time memory usage (RSS, heapTotal, heapUsed), process ID, uptime, platform, and active connections.
-2. **Cloud Run Structured Logs:**
-   Standard `console.log` and `console.error` stream directly to Google Cloud Logging (Cloud Logging / Stackdriver).
-3. **Enterprise Audit Trail (`/audit_logs`):**
-   Key events are recorded with actor email, action type, resource path, and ISO-8601 timestamps:
-   - `AUTH_LOGIN_GOOGLE`, `AUTH_LOGIN_EMAIL`, `AUTH_REGISTER`, `AUTH_LOGOUT`
-   - `QUOTATION_SUBMITTED`, `QUOTATION_STATUS_CHANGE`
-   - `TICKET_CREATED`, `TICKET_REPLIED`, `TICKET_STATUS_UPDATED`
-   - `USER_ROLE_UPDATED`, `CLIENT_RECORD_SAVED`
-   - `PROJECT_SAVED`, `SERVICE_SAVED`
+1. **Admin-Only Telemetry (`GET /api/telemetry`):** Protected by `requireAdmin` (verifying ID token + admin RBAC).
+2. **Dynamic SEO & History Routing:** Every route (`/`, `/services`, `/ai-solutions`, `/android-portfolio`, `/apps/:id`, `/process`, `/about`, `/contact`, `/blog`, `/privacy`, `/terms`) dynamically updates `<title>`, `<meta name="description">`, `<link rel="canonical">`, OpenGraph (`og:title`, `og:description`, `og:url`, `og:image`), and Twitter tags using `SITE_URL`. Legacy `#/...` URLs automatically redirect to clean History API paths.
+3. **Media Optimization:** Uses WebP assets via `<picture>` with JPG fallbacks and `loading="lazy"` below the fold.
+4. **Validated Uploads:** Only `pdf`, `png`, `jpg`, `docx` (max 10 MB binary) with randomized object keys and auth-token `uploadedBy` attribution in private Cloud Storage (`GCS_BUCKET`).
 
 ---
 
-## 7. Backup & Disaster Recovery (DR) Strategy
+## 7. Deployment Health Probe
 
-1. **Cloud Firestore Automated Backups:**
-   Google Cloud Firestore Enterprise Edition provides cross-zone replication and backup capabilities configured at the GCP project tier.
-2. **SLA Scope:**
-   Service Availability, RPO, and RTO targets are governed individually per executed Client Statement of Work (SOW).
-3. **Validated Uploads Manifest:**
-   When `GCS_BUCKET` is configured, files uploaded through `/api/files/upload` generate a SHA-256 digest and store metadata in private GCS / manifest storage with authenticated download gating. When `GCS_BUCKET` is unset, uploads are safely disabled (`HTTP 503 STORAGE_NOT_CONFIGURED`).
+- **Liveness & Startup Probe:** `GET /api/health`
+  Returns `HTTP 200 OK` with company metadata (with `companyRegistration` hidden unless explicitly configured), Firestore status, and runtime info.
 
 ---
 
-## 8. Deployment Health Probes
-
-- **Liveness & Startup Probe:**
-  `GET /api/health`
-  Returns `HTTP 200 OK` with JSON:
-  ```json
-  {
-    "status": "ONLINE",
-    "service": "POWER WEB STUDIO AI ENTERPRISE BACKEND",
-    "company": "BHANU RAM BARIHA DIGITAL TECHNOLOGIES",
-    "database": {
-      "provider": "Google Cloud Firestore",
-      "status": "CONNECTED"
-    },
-    "deployment": {
-      "platform": "Google Cloud Run",
-      "port": 3000,
-      "nodeVersion": "v22.23.2"
-    }
-  }
-  ```
-
----
-
-## 9. Google Cloud Run Deployment Commands (For User Approval)
-
-When ready to trigger live deployment, the following standard Google Cloud CLI command can be executed:
+## 8. Google Cloud Run Deployment Commands (For User Approval)
 
 ```bash
-# 1. Build Production Frontend Bundle
-npm run build
+# 1. Verify Typecheck, ESLint, and Production Build
+npm run check
 
 # 2. Deploy to Google Cloud Run
 gcloud run deploy power-web-studio-ai \
@@ -161,12 +123,13 @@ gcloud run deploy power-web-studio-ai \
   --min-instances 0 \
   --max-instances 10 \
   --timeout 300 \
-  --set-env-vars NODE_ENV=production,PORT=8080
+  --set-env-vars NODE_ENV=production,PORT=8080,SITE_URL=https://YOUR-DOMAIN.com,GCS_BUCKET=YOUR_PRIVATE_BUCKET,VITE_RECAPTCHA_SITE_KEY=YOUR_RECAPTCHA_SITE_KEY
 ```
 
 ---
 
-## 10. Approval Gate Status
+## 9. Approval Gate Status
 
-**GATE STATUS:** **HOLDING DEPLOYMENT FOR USER REVIEW & APPROVAL**  
-*No deployment has been triggered. Please review the above configurations, parameters, and verification tests and provide confirmation to proceed.*
+**GATE STATUS:** **READY FOR USER REVIEW & APPROVAL**  
+*No live Cloud Run deployment has been executed automatically.*
+

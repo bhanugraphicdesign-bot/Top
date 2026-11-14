@@ -26,46 +26,6 @@ function record(category: string, name: string, passed: boolean, details?: strin
   console.log(`[${status}] [${category}] ${name}${details ? ` -> ${details}` : ''}`);
 }
 
-function cleanupTestRfpFile(fileId: string, storageFileName?: string) {
-  try {
-    const uploadsDir = path.resolve(process.cwd(), 'uploads');
-    const manifestPath = path.join(uploadsDir, 'manifest.json');
-    if (storageFileName) {
-      const target = path.join(uploadsDir, path.basename(storageFileName));
-      if (fs.existsSync(target)) fs.unlinkSync(target);
-    }
-    if (fs.existsSync(manifestPath)) {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-      if (manifest[fileId]) {
-        const stored = manifest[fileId].storageFileName;
-        if (stored) {
-          const target = path.join(uploadsDir, path.basename(stored));
-          if (fs.existsSync(target)) fs.unlinkSync(target);
-        }
-        delete manifest[fileId];
-        fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
-      }
-    }
-  } catch {
-    // best-effort cleanup
-  }
-}
-
-function cleanupTestNewsletterEmail(email: string) {
-  try {
-    const ledgerPath = path.resolve(process.cwd(), 'uploads', 'ledger', 'newsletter.json');
-    if (fs.existsSync(ledgerPath)) {
-      const subs = JSON.parse(fs.readFileSync(ledgerPath, 'utf8'));
-      if (Array.isArray(subs)) {
-        const filtered = subs.filter((s: any) => s.email !== email.toLowerCase());
-        fs.writeFileSync(ledgerPath, JSON.stringify(filtered, null, 2), 'utf8');
-      }
-    }
-  } catch {
-    // best-effort cleanup
-  }
-}
-
 async function runTestSuite() {
   console.log('================================================================');
   console.log('   POWER WEB STUDIO AI — PHASE 8 COMPREHENSIVE TEST SUITE       ');
@@ -105,20 +65,14 @@ async function runTestSuite() {
 
   try {
     const res = await fetch(`${SERVER_BASE}/api/telemetry`);
-    const data = await res.json();
-    const passed =
-      res.status === 200 &&
-      Boolean(data.nodeVersion) &&
-      typeof data.memory?.rssMb === 'number' &&
-      typeof data.memory?.heapUsedMb === 'number';
     record(
-      'API Functional',
-      'GET /api/telemetry returns runtime metrics',
-      passed,
-      `Node: ${data.nodeVersion}, RSS: ${data.memory?.rssMb}MB`
+      'API Security',
+      'GET /api/telemetry rejects unauthenticated callers with HTTP 401 (admin-only)',
+      res.status === 401,
+      `status=${res.status}`
     );
   } catch (err: any) {
-    record('API Functional', 'GET /api/telemetry returns runtime metrics', false, err.message);
+    record('API Security', 'GET /api/telemetry requires admin auth', false, err.message);
   }
 
   try {
@@ -169,6 +123,40 @@ async function runTestSuite() {
     record('API Functional', 'POST /api/inquiries/validate rejects empty fullName with 400', false, err.message);
   }
 
+  try {
+    const okRes = await fetch(`${SERVER_BASE}/api/quotations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: 'Vikram Patel',
+        email: 'v.patel@example.in',
+        serviceType: 'Enterprise AI & Autonomous Agents',
+        brief: 'Architecture scoping check via POST /api/quotations.',
+      }),
+    });
+    const okData = await okRes.json().catch(() => ({}));
+    const badRes = await fetch(`${SERVER_BASE}/api/quotations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: '',
+        email: 'invalid-email',
+        serviceType: '',
+      }),
+    });
+    const validHandled =
+      okRes.status === 201 ||
+      (okRes.status === 503 && okData?.code === 'FIRESTORE_ADMIN_NOT_CONFIGURED');
+    record(
+      'API Functional',
+      'POST /api/quotations validates with Zod & persists via firebase-admin (or 503 unconfigured)',
+      validHandled && badRes.status === 400,
+      `validStatus=${okRes.status}, invalidStatus=${badRes.status}`
+    );
+  } catch (err: any) {
+    record('API Functional', 'POST /api/quotations validation test', false, err.message);
+  }
+
   const testSubEmail = `phase8-test-${Date.now()}@example.com`;
   try {
     const okRes = await fetch(`${SERVER_BASE}/api/newsletter/subscribe`, {
@@ -176,17 +164,25 @@ async function runTestSuite() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: testSubEmail, language: 'hi' }),
     });
+    const okData = await okRes.json().catch(() => ({}));
     const badRes = await fetch(`${SERVER_BASE}/api/newsletter/subscribe`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'not-valid-email' }),
     });
-    const passed = (okRes.status === 201 || okRes.status === 200) && badRes.status === 400;
-    record('API Functional', 'POST /api/newsletter/subscribe persists valid email & rejects invalid email', passed);
+    const validHandled =
+      okRes.status === 201 ||
+      okRes.status === 200 ||
+      (okRes.status === 503 && okData?.code === 'FIRESTORE_ADMIN_NOT_CONFIGURED');
+    const passed = validHandled && badRes.status === 400;
+    record(
+      'API Functional',
+      'POST /api/newsletter/subscribe uses Firestore (or 503 when Admin unconfigured) & rejects invalid email',
+      passed,
+      `validStatus=${okRes.status}, invalidStatus=${badRes.status}`
+    );
   } catch (err: any) {
     record('API Functional', 'POST /api/newsletter/subscribe test', false, err.message);
-  } finally {
-    cleanupTestNewsletterEmail(testSubEmail);
   }
 
   // --------------------------------------------------------------------------
@@ -297,14 +293,12 @@ async function runTestSuite() {
       expectedHash.length === 64;
     record(
       'File Storage',
-      'Server enforces extension allowlist, strict Base64, PDF/image/ZIP magic bytes & path-traversal rejection',
-      serverGuardsOk,
-      'Magic-byte, strict Base64, category allowlist & path traversal guards verified in server.ts'
+      'Server enforces GCS-only (503 STORAGE_NOT_CONFIGURED), pdf/png/jpg/docx 10MB allowlist, magic bytes & path-traversal rejection',
+      serverGuardsOk && serverSrc.includes('STORAGE_NOT_CONFIGURED') && serverSrc.includes('randomUUID'),
+      'GCS-only, 10MB pdf/png/jpg/docx, magic-byte, strict Base64 & randomized filename guards verified in server.ts'
     );
   } catch (err: any) {
     record('File Storage', 'Validated file upload & auth gate suite', false, err.message);
-  } finally {
-    cleanupTestRfpFile('');
   }
 
   // --------------------------------------------------------------------------
@@ -325,8 +319,10 @@ async function runTestSuite() {
 
   record(
     'Security Rules',
-    'Root Admin email + email_verified enforcement active in isAdmin()',
-    rulesContent.includes('ssbhanu41@gmail.com') && rulesContent.includes('email_verified == true')
+    'No hardcoded admin email in rules/server/services; isAdmin() uses user_roles or custom claim only',
+    !rulesContent.includes('ssbhanu41@gmail.com') &&
+      rulesContent.includes('hasAdminRole()') &&
+      rulesContent.includes('hasAdminClaim()')
   );
 
   record(
@@ -338,17 +334,19 @@ async function runTestSuite() {
 
   record(
     'Security Rules',
-    'Audit logs strictly immutable (update and delete denied)',
+    'Audit logs strictly server-written and immutable (client create/update/delete denied)',
     rulesContent.includes('match /audit_logs/{logId}') &&
-      rulesContent.includes('allow update, delete: if false;')
+      rulesContent.includes('allow create, update, delete: if false;')
   );
 
   record(
     'Security Rules',
-    'Client tenant isolation & schema-validated quotations enforced',
+    'Quotations server-only create & ticket responses strictly append-only for clients',
     rulesContent.includes('resource.data.clientId == request.auth.uid || isAdmin()') &&
       rulesContent.includes('match /quotations/{quotationId}') &&
-      rulesContent.includes('allow list: if isAdmin();')
+      rulesContent.includes('allow list: if isAdmin();') &&
+      rulesContent.includes('allow create: if false;') &&
+      rulesContent.includes('incoming.responses.size() == existing.responses.size() + 1')
   );
 
   const expectedCollections = [
@@ -430,13 +428,26 @@ async function runTestSuite() {
     const sitemapRes = await fetch(`${SERVER_BASE}/sitemap.xml`);
     const robotsTxt = await robotsRes.text();
     const sitemapXml = await sitemapRes.text();
+    const [aboutHtmlRes, appDetailHtmlRes] = await Promise.all([
+      fetch(`${SERVER_BASE}/about`, { headers: { Accept: 'text/html' } }),
+      fetch(`${SERVER_BASE}/apps/bariha-pay`, { headers: { Accept: 'text/html' } }),
+    ]);
+    const aboutHtml = await aboutHtmlRes.text();
+    const appDetailHtml = await appDetailHtmlRes.text();
+
     record(
       'SEO Endpoints',
-      '/robots.txt and /sitemap.xml return valid SEO directives',
+      '/robots.txt, /sitemap.xml, and SPA clean paths (/about, /apps/:id) serve valid directives without ai.studio',
       robotsRes.status === 200 &&
         robotsTxt.includes('Disallow: /admin-dashboard') &&
+        !robotsTxt.includes('ai.studio') &&
         sitemapRes.status === 200 &&
-        sitemapXml.includes('<urlset')
+        sitemapXml.includes('<urlset') &&
+        !sitemapXml.includes('ai.studio') &&
+        aboutHtmlRes.status === 200 &&
+        aboutHtml.includes('<!doctype html>') &&
+        appDetailHtmlRes.status === 200 &&
+        appDetailHtml.includes('<!doctype html>')
     );
   } catch (err: any) {
     record('SEO Endpoints', '/robots.txt and /sitemap.xml check', false, err.message);

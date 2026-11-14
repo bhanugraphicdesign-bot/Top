@@ -53,9 +53,11 @@ export const ContactPage: React.FC = () => {
               {siteContact.name}<br />
               {siteContact.location}
             </p>
-            <p className="text-[11px] font-mono text-slate-400 pt-1">
-              {siteContact.registration}
-            </p>
+            {siteContact.companyRegistration && (
+              <p className="text-[11px] font-mono text-slate-400 pt-1">
+                {siteContact.companyRegistration}
+              </p>
+            )}
           </div>
 
           <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2">

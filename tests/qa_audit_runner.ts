@@ -181,7 +181,7 @@ async function runQAAudit() {
     recommendedFix: 'None required',
   });
 
-  // 5. Quote Validation API + Schema-Validated Firestore Quotations Rule
+  // 5. Quote Validation API + Server-Written Firestore Quotations Rule
   try {
     const valRes = await fetch(`${SERVER_BASE}/api/inquiries/validate`, {
       method: 'POST',
@@ -193,7 +193,7 @@ async function runQAAudit() {
         brief: 'Multilingual crop advisory specification.',
       }),
     });
-    const badRes = await fetch(`${SERVER_BASE}/api/inquiries/validate`, {
+    const badRes = await fetch(`${SERVER_BASE}/api/quotations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fullName: '', email: 'bad-email', serviceType: '' }),
@@ -202,18 +202,17 @@ async function runQAAudit() {
     const quoteRuleHardened =
       rulesStr.includes('match /quotations/{quotationId}') &&
       rulesStr.includes('isValidId(quotationId)') &&
-      rulesStr.includes('isValidQuotationCreate(request.resource.data, quotationId)') &&
-      rulesStr.includes('isValidEmailStr(data.clientEmail)') &&
+      rulesStr.includes('allow create: if false;') &&
       rulesStr.includes('allow list: if isAdmin();') &&
       rulesStr.includes('allow update, delete: if isValidId(quotationId) && isAdmin();');
 
     const passed = valRes.status === 200 && badRes.status === 400 && quoteRuleHardened;
     recordAudit({
       testId: 5,
-      testName: 'Quote validation API & Firestore schema-validated /quotations rule',
+      testName: 'Quote Zod validation API & server-only /quotations Firestore rule',
       status: passed ? 'PASS' : 'FAIL',
-      executionMethod: 'Live HTTP fuzzing on /api/inquiries/validate + firestore.rules inspection',
-      evidence: `Valid payload HTTP ${valRes.status}; invalid payload HTTP ${badRes.status}; schema-validated create & admin-only read/list rule verified in firestore.rules.`,
+      executionMethod: 'Live HTTP checks on /api/inquiries/validate & /api/quotations + firestore.rules inspection',
+      evidence: `Valid payload HTTP ${valRes.status}; invalid payload HTTP ${badRes.status}; server-only create & admin-only read/list rule verified in firestore.rules.`,
       errorDetails: passed ? 'None' : 'Validation endpoint or quotations rule check failed.',
       recommendedFix: 'None required',
     });

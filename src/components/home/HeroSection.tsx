@@ -72,7 +72,14 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
               </button>
 
               <a
-                href="#services"
+                href="/services"
+                onClick={(e) => {
+                  e.preventDefault();
+                  const el = document.getElementById('services');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3.5 text-sm font-semibold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors cursor-pointer"
               >
                 <span>{t('Explore Capabilities', 'तकनीकी क्षमताएं देखें')}</span>
@@ -143,22 +150,22 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
 
           <div>
             <div className="text-2xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
-              &lt;150ms
+              Modular Core
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
-              {t('Latency Target Benchmark', 'लक्षित प्रतिक्रिया समय बेंचमार्क')}
+              {t('Low-Latency Service Design', 'कम लेटेंसी सर्विस डिज़ाइन')}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
-              {t('High-concurrency microservices', 'उच्च समवर्ती माइक्रोसर्विस')}
+              {t('Idempotent API & event-driven workers', 'आइडमपोटेंट एपीआई और इवेंट-ड्रिवेन वर्कर्स')}
             </div>
           </div>
 
           <div>
             <div className="text-2xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
-              100%
+              Client IP
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
-              {t('Client IP Ownership', 'ग्राहक कोड व आईपी स्वामित्व')}
+              {t('Full Code & IP Handover', 'पूर्ण कोड व आईपी स्वामित्व')}
             </div>
             <div className="text-xs text-slate-500 mt-0.5">
               {t('Zero proprietary vendor lock-in', 'शून्य मालिकाना वेंडर लॉक-इन')}

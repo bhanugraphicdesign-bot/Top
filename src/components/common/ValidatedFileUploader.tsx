@@ -40,8 +40,8 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   onRemove,
   category = 'general_attachment',
   projectId,
-  maxSizeMb = 25,
-  allowedExtensions = ['pdf', 'docx', 'zip', 'apk', 'png', 'jpg', 'jpeg', 'txt', 'json'],
+  maxSizeMb = 10,
+  allowedExtensions = ['pdf', 'png', 'jpg', 'docx'],
   label,
   labelHi,
   description,
@@ -58,7 +58,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   const [, setClientSha256] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [fileUploadEnabled, setFileUploadEnabled] = useState<boolean | null>(null);
-  const [storageMode, setStorageMode] = useState<string>('local_container_disk');
+  const [storageMode, setStorageMode] = useState<string>('storage_not_configured');
 
   useEffect(() => {
     let active = true;
@@ -72,11 +72,11 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
             setStorageMode(data.storageMode);
           }
         } else {
-          setFileUploadEnabled(true);
+          setFileUploadEnabled(false);
         }
       })
       .catch(() => {
-        if (active) setFileUploadEnabled(true);
+        if (active) setFileUploadEnabled(false);
       });
     return () => {
       active = false;
@@ -392,13 +392,13 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
               </div>
               <p className="text-[11px] text-slate-500 font-mono">
                 {language === 'hi' && descriptionHi ? descriptionHi : description || (
-                  `PDF, DOCX, ZIP, APK, PNG, JPG (up to ${maxSizeMb} MB)`
+                  `PDF, PNG, JPG, DOCX (up to ${maxSizeMb} MB)`
                 )}
               </p>
               <div className="text-[10px] font-mono text-slate-400">
                 {storageMode === 'google_cloud_storage'
                   ? t('Encrypted Google Cloud Storage Vault · SHA-256', 'एन्क्रिप्टेड Cloud Storage वॉल्ट · SHA-256')
-                  : t('Authenticated Server Vault · Magic-Byte & SHA-256 Checked', 'प्रमाणित सर्वर वॉल्ट · Magic-Byte व SHA-256 सत्यापित')}
+                  : t('Cloud Storage Vault · Magic-Byte & SHA-256 Checked', 'Cloud Storage वॉल्ट · Magic-Byte व SHA-256 सत्यापित')}
               </div>
             </div>
           )}

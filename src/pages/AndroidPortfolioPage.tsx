@@ -159,10 +159,15 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
-                        {app.category}
-                      </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold uppercase tracking-wide">
+                          {t('DEMO / Concept', 'डेमो / कॉन्सेप्ट')}
+                        </span>
+                        <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
+                          {language === 'hi' ? app.categoryHi : app.category}
+                        </span>
+                      </div>
                       <span className="text-xs font-mono text-slate-500">{app.version}</span>
                     </div>
 
@@ -176,12 +181,12 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                   </div>
                 </div>
 
-                {/* Release Status Notice (Strictly Honest: No Fake Play Store Links!) */}
-                <div className="mb-4 p-2.5 rounded-md bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-                  <span className="text-slate-600 font-medium">
-                    {t('Distribution Status:', 'वितरण स्थिति:')}
+                {/* Release Status Notice (Strictly Honest: Concept / Demo status) */}
+                <div className="mb-4 p-2.5 rounded-md bg-amber-50/70 border border-amber-200 flex items-center justify-between text-xs">
+                  <span className="text-slate-700 font-medium">
+                    {t('Release Status:', 'रिलीज़ स्थिति:')}
                   </span>
-                  <span className="font-semibold text-blue-800 font-mono text-[11px]">
+                  <span className="font-semibold text-amber-900 font-mono text-[11px]">
                     {language === 'hi' ? app.statusLabelHi : app.statusLabelEn}
                   </span>
                 </div>
@@ -241,7 +246,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  {/* Google Play / Distribution Info */}
+                  {/* Google Play / Demo Info */}
                   <div className="text-[11px] text-slate-500">
                     {app.playStoreUrl ? (
                       <a
@@ -254,19 +259,19 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     ) : (
-                      <span className="text-slate-500 italic">
-                        {t('Enterprise Private Build', 'एंटरप्राइज प्राइवेट बिल्ड')}
+                      <span className="text-amber-800 font-semibold">
+                        {t('Demo coming soon', 'डेमो जल्द उपलब्ध होगा')}
                       </span>
                     )}
                   </div>
 
                   <div className="flex items-center gap-2">
-                    {/* Demo Button */}
+                    {/* Concept Preview Button */}
                     <button
                       onClick={() => navigate('app-detail', { id: app.id })}
                       className="px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
                     >
-                      {t('Interactive Demo', 'डेमो पूर्वावलोकन')}
+                      {t('Concept Preview', 'कॉन्सेप्ट पूर्वावलोकन')}
                     </button>
 
                     {/* App Details Button */}

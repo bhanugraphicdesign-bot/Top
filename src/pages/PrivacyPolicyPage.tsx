@@ -29,7 +29,9 @@ export const PrivacyPolicyPage: React.FC = () => {
               )}
             </p>
             <div className="mt-4 text-xs text-slate-500 font-mono">
-              {siteContact.name} · {siteContact.registration} · Effective Date: November 2026
+              {[siteContact.name, siteContact.companyRegistration, 'Effective Date: November 2026']
+                .filter(Boolean)
+                .join(' · ')}
             </div>
           </div>
         </div>
@@ -56,8 +58,8 @@ export const PrivacyPolicyPage: React.FC = () => {
           </h2>
           <p>
             {language === 'hi'
-              ? `यह गोपनीयता नीति भानु राम बरीहा डिजिटल टेक्नोलॉजीज (${siteContact.registration}) द्वारा संचालित प्लेटफॉर्म 'पावर वेब स्टूडियो एआई' पर लागू होती है। हमारा पंजीकृत कार्यालय ${siteContact.location} में स्थित है।`
-              : `This Privacy Policy governs the operations of Bhanu Ram Bariha Digital Technologies (${siteContact.registration}), operating the Power Web Studio AI platform. Our registered delivery hub is situated in ${siteContact.location}.`}
+              ? `यह गोपनीयता नीति भानु राम बरीहा डिजिटल टेक्नोलॉजीज${siteContact.companyRegistration ? ` (${siteContact.companyRegistration})` : ''} द्वारा संचालित प्लेटफॉर्म 'पावर वेब स्टूडियो एआई' पर लागू होती है। हमारा कार्यालय ${siteContact.location} में स्थित है।`
+              : `This Privacy Policy governs the operations of Bhanu Ram Bariha Digital Technologies${siteContact.companyRegistration ? ` (${siteContact.companyRegistration})` : ''}, operating the Power Web Studio AI platform. Our engineering hub is situated in ${siteContact.location}.`}
           </p>
         </section>
 

@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useApps } from '../context/AppsContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '../context/NavigationContext';
+import { notifySiteSettingsUpdated } from '../hooks/useSiteContact';
 import { AndroidApp, BlogPost, EnterpriseInvoice, ServiceItem } from '../types';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
 import { CustomerManagerModal } from '../components/admin/CustomerManagerModal';
@@ -508,7 +509,7 @@ export const AdminDashboardPage: React.FC = () => {
   const [siteSettings, setSiteSettings] = useState({
     companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
     brandName: 'POWER WEB STUDIO AI',
-    cin: 'CIN: U72900OR2024PTC045812',
+    companyRegistration: '',
     contactEmail: 'powerusertopuser@gmail.com',
     contactPhone: '+91 8305457717',
     maintenanceMode: false,
@@ -538,13 +539,6 @@ export const AdminDashboardPage: React.FC = () => {
       })
       .catch(() => {});
 
-    fetch('/api/telemetry')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data) setTelemetryData(data);
-      })
-      .catch(() => {});
-
     fetchServicesCatalog()
       .then((services) => {
         if (services && services.length > 0) setServicesList(services);
@@ -559,7 +553,19 @@ export const AdminDashboardPage: React.FC = () => {
 
     fetchSiteSettings()
       .then((settings) => {
-        if (settings) setSiteSettings((prev) => ({ ...prev, ...settings }));
+        if (settings) {
+          setSiteSettings((prev) => ({
+            ...prev,
+            companyName: settings.companyName ?? prev.companyName,
+            brandName: settings.brandName ?? prev.brandName,
+            companyRegistration: settings.companyRegistration ?? '',
+            contactEmail: settings.contactEmail ?? prev.contactEmail,
+            contactPhone: settings.contactPhone ?? prev.contactPhone,
+            maintenanceMode: Boolean(settings.maintenanceMode),
+            slaTarget: settings.slaTarget ?? prev.slaTarget,
+            headquarters: settings.headquarters ?? prev.headquarters,
+          }));
+        }
       })
       .catch(() => {});
 
@@ -577,6 +583,7 @@ export const AdminDashboardPage: React.FC = () => {
 
     // Only load protected admin collections if user is a real verified Firebase Admin
     if (!currentUser || !isRealAdmin) {
+      setTelemetryData(null);
       setInvoicesList([]);
       setUsersList([]);
       setLeads([]);
@@ -592,11 +599,20 @@ export const AdminDashboardPage: React.FC = () => {
     setLoadingInvoices(true);
     currentUser
       .getIdToken()
-      .then((idToken) =>
-        fetch('/api/invoices', {
+      .then((idToken) => {
+        fetch('/api/telemetry', {
           headers: { Authorization: `Bearer ${idToken}` },
         })
-      )
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data) setTelemetryData(data);
+          })
+          .catch(() => {});
+
+        return fetch('/api/invoices', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
+      })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         setInvoicesList(data && Array.isArray(data.invoices) ? data.invoices : []);
@@ -896,6 +912,7 @@ export const AdminDashboardPage: React.FC = () => {
     setSavingSettings(true);
     try {
       await saveSiteSettings(siteSettings);
+      notifySiteSettingsUpdated(siteSettings);
       showToast(
         language === 'hi'
           ? 'ग्लोबल प्लेटफ़ॉर्म सेटिंग्स सफलतापूर्वक सहेज ली गईं।'
@@ -2725,7 +2742,7 @@ export const AdminDashboardPage: React.FC = () => {
                           ) : (
                             <div className="space-y-2.5">
                               {responses.map((resp: any, idx: number) => {
-                                const isArchitect = resp.authorRole !== 'client';
+                                const isArchitect = (resp.role || resp.authorRole) !== 'client';
                                 return (
                                   <div
                                     key={resp.id || idx}
@@ -2737,7 +2754,7 @@ export const AdminDashboardPage: React.FC = () => {
                                   >
                                     <div className="flex items-center justify-between gap-2">
                                       <div className="flex items-center gap-1.5">
-                                        <span className="font-bold text-slate-900">{resp.author}</span>
+                                        <span className="font-bold text-slate-900">{resp.authorName || resp.author}</span>
                                         <span
                                           className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
                                             isArchitect
@@ -2965,7 +2982,7 @@ export const AdminDashboardPage: React.FC = () => {
                     {t('Global Enterprise Platform Configuration', 'ग्लोबल एंटरप्राइज प्लेटफ़ॉर्म विन्यास')}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {t('Corporate identity, CIN registration, official communications, and operational parameters.', 'कंपनी पहचान, सीआईएन (CIN) पंजीकरण और आधिकारिक परिचालन विवरण।')}
+                    {t('Corporate identity, optional registration details, official communications, and operational parameters.', 'कंपनी पहचान, वैकल्पिक पंजीकरण विवरण और आधिकारिक परिचालन विवरण।')}
                   </p>
                 </div>
 
@@ -3001,13 +3018,13 @@ export const AdminDashboardPage: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        {t('Corporate Identification Number (CIN)', 'कॉर्पोरेट पहचान संख्या (CIN)')}
+                        {t('Company Registration (Optional — hidden until filled)', 'कंपनी पंजीकरण विवरण (वैकल्पिक — भरने तक छिपा रहता है)')}
                       </label>
                       <input
                         type="text"
-                        required
-                        value={siteSettings.cin}
-                        onChange={(e) => setSiteSettings({ ...siteSettings, cin: e.target.value })}
+                        value={siteSettings.companyRegistration}
+                        onChange={(e) => setSiteSettings({ ...siteSettings, companyRegistration: e.target.value })}
+                        placeholder={t('Leave blank to hide on public pages', 'सार्वजनिक पृष्ठों पर छिपाने के लिए खाली छोड़ें')}
                         className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
                       />
                     </div>

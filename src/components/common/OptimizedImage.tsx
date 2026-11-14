@@ -79,7 +79,9 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
 
   return (
     <picture className="contents">
-      <source srcSet={meta.webp} type="image/webp" sizes={sizes} />
+      {meta.webp !== meta.jpg && (
+        <source srcSet={meta.webp} type="image/webp" sizes={sizes} />
+      )}
       <img
         src={meta.jpg}
         alt={resolvedAlt}

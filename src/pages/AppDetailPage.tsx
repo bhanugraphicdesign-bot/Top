@@ -81,7 +81,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
         ogImage={appOgImage}
         ogImageAltEn={`${app.name} enterprise Android application preview`}
         ogImageAltHi={`${app.nameHi || app.name} एंटरप्राइज एंड्रॉइड एप्लिकेशन पूर्वावलोकन`}
-        canonicalPath={`/app-detail?id=${encodeURIComponent(app.id)}`}
+        canonicalPath={`/apps/${encodeURIComponent(app.id)}`}
       />
 
       {/* Top Breadcrumb & Back Action */}
@@ -112,9 +112,14 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                   <Smartphone className="w-8 h-8" />
                 </div>
                 <div>
-                  <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
-                    {app.category}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold uppercase tracking-wide">
+                      {t('DEMO / Concept', 'डेमो / कॉन्सेप्ट')}
+                    </span>
+                    <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
+                      {language === 'hi' ? app.categoryHi : app.category}
+                    </span>
+                  </div>
                   <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-950">
                     {language === 'hi' ? app.nameHi : app.name}
                   </h1>
@@ -124,18 +129,18 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                 </div>
               </div>
 
-              {/* Release Status & Authenticity Box (Honest Play Store Policy) */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+              {/* Release Status & Authenticity Box */}
+              <div className="p-3 bg-amber-50/70 border border-amber-200 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div>
-                  <span className="font-semibold text-slate-700">{t('Distribution Channel: ', 'वितरण माध्यम: ')}</span>
-                  <span className="font-mono text-blue-800 font-bold">
+                  <span className="font-semibold text-slate-700">{t('Prototype Status: ', 'प्रोटोटाइप स्थिति: ')}</span>
+                  <span className="font-mono text-amber-900 font-bold">
                     {language === 'hi' ? app.statusLabelHi : app.statusLabelEn}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono text-slate-500">{app.downloadSize}</span>
-                  <span aria-hidden="true" className="text-slate-300">·</span>
-                  <span className="font-mono text-slate-500">{app.targetSdk}</span>
+                  <span className="font-semibold text-amber-900">{t('Demo coming soon', 'डेमो जल्द उपलब्ध होगा')}</span>
+                  <span aria-hidden="true" className="text-amber-300">·</span>
+                  <span className="font-mono text-slate-600">{app.targetSdk}</span>
                 </div>
               </div>
 
@@ -150,15 +155,15 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                   className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs"
                 >
                   <Play className="w-3.5 h-3.5" />
-                  <span>{t('Launch Interactive Simulation', 'इंटरैक्टिव सिमुलेटर चलाएं')}</span>
+                  <span>{t('Run Architecture Walkthrough', 'आर्किटेक्चर वॉकथ्रू चलाएं')}</span>
                 </button>
 
                 <button
-                  onClick={() => onOpenConsultation(`Android App Demo: ${app.name}`)}
+                  onClick={() => onOpenConsultation(`Custom Build Scope: ${app.name}`)}
                   className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5 text-blue-700" />
-                  <span>{t('Request Private Enterprise APK', 'प्राइवेट एंटरप्राइज एपीके का अनुरोध करें')}</span>
+                  <span>{t('Demo coming soon · Request Pilot Build', 'डेमो जल्द उपलब्ध होगा · पायलट पूछें')}</span>
                 </button>
               </div>
             </div>
@@ -167,7 +172,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
             <div className="lg:col-span-4 space-y-3">
               <div className="p-5 rounded-xl border border-slate-200 bg-slate-50 space-y-4">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block border-b border-slate-200 pb-2">
-                  {t('SLA & Performance Benchmarks', 'प्रदर्शन बेंचमार्क')}
+                  {t('Concept Architecture Targets', 'कॉन्सेप्ट आर्किटेक्चर लक्ष्य')}
                 </span>
 
                 {app.metrics.map((m, idx) => (
@@ -235,7 +240,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                     <div className="text-emerald-400">✓ Background WorkManager queue active</div>
                   )}
                   {demoSimActive && simStep >= 3 && (
-                    <div className="text-white">✓ Ready: P99 latency &lt; 180ms verified</div>
+                    <div className="text-white">✓ Ready: Concept offline-sync sequence complete</div>
                   )}
                 </div>
 

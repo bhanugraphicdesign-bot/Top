@@ -6,7 +6,7 @@ import { fetchSiteSettings } from '../firebase/services';
 export interface SiteContactInfo {
   name: string;
   brand: string;
-  registration: string;
+  companyRegistration: string;
   email: string;
   phone: string;
   location: string;
@@ -16,7 +16,7 @@ export interface SiteContactInfo {
 interface RemoteSiteSettings {
   companyName?: string;
   brandName?: string;
-  cin?: string;
+  companyRegistration?: string;
   contactEmail?: string;
   contactPhone?: string;
   headquarters?: string;
@@ -87,7 +87,7 @@ export function useSiteContact(): SiteContactInfo {
   return {
     name: (remote?.companyName || '').trim() || COMPANY_INFO.name,
     brand: (remote?.brandName || '').trim() || COMPANY_INFO.brand,
-    registration: (remote?.cin || '').trim() || COMPANY_INFO.registration,
+    companyRegistration: (remote?.companyRegistration || '').trim() || COMPANY_INFO.companyRegistration,
     email: (remote?.contactEmail || '').trim() || COMPANY_INFO.email,
     phone: (remote?.contactPhone || '').trim() || COMPANY_INFO.phone,
     headquartersEn,

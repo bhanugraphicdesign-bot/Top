@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
             {navItems.map((item) => (
               <a
                 key={item.route}
-                href={`#${item.route}`}
+                href={`/${item.route}`}
                 onClick={(e) => handleNavClick(e, item.route)}
                 className={`transition-colors whitespace-nowrap shrink-0 py-1 ${
                   currentRoute === item.route

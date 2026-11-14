@@ -31,12 +31,13 @@ export const BlogPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (params.post && posts.length > 0) {
-      const matched = posts.find((p) => p.id === params.post);
+    const queryPostId = new URLSearchParams(window.location.search).get('post') || params.post;
+    if (queryPostId && posts.length > 0) {
+      const matched = posts.find((p) => p.id === queryPostId);
       if (matched) {
         setSelectedPost(matched);
       }
-    } else if (!params.post && !window.location.hash.includes('post=')) {
+    } else if (!queryPostId) {
       setSelectedPost(null);
     }
   }, [params.post, posts]);
@@ -44,9 +45,9 @@ export const BlogPage: React.FC = () => {
   const openPost = useCallback((post: BlogPost) => {
     setSelectedPost(post);
     try {
-      const nextHash = `#blog?post=${encodeURIComponent(post.id)}`;
-      if (window.location.hash !== nextHash) {
-        window.history.replaceState(null, '', nextHash);
+      const nextUrl = `/blog?post=${encodeURIComponent(post.id)}`;
+      if (`${window.location.pathname}${window.location.search}` !== nextUrl) {
+        window.history.pushState(null, '', nextUrl);
       }
     } catch {
       // ignore history errors in sandboxed frames
@@ -56,8 +57,8 @@ export const BlogPage: React.FC = () => {
   const closePost = useCallback(() => {
     setSelectedPost(null);
     try {
-      if (window.location.hash !== '#blog') {
-        window.history.replaceState(null, '', '#blog');
+      if (window.location.pathname !== '/blog' || window.location.search) {
+        window.history.replaceState(null, '', '/blog');
       }
     } catch {
       // ignore history errors in sandboxed frames
@@ -136,9 +137,8 @@ export const BlogPage: React.FC = () => {
               altHi={`पावर वेब स्टूडियो एआई इंजीनियरिंग ब्लॉग — ${featuredPost.titleHi || featuredPost.title}`}
               width={1200}
               height={896}
-              loading="eager"
+              loading="lazy"
               sizes="100vw"
-              priority
               className="w-full h-64 sm:h-80 lg:h-96 object-cover opacity-45 transition-transform duration-500 group-hover:scale-102"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent pointer-events-none" />

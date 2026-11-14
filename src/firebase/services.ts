@@ -13,23 +13,12 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db, auth } from './config';
+import { getAppCheckTokenHeader } from './appCheck';
 import { handleFirestoreError, OperationType } from './errorHandler';
+import { extractBilingualApiError } from '../utils/formProtection';
 import { AndroidApp, BlogPost, ServiceItem, AppNotification } from '../types';
 import { INITIAL_ANDROID_APPS, SERVICES_DATA } from '../data/content';
 import { BLOG_POSTS } from '../data/blogData';
-
-const LEGACY_ROOT_ADMIN_FALLBACK = 'ssbhanu41@gmail.com';
-const CLIENT_ROOT_ADMIN_EMAILS = new Set<string>(
-  ((import.meta.env.VITE_ROOT_ADMIN_EMAIL as string | undefined)?.trim() || LEGACY_ROOT_ADMIN_FALLBACK)
-    .split(',')
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean)
-);
-
-export function isLegacyOrEnvRootAdminEmail(email?: string | null, emailVerified?: boolean): boolean {
-  if (emailVerified !== true || !email) return false;
-  return CLIENT_ROOT_ADMIN_EMAILS.has(email.trim().toLowerCase());
-}
 
 export const COLLECTIONS = {
   USERS: 'users',
@@ -63,7 +52,17 @@ async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
     return true;
   }
 
-  // 2. Server-verified RBAC (checks `user_roles` + `process.env.ROOT_ADMIN_EMAIL`)
+  // 2. Verified Firebase Auth custom claim
+  try {
+    const tokenResult = await currentUser.getIdTokenResult();
+    if (tokenResult?.claims?.admin === true || tokenResult?.claims?.role === 'admin') {
+      return true;
+    }
+  } catch {
+    // Continue to server check below
+  }
+
+  // 3. Server-verified RBAC (checks `user_roles/{uid}` + custom claims)
   if (typeof fetch !== 'undefined' && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
     try {
       const idToken = await currentUser.getIdToken();
@@ -77,41 +76,37 @@ async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
         }
       }
     } catch {
-      // Offline/network fallback handled below
+      // Offline/network fallback keeps strict client role
     }
   }
 
-  // 3. Verified bootstrap fallback for backward compatibility
-  return (
-    currentUser.emailVerified === true &&
-    isLegacyOrEnvRootAdminEmail(currentUser.email, currentUser.emailVerified)
-  );
+  return false;
 }
 
 /* =========================================================================
-   1. AUDIT LOGGING (SECURITY & ACCOUNTABILITY)
+   1. AUDIT LOGGING (SERVER-AUTHORITATIVE — CLIENT NEVER SETS IP OR WRITES DIRECTLY)
    ========================================================================= */
 export async function logAuditEvent(action: string, resource: string, details: string) {
-  const path = COLLECTIONS.AUDIT_LOGS;
   const currentUser = auth.currentUser;
-  if (!currentUser) {
+  if (!currentUser || typeof fetch === 'undefined') {
     return;
   }
   try {
-    const logId = `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    await setDoc(doc(db, path, logId), {
-      id: logId,
-      actorId: currentUser.uid,
-      actorEmail: clampStr(currentUser.email || 'verified-user', 160),
-      action: clampStr(action, 100),
-      resource: clampStr(resource, 200),
-      details: clampStr(details, 1000),
-      ipAddress: 'client-verified',
-      timestamp: new Date().toISOString(),
-      createdAt: serverTimestamp(),
+    const idToken = await currentUser.getIdToken();
+    await fetch('/api/audit-events', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        action: clampStr(action, 100),
+        resource: clampStr(resource, 200),
+        details: clampStr(details, 1000),
+      }),
     });
   } catch (error) {
-    // Audit logging should not break primary UX flow if offline or restricted
+    // Audit logging should not break primary UX flow if offline or unavailable
     console.warn('[Audit Log Failed]', error);
   }
 }
@@ -120,6 +115,23 @@ export async function getAuditLogs(limitCount = 20) {
   const path = COLLECTIONS.AUDIT_LOGS;
   if (!(await isCurrentUserVerifiedAdmin())) {
     return [];
+  }
+  const currentUser = auth.currentUser;
+  if (currentUser && typeof fetch !== 'undefined') {
+    try {
+      const idToken = await currentUser.getIdToken();
+      const res = await fetch('/api/audit-events', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.events)) {
+          return data.events.slice(0, limitCount);
+        }
+      }
+    } catch {
+      // Fall back to direct Firestore admin query below
+    }
   }
   try {
     const q = query(collection(db, path), orderBy('timestamp', 'desc'), limit(limitCount));
@@ -180,6 +192,7 @@ export async function syncUserAccount(user: {
 export async function fetchUserRole(uid: string): Promise<string> {
   const path = COLLECTIONS.USER_ROLES;
   if (!auth.currentUser) return 'client';
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'client';
   try {
     const roleDoc = await getDoc(doc(db, path, uid));
     if (roleDoc.exists()) {
@@ -189,31 +202,6 @@ export async function fetchUserRole(uid: string): Promise<string> {
   } catch (error) {
     console.warn('[fetchUserRole]', error);
     return 'client';
-  }
-}
-
-export async function ensureBootstrapAdminRoleDoc(user: {
-  uid: string;
-  email: string | null;
-}): Promise<void> {
-  if (!auth.currentUser || auth.currentUser.uid !== user.uid) return;
-  try {
-    const roleRef = doc(db, COLLECTIONS.USER_ROLES, user.uid);
-    const snap = await getDoc(roleRef);
-    if (!snap.exists() || snap.data()?.role !== 'admin') {
-      await setDoc(
-        roleRef,
-        {
-          uid: user.uid,
-          role: 'admin',
-          assignedBy: clampStr(user.email || 'root-admin-bootstrap', 160),
-          assignedAt: new Date().toISOString(),
-        },
-        { merge: true }
-      );
-    }
-  } catch {
-    // Non-fatal: Firestore rules reject non-admins; fallback remains guarded by rules
   }
 }
 
@@ -232,7 +220,8 @@ export async function fetchFirestoreApps(): Promise<AndroidApp[]> {
     }
     return snap.docs.map((d) => d.data() as AndroidApp);
   } catch (error: any) {
-    if (error?.code === 'unavailable') {
+    const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    if (error?.code === 'unavailable' || msg.includes('offline')) {
       return [];
     }
     handleFirestoreError(error, OperationType.LIST, path);
@@ -269,7 +258,7 @@ export async function deleteFirestoreApp(appId: string) {
 }
 
 /* =========================================================================
-   4. QUOTATIONS & CONSULTATION INQUIRIES
+   4. QUOTATIONS & CONSULTATION INQUIRIES (SERVER-VALIDATED VIA POST /api/quotations)
    ========================================================================= */
 export async function submitQuotation(data: {
   fullName: string;
@@ -280,6 +269,10 @@ export async function submitQuotation(data: {
   timeline?: string;
   budget?: string;
   brief?: string;
+  language?: 'en' | 'hi';
+  _hp?: string;
+  formOpenedAt?: number;
+  fillDurationMs?: number;
   attachment?: {
     fileUrl?: string;
     fileName?: string;
@@ -287,19 +280,40 @@ export async function submitQuotation(data: {
     fileSizeFormatted?: string;
   };
 }) {
-  const path = COLLECTIONS.QUOTATIONS;
-  try {
-    const quoteId = `quote-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const payload = {
-      id: quoteId,
-      clientName: clampStr(data.fullName, 160),
-      clientEmail: clampStr(data.email, 160).toLowerCase(),
+  const lang: 'en' | 'hi' = data.language === 'hi' ? 'hi' : 'en';
+  const appCheckHeaders = await getAppCheckTokenHeader();
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...appCheckHeaders,
+  };
+
+  if (auth.currentUser) {
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      if (idToken) {
+        headers.Authorization = `Bearer ${idToken}`;
+      }
+    } catch {
+      // Optional auth header on public quotation submission
+    }
+  }
+
+  const response = await fetch('/api/quotations', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      fullName: clampStr(data.fullName, 160),
+      email: clampStr(data.email, 160).toLowerCase(),
       phone: clampStr(data.phone, 40),
       company: clampStr(data.company, 160),
       serviceType: clampStr(data.serviceType, 160),
       timeline: clampStr(data.timeline || '3-6-months', 64),
-      estimatedBudget: clampStr(data.budget || 'enterprise', 80),
+      budget: clampStr(data.budget || 'enterprise', 80),
       brief: clampStr(data.brief, 3000),
+      language: lang,
+      _hp: data._hp || '',
+      formOpenedAt: data.formOpenedAt,
+      fillDurationMs: data.fillDurationMs,
       attachment: data.attachment
         ? {
             fileUrl: clampStr(data.attachment.fileUrl, 300),
@@ -307,30 +321,36 @@ export async function submitQuotation(data: {
             sha256: clampStr(data.attachment.sha256, 128),
             fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
           }
-        : null,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-    };
+        : undefined,
+    }),
+  });
 
-    await setDoc(doc(db, path, quoteId), payload);
-    if (auth.currentUser) {
-      await logAuditEvent('QUOTATION_SUBMITTED', `quotations/${quoteId}`, `Submitted by ${payload.clientEmail}`);
-
-      await createNotification({
-        userId: auth.currentUser.uid,
-        title: `New Scoping Proposal: ${payload.clientName}`,
-        titleHi: `नया तकनीकी परामर्श अनुरोध: ${payload.clientName}`,
-        message: `${payload.serviceType} | ${payload.company || 'Enterprise Client'} (${payload.estimatedBudget || 'Custom'})`,
-        messageHi: `${payload.serviceType} | ${payload.company || 'एंटरप्राइज क्लाइंट'}`,
-        type: 'quote',
-        linkRoute: 'client-dashboard',
-      });
-    }
-
-    return quoteId;
-  } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractBilingualApiError(
+        response.status,
+        payload,
+        lang,
+        `Unable to submit scoping request (HTTP ${response.status}).`,
+        `अनुरोध सबमिट करने में असमर्थ (HTTP ${response.status})।`
+      )
+    );
   }
+
+  if (auth.currentUser) {
+    await createNotification({
+      userId: auth.currentUser.uid,
+      title: `New Scoping Proposal: ${clampStr(data.fullName, 160)}`,
+      titleHi: `नया तकनीकी परामर्श अनुरोध: ${clampStr(data.fullName, 160)}`,
+      message: `${clampStr(data.serviceType, 160)} | ${clampStr(data.company, 160) || 'Enterprise Client'}`,
+      messageHi: `${clampStr(data.serviceType, 160)} | ${clampStr(data.company, 160) || 'एंटरप्राइज क्लाइंट'}`,
+      type: 'quote',
+      linkRoute: 'client-dashboard',
+    });
+  }
+
+  return payload?.quoteId as string;
 }
 
 export async function fetchAllQuotations() {
@@ -531,7 +551,7 @@ export async function seedInitialDatabaseIfEmpty() {
       id: 'global_config',
       companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
       brandName: 'POWER WEB STUDIO AI',
-      cin: 'U72900OR2024PTC045812',
+      companyRegistration: '',
       maintenanceMode: false,
       contactEmail: 'powerusertopuser@gmail.com',
       contactPhone: '+91 8305457717',
@@ -861,6 +881,9 @@ export async function fetchNotifications(userId?: string): Promise<AppNotificati
   if (!auth.currentUser) {
     return [];
   }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return [];
+  }
   try {
     const effectiveUid = auth.currentUser.uid;
     const targetUid = userId === effectiveUid ? effectiveUid : effectiveUid;
@@ -920,7 +943,8 @@ export async function addTicketResponse(
   }
 ) {
   const path = COLLECTIONS.SUPPORT_TICKETS;
-  if (!auth.currentUser) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
     throw new Error('Authentication required to reply to support tickets.');
   }
   try {
@@ -929,15 +953,34 @@ export async function addTicketResponse(
     if (!snap.exists()) {
       throw new Error(`Ticket ${ticketId} not found`);
     }
+    const callerIsAdmin = await isCurrentUserVerifiedAdmin();
     const currentData = snap.data();
     const existingReplies = Array.isArray(currentData.responses) ? currentData.responses : [];
-    const newReply = {
-      id: `resp-${Date.now()}`,
-      author: clampStr(reply.author, 120),
-      authorRole: clampStr(reply.authorRole, 120),
-      message: clampStr(reply.message, 2000),
-      timestamp: new Date().toISOString(),
-    };
+    const displayAuthor =
+      clampStr(reply.author, 120) ||
+      currentUser.displayName ||
+      currentUser.email?.split('@')[0] ||
+      (callerIsAdmin ? 'Lead Platform Architect' : 'Enterprise Client');
+
+    const newReply = callerIsAdmin
+      ? {
+          id: `resp-${Date.now()}`,
+          author: currentUser.uid,
+          authorName: displayAuthor,
+          role: 'admin',
+          authorRole: clampStr(reply.authorRole, 120) || 'Lead Platform Architect',
+          message: clampStr(reply.message, 2000),
+          timestamp: new Date().toISOString(),
+        }
+      : {
+          id: `resp-${Date.now()}`,
+          author: currentUser.uid,
+          authorName: displayAuthor,
+          role: 'client',
+          authorRole: 'client',
+          message: clampStr(reply.message, 2000),
+          timestamp: new Date().toISOString(),
+        };
 
     const updates: any = {
       responses: [...existingReplies, newReply],
@@ -945,19 +988,19 @@ export async function addTicketResponse(
       updatedAt: serverTimestamp(),
     };
 
-    if (reply.statusChange) {
+    if (callerIsAdmin && reply.statusChange) {
       updates.status = reply.statusChange;
     }
 
     await updateDoc(ticketRef, updates);
-    await logAuditEvent('TICKET_REPLIED', `support_tickets/${ticketId}`, `Reply by ${newReply.author}`);
+    await logAuditEvent('TICKET_REPLIED', `support_tickets/${ticketId}`, `Reply by ${displayAuthor}`);
 
     await createNotification({
       userId: currentData.clientId,
       title: `Response on Ticket #${ticketId}`,
       titleHi: `टिकट #${ticketId} पर प्रतिक्रिया`,
-      message: `${newReply.author}: "${newReply.message.substring(0, 80)}..."`,
-      messageHi: `${newReply.author}: "${newReply.message.substring(0, 80)}..."`,
+      message: `${displayAuthor}: "${newReply.message.substring(0, 80)}..."`,
+      messageHi: `${displayAuthor}: "${newReply.message.substring(0, 80)}..."`,
       type: 'ticket',
       linkRoute: 'client-dashboard',
     });

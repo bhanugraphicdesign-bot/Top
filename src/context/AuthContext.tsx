@@ -14,8 +14,6 @@ import {
   syncUserAccount,
   fetchUserRole,
   logAuditEvent,
-  isLegacyOrEnvRootAdminEmail,
-  ensureBootstrapAdminRoleDoc,
 } from '../firebase/services';
 
 interface AuthContextType {
@@ -52,15 +50,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
-  // Listen to Firebase Auth state (never grants admin without verified email or Firestore role)
+  // Listen to Firebase Auth state (admin derived strictly from user_roles/{uid} or custom claim)
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        const isClientBootstrapAdmin =
-          user.emailVerified === true &&
-          isLegacyOrEnvRootAdminEmail(user.email, user.emailVerified);
-
+        let resolvedAdmin = false;
         try {
           await syncUserAccount({
             uid: user.uid,
@@ -70,7 +65,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           const role = await fetchUserRole(user.uid);
-          let resolvedAdmin = role === 'admin' || isClientBootstrapAdmin;
+          if (role === 'admin') {
+            resolvedAdmin = true;
+          }
+
+          if (!resolvedAdmin) {
+            try {
+              const tokenResult = await user.getIdTokenResult();
+              if (tokenResult?.claims?.admin === true || tokenResult?.claims?.role === 'admin') {
+                resolvedAdmin = true;
+              }
+            } catch {
+              // Ignore token claim read failure
+            }
+          }
 
           if (!resolvedAdmin) {
             try {
@@ -87,14 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
 
-          if (resolvedAdmin && role !== 'admin') {
-            await ensureBootstrapAdminRoleDoc({ uid: user.uid, email: user.email });
-          }
-
           setUserRole(resolvedAdmin ? 'admin' : 'client');
         } catch (err) {
           console.warn('[Auth Sync Warning]', err);
-          setUserRole(isClientBootstrapAdmin ? 'admin' : 'client');
+          setUserRole('client');
         }
       } else {
         setUserRole('client');

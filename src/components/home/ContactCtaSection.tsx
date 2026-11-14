@@ -9,7 +9,6 @@ import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
 import {
   validateFormAntiBot,
-  extractBilingualApiError,
   computeFillDurationMs,
 } from '../../utils/formProtection';
 
@@ -80,36 +79,6 @@ export const ContactCtaSection: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // 1. Validate against backend endpoint & enforce IP rate limiting
-      const valRes = await fetch('/api/inquiries/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fullName: formData.fullName,
-          email: formData.workEmail,
-          serviceType: formData.serviceType,
-          brief: formData.projectBrief,
-          language,
-          _hp: honeypot,
-          formOpenedAt: formOpenedAtRef.current,
-          fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),
-        }),
-      });
-
-      if (!valRes.ok) {
-        const errData = await valRes.json().catch(() => ({}));
-        throw new Error(
-          extractBilingualApiError(
-            valRes.status,
-            errData,
-            language,
-            `Validation failed (HTTP ${valRes.status})`,
-            `सत्यापन विफल रहा (HTTP ${valRes.status})`
-          )
-        );
-      }
-
-      // 2. Submit to Cloud Firestore
       await submitQuotation({
         fullName: formData.fullName,
         email: formData.workEmail,
@@ -119,6 +88,10 @@ export const ContactCtaSection: React.FC = () => {
         timeline: formData.timeline,
         budget: formData.budget,
         brief: formData.projectBrief,
+        language,
+        _hp: honeypot,
+        formOpenedAt: formOpenedAtRef.current,
+        fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),
         attachment: attachment
           ? {
               fileUrl: attachment.downloadUrl,
@@ -449,8 +422,8 @@ export const ContactCtaSection: React.FC = () => {
                     key={uploaderKey}
                     label="Attach RFP / Architecture Specification (Optional)"
                     labelHi="RFP / तकनीकी विनिर्देश संलग्न करें (वैकल्पिक)"
-                    description="Upload PDF, DOCX, ZIP, or diagram (up to 25 MB with SHA-256 validation)"
-                    descriptionHi="PDF, DOCX, ZIP, या चित्र अपलोड करें (25 MB तक SHA-256 सत्यापन के साथ)"
+                    description="Upload PDF, PNG, JPG, or DOCX (up to 10 MB with SHA-256 validation)"
+                    descriptionHi="PDF, PNG, JPG, या DOCX अपलोड करें (10 MB तक SHA-256 सत्यापन के साथ)"
                     category="rfp_attachment"
                     onUploadSuccess={(file) => setAttachment(file)}
                     onRemove={() => setAttachment(null)}

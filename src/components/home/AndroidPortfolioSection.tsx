@@ -86,8 +86,13 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
             <div className="p-6 sm:p-8 rounded-xl border border-slate-200 bg-white shadow-xs space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
                 <div>
-                  <div className="text-xs font-bold text-blue-700 tracking-wider uppercase">
-                    {language === 'hi' ? activeApp.categoryHi : activeApp.category} · {activeApp.version}
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-bold uppercase tracking-wide">
+                      {t('DEMO / Concept', 'डेमो / कॉन्सेप्ट')}
+                    </span>
+                    <span className="text-xs font-bold text-blue-700 tracking-wider uppercase">
+                      {language === 'hi' ? activeApp.categoryHi : activeApp.category} · {activeApp.version}
+                    </span>
                   </div>
                   <h3 className="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">
                     {language === 'hi' ? activeApp.nameHi : activeApp.name}
@@ -163,13 +168,18 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
                     </span>
                   ))}
                 </div>
-                <button
-                  onClick={() => onRequestApkDemo(activeApp.id)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs shrink-0"
-                >
-                  <span>{t('Request Demo APK', 'डेमो एपीके का अनुरोध करें')}</span>
-                  <ArrowRight className="w-3.5 h-3.5 shrink-0" />
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[11px] font-medium text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded">
+                    {t('Demo coming soon', 'डेमो जल्द उपलब्ध होगा')}
+                  </span>
+                  <button
+                    onClick={() => onRequestApkDemo(activeApp.id)}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs shrink-0"
+                  >
+                    <span>{t('Request Custom Pilot', 'कस्टम पायलट पूछें')}</span>
+                    <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -194,8 +204,8 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
                 </span>
                 <p className="text-sm font-semibold mt-1">
                   {t(
-                    'Built for real-world field resiliency across 1,000+ Android device profiles.',
-                    '1,000+ एंड्रॉइड डिवाइस प्रोफाइल पर विश्वसनीय संचालन के लिए निर्मित।'
+                    'Engineered for real-world field resiliency across enterprise Android phones, tablets, and POS terminals.',
+                    'एंटरप्राइज एंड्रॉइड फोन, टैबलेट और पीओएस टर्मिनलों पर विश्वसनीय फील्ड संचालन के लिए डिज़ाइन किया गया।'
                   )}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-300">

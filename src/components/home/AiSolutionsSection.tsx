@@ -34,37 +34,31 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
     }
   };
 
-  // Calculate dynamic architecture metrics
+  // Derive honest architectural blueprint based on workload & volume tier
   const getEstimation = () => {
-    let speedGain = '75%';
-    let processingHours = '1,400+ hrs/mo';
-    let targetLatency = '<850ms';
+    let workflowApproach = t('Grounded Citation Pipeline', 'संदर्भ-सत्यापित पाइपलाइन');
+    let tierProfile = t('Standard Cloud Pod', 'मानक क्लाउड पॉड');
+    const validationMethod = t('Scoped in Discovery Pilot', 'पायलट में सत्यापित');
     let blueprint = 'Hybrid Qdrant + Gemini 2.5 Flash + Private Cloud VPC';
 
     if (calcWorkload === 'agents') {
-      speedGain = '84%';
-      processingHours = '2,800+ hrs/mo';
-      targetLatency = '<1.2s';
+      workflowApproach = t('Stateful Tool Orchestration', 'स्टेटफुल टूल ऑर्केस्ट्रेशन');
       blueprint = 'LangGraph State Bus + Redis + Deterministic JSON Tooling';
     } else if (calcWorkload === 'vision') {
-      speedGain = '92%';
-      processingHours = '3,200+ hrs/mo';
-      targetLatency = '<450ms';
+      workflowApproach = t('Structured Document Parsing', 'संरचित दस्तावेज़ पार्सिंग');
       blueprint = 'Multi-lingual OCR Engine + PyTorch + Fast Inference Pods';
     } else if (calcWorkload === 'predictive') {
-      speedGain = '68%';
-      processingHours = '950+ hrs/mo';
-      targetLatency = '<200ms';
+      workflowApproach = t('Streaming Anomaly Scoring', 'स्ट्रीमिंग विसंगति स्कोरिंग');
       blueprint = 'ClickHouse + Time-series Neural Pipeline + Grafana Hub';
     }
 
     if (calcScale === 'enterprise') {
-      processingHours = '8,500+ hrs/mo';
+      tierProfile = t('Dedicated Multi-Node VPC', 'समर्पित मल्टी-नोड VPC');
     } else if (calcScale === 'startup') {
-      processingHours = '450+ hrs/mo';
+      tierProfile = t('Lean Single-Tenant Pilot', 'सिंगल-टेनेंट पायलट');
     }
 
-    return { speedGain, processingHours, targetLatency, blueprint };
+    return { workflowApproach, tierProfile, validationMethod, blueprint };
   };
 
   const est = getEstimation();
@@ -195,24 +189,24 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                 </p>
               </div>
 
-              {/* Live Calculated Stats Box */}
+              {/* Honest Architecture Scope Box */}
               <div className="relative z-10 mt-8 p-4 rounded-lg bg-slate-950/80 border border-slate-800 backdrop-blur-md text-white space-y-3">
                 <div className="flex items-center justify-between gap-2 text-xs border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">{t('Projected Efficiency Gain:', 'अनुमानित दक्षता वृद्धि:')}</span>
-                  <span className="font-mono text-emerald-400 font-extrabold text-base tabular-nums shrink-0">
-                    +{est.speedGain}
+                  <span className="text-slate-400">{t('Automation Focus:', 'स्वचालन पद्धति:')}</span>
+                  <span className="font-mono text-emerald-400 font-bold text-xs text-right">
+                    {est.workflowApproach}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-xs border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">{t('Est. Work Hours Saved:', 'बचत किए गए कार्य घंटे:')}</span>
-                  <span className="font-mono text-blue-400 font-extrabold text-base tabular-nums shrink-0">
-                    {est.processingHours}
+                  <span className="text-slate-400">{t('Deployment Tier:', 'परिनियोजन स्तर:')}</span>
+                  <span className="font-mono text-blue-400 font-bold text-xs text-right">
+                    {est.tierProfile}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-slate-400">{t('Target Inference Latency:', 'लक्षित इनफेरेंस लेटेंसी:')}</span>
-                  <span className="font-mono text-white font-extrabold text-sm tabular-nums shrink-0">
-                    {est.targetLatency}
+                  <span className="text-slate-400">{t('Performance Target:', 'प्रदर्शन मानदंड:')}</span>
+                  <span className="font-mono text-white font-bold text-xs text-right">
+                    {est.validationMethod}
                   </span>
                 </div>
               </div>

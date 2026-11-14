@@ -1,12 +1,16 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
+import { z } from 'zod';
 import { initializeApp, getApps, cert, applicationDefault, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getAppCheck } from 'firebase-admin/app-check';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { Storage } from '@google-cloud/storage';
 
 dotenv.config();
@@ -51,25 +55,17 @@ function loadFirebasePublicConfig(): FirebasePublicConfig {
 }
 
 const FIREBASE_CONFIG = loadFirebasePublicConfig();
-const LEGACY_ROOT_ADMIN_FALLBACK = 'ssbhanu41@gmail.com';
-const RAW_ROOT_ADMIN_EMAIL = (process.env.ROOT_ADMIN_EMAIL || '').trim();
-const HAS_EXPLICIT_ROOT_ADMIN_EMAIL = RAW_ROOT_ADMIN_EMAIL.length > 0;
-const ROOT_ADMIN_EMAILS = new Set<string>(
-  (HAS_EXPLICIT_ROOT_ADMIN_EMAIL ? RAW_ROOT_ADMIN_EMAIL : LEGACY_ROOT_ADMIN_FALLBACK)
-    .split(',')
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean)
-);
+const RECAPTCHA_SITE_KEY = (
+  process.env.VITE_RECAPTCHA_SITE_KEY ||
+  process.env.RECAPTCHA_SITE_KEY ||
+  ''
+).trim();
+const HAS_RECAPTCHA_SITE_KEY = RECAPTCHA_SITE_KEY.length > 0;
 
-if (!HAS_EXPLICIT_ROOT_ADMIN_EMAIL) {
+if (!HAS_RECAPTCHA_SITE_KEY) {
   console.warn(
-    '[Security Notice] ROOT_ADMIN_EMAIL env var not set; using legacy bootstrap admin fallback alongside Firestore user_roles.'
+    '[AppCheck Notice] VITE_RECAPTCHA_SITE_KEY is not set; form submissions continue without mandatory App Check verification until configured.'
   );
-}
-
-function isRootAdminEmail(email: string, emailVerified: boolean): boolean {
-  if (!emailVerified || !email) return false;
-  return ROOT_ADMIN_EMAILS.has(email.trim().toLowerCase());
 }
 
 const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
@@ -136,14 +132,32 @@ function initializeFirebaseAdmin(): void {
 
 initializeFirebaseAdmin();
 
+const FIRESTORE_DB_ID = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
+let adminDb: Firestore | null = null;
+if (adminApp && adminHasCredentials) {
+  adminDb =
+    FIRESTORE_DB_ID === '(default)'
+      ? getFirestore(adminApp)
+      : getFirestore(adminApp, FIRESTORE_DB_ID);
+  console.log(`[Firestore Admin] Connected to database "${FIRESTORE_DB_ID}".`);
+} else {
+  console.warn(
+    '[Firestore Admin Notice] Credentials not configured (FIREBASE_SERVICE_ACCOUNT_KEY or GCP ADC). Server Firestore ledger routes will return HTTP 503 until configured.'
+  );
+}
+
 /* =========================================================================
-   MODULAR STORAGE PROVIDER (GCS WHEN VERIFIED, ELSE LOCAL CONTAINER DISK)
+   CLOUD STORAGE PROVIDER (GCS ONLY — ZERO LOCAL DISK WRITES)
    ========================================================================= */
 const EXPLICIT_GCS_BUCKET = (process.env.GCS_BUCKET || '').trim();
 let gcsStorageClient: Storage | null = null;
 let gcsBucketVerified = false;
 let gcsStatusNote =
-  'GCS_BUCKET not set; file upload is active using authenticated local server disk vault (uploads/). Configure GCS_BUCKET for persistent Cloud Storage across container restarts.';
+  'GCS_BUCKET not set; file uploads return HTTP 503 STORAGE_NOT_CONFIGURED. Local container disk writes are disabled.';
+
+function isGcsConfiguredAndVerified(): boolean {
+  return Boolean(EXPLICIT_GCS_BUCKET && gcsBucketVerified && gcsStorageClient);
+}
 
 async function verifyGcsStorageAvailability(): Promise<void> {
   if (!EXPLICIT_GCS_BUCKET) {
@@ -168,12 +182,12 @@ async function verifyGcsStorageAvailability(): Promise<void> {
       console.log(`[Storage] ${gcsStatusNote}`);
     } else {
       gcsBucketVerified = false;
-      gcsStatusNote = `Configured GCS_BUCKET (${EXPLICIT_GCS_BUCKET}) does not exist or is unreachable; using authenticated local server disk vault fallback.`;
+      gcsStatusNote = `Configured GCS_BUCKET (${EXPLICIT_GCS_BUCKET}) does not exist or is unreachable; file uploads return HTTP 503 STORAGE_NOT_CONFIGURED.`;
       console.warn(`[Storage Warning] ${gcsStatusNote}`);
     }
   } catch (err: any) {
     gcsBucketVerified = false;
-    gcsStatusNote = `GCS verification unavailable (${err?.code || 'missing credentials'}); using authenticated local server disk vault fallback.`;
+    gcsStatusNote = `GCS verification unavailable (${err?.code || 'missing credentials'}); file uploads return HTTP 503 STORAGE_NOT_CONFIGURED.`;
     console.warn(`[Storage Notice] ${gcsStatusNote}`);
   }
 }
@@ -195,19 +209,74 @@ if (!HAS_EXPLICIT_PAYMENT_SECRET) {
   );
 }
 
-// Cloud Run Reverse Proxy Configuration
+// Cloud Run Reverse Proxy & Security Hardening
 app.set('trust proxy', true);
+app.disable('x-powered-by');
 
-// Production Security Headers (HSTS, nosniff, XSS protection, Referrer policy, Frame guard)
-app.use((req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+const isDevEnv = process.env.NODE_ENV !== 'production';
+
+// Helmet HTTP Security Headers + Content-Security-Policy (Firebase, Google Sign-In, reCAPTCHA, Google Fonts)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: [
+          "'self'",
+          "'unsafe-inline'",
+          ...(isDevEnv ? ["'unsafe-eval'"] : []),
+          'https://apis.google.com',
+          'https://www.google.com',
+          'https://www.gstatic.com',
+          'https://www.recaptcha.net',
+          'https://www.googletagmanager.com',
+        ],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: [
+          "'self'",
+          ...(isDevEnv ? ['ws:', 'wss:'] : []),
+          'https://*.googleapis.com',
+          'https://*.firebaseio.com',
+          'https://*.firebaseapp.com',
+          'https://*.cloudfunctions.net',
+          'https://identitytoolkit.googleapis.com',
+          'https://securetoken.googleapis.com',
+          'https://firestore.googleapis.com',
+          'https://firebaseappcheck.googleapis.com',
+          'https://content-firebaseappcheck.googleapis.com',
+          'https://accounts.google.com',
+          'https://apis.google.com',
+          'https://www.google.com',
+          'https://www.gstatic.com',
+          'https://www.recaptcha.net',
+          'https://www.google-analytics.com',
+          'https://analytics.google.com',
+        ],
+        frameSrc: [
+          "'self'",
+          'https://*.firebaseapp.com',
+          'https://accounts.google.com',
+          'https://www.google.com',
+          'https://www.recaptcha.net',
+        ],
+        objectSrc: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        frameAncestors: ["'self'", 'https://aistudio.google.com', 'https://*.google.com'],
+        ...(isDevEnv ? { upgradeInsecureRequests: null } : {}),
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    xFrameOptions: { action: 'sameorigin' },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+  })
+);
+
+app.use((_req, res, next) => {
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  if (req.secure || req.headers['x-forwarded-proto'] === 'https') {
-    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
-  }
   next();
 });
 
@@ -219,10 +288,9 @@ const configuredOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
 
 const staticAllowedOrigins = new Set<string>(
   [
-    'https://power-web-studio-ai-enterprise-digital-platform.ai.studio',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
-    process.env.APP_URL?.trim() || '',
+    (process.env.SITE_URL || '').trim().replace(/\/+$/, ''),
     ...configuredOrigins,
   ].filter(Boolean)
 );
@@ -232,10 +300,7 @@ function isAllowedCorsOrigin(origin?: string): boolean {
   if (staticAllowedOrigins.has(origin)) return true;
   try {
     const parsed = new URL(origin);
-    if (
-      parsed.protocol === 'https:' &&
-      (parsed.hostname.endsWith('.run.app') || parsed.hostname.endsWith('.ai.studio'))
-    ) {
+    if (parsed.protocol === 'https:' && parsed.hostname.endsWith('.run.app')) {
       return true;
     }
   } catch {
@@ -257,55 +322,20 @@ app.use(
       }
     },
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck'],
     credentials: true,
     maxAge: 600,
   })
 );
 
-// Body parsers with bounded payload size for base64 artifacts
-app.use(express.json({ limit: '35mb' }));
-app.use(express.urlencoded({ extended: true, limit: '35mb' }));
+// Route-scoped body limits: 15mb for base64 file uploads, strict 1mb everywhere else
+app.use('/api/files/upload', express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* =========================================================================
-   LOCAL CONTAINER STORAGE, LEDGER & AUDIT LOG REGISTRY
-   Note: On Cloud Run stateless containers without GCS_BUCKET, local disk is ephemeral.
+   CLOUD FIRESTORE AUDIT LOGGING & SAFE DTO HELPERS (NO LOCAL DISK WRITES)
    ========================================================================= */
-const UPLOADS_DIR = path.resolve(__dirname, 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-}
-
-const MANIFEST_PATH = path.join(UPLOADS_DIR, 'manifest.json');
-function getManifest(): Record<string, any> {
-  try {
-    if (fs.existsSync(MANIFEST_PATH)) {
-      return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
-    }
-  } catch {
-    // fallback
-  }
-  return {};
-}
-
-function saveManifest(manifest: Record<string, any>) {
-  try {
-    fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
-  } catch (err) {
-    console.error('[Manifest Save Error]', err);
-  }
-}
-
-const LEDGER_DIR = path.resolve(__dirname, 'uploads', 'ledger');
-if (!fs.existsSync(LEDGER_DIR)) {
-  fs.mkdirSync(LEDGER_DIR, { recursive: true });
-}
-
-const INVOICES_PATH = path.join(LEDGER_DIR, 'invoices.json');
-const PAYMENTS_PATH = path.join(LEDGER_DIR, 'payments.json');
-const NEWSLETTER_PATH = path.join(LEDGER_DIR, 'newsletter.json');
-const AUDIT_EVENTS_PATH = path.join(LEDGER_DIR, 'audit_events.json');
-
 interface ServerAuditEvent {
   id: string;
   action: string;
@@ -318,24 +348,74 @@ interface ServerAuditEvent {
   timestamp: string;
 }
 
-function appendServerAuditEvent(event: Omit<ServerAuditEvent, 'id' | 'timestamp'>): void {
+function isFirestoreAdminCredentialError(err: any): boolean {
+  const code = err?.code;
+  const msg = String(err?.message || '');
+  return (
+    code === 7 ||
+    code === 16 ||
+    code === 'permission-denied' ||
+    code === 'unauthenticated' ||
+    msg.includes('PERMISSION_DENIED') ||
+    msg.includes('Could not load the default credentials')
+  );
+}
+
+function sendFirestoreRouteError(
+  res: express.Response,
+  err: any,
+  fallbackMessage: string,
+  lang: 'hi' | 'en' | 'both' = 'en'
+) {
+  if (isFirestoreAdminCredentialError(err)) {
+    const errorEn = 'Firestore Admin SDK lacks IAM permissions or service account credentials on this environment.';
+    const errorHi = 'इस वातावरण में Firestore Admin SDK के लिए आवश्यक IAM अनुमतियाँ या सर्विस अकाउंट क्रेडेंशियल उपलब्ध नहीं हैं।';
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: lang === 'hi' ? errorHi : errorEn,
+      errorEn,
+      errorHi,
+    });
+  }
+  return res.status(500).json({ error: fallbackMessage });
+}
+
+let loggedAuditPermissionWarning = false;
+
+async function appendServerAuditEvent(
+  event: Omit<ServerAuditEvent, 'id' | 'timestamp'>
+): Promise<void> {
+  if (!adminDb) {
+    return;
+  }
   try {
-    let events: ServerAuditEvent[] = [];
-    if (fs.existsSync(AUDIT_EVENTS_PATH)) {
-      events = JSON.parse(fs.readFileSync(AUDIT_EVENTS_PATH, 'utf8'));
-      if (!Array.isArray(events)) events = [];
-    }
-    const entry: ServerAuditEvent = {
-      id: `srv-audit-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-      timestamp: new Date().toISOString(),
-      ...event,
+    const logId = `srv-audit-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    const timestamp = new Date().toISOString();
+    const entry = {
+      id: logId,
+      actorId: event.actorUid,
+      actorUid: event.actorUid,
+      actorEmail: event.actorEmail,
+      action: event.action,
+      resource: event.resource,
+      outcome: event.outcome,
+      ipAddress: event.ip,
+      ip: event.ip,
+      details: event.details,
+      timestamp,
+      source: 'server',
     };
-    events.unshift(entry);
-    if (events.length > 500) {
-      events = events.slice(0, 500);
-    }
-    fs.writeFileSync(AUDIT_EVENTS_PATH, JSON.stringify(events, null, 2), 'utf8');
+    await adminDb.collection('audit_logs').doc(logId).set(entry);
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err)) {
+      if (!loggedAuditPermissionWarning) {
+        loggedAuditPermissionWarning = true;
+        console.warn(
+          '[Server Audit Notice] Firestore Admin lacks IAM permissions in this environment; skipping server audit persistence.'
+        );
+      }
+      return;
+    }
     console.error('[Server Audit Log Error]', err);
   }
 }
@@ -355,149 +435,11 @@ function toSafeFileDto(record: any) {
     sha256: record.sha256,
     ownerUid: record.ownerUid || null,
     uploadedBy: record.uploadedBy,
-    storageProvider: record.storageProvider || 'local_container_disk',
+    storageProvider: record.storageProvider || 'google_cloud_storage',
     notes: record.notes || '',
     uploadedAt: record.uploadedAt,
     downloadUrl: `/api/files/${record.fileId}`,
   };
-}
-
-const INITIAL_INVOICES = [
-  {
-    id: 'inv-2026-0814',
-    invoiceNumber: 'INV-2026-0814',
-    projectId: 'proj-1',
-    projectName: 'Bharat Fleet ERP & Distributed Telematics',
-    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
-    clientId: 'kalinga-client-id',
-    clientName: 'Rajiv Sengupta',
-    clientEmail: 'kalinga@enterprise.in',
-    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
-    clientGstin: '21AAACK1924L1ZZ',
-    milestoneTitle: 'Milestone 03 — BLE Soundbox & Dynamic QR Payment Reconciliation',
-    milestoneTitleHi: 'माइलस्टोन 03 — BLE साउंडबॉक्स एवं डायनामिक QR भुगतान समाधान',
-    subtotal: 450000,
-    gstRate: 18,
-    gstAmount: 81000,
-    totalAmount: 531000,
-    currency: 'INR',
-    hsnSac: '998313',
-    status: 'paid',
-    issuedAt: '2026-10-25T10:00:00Z',
-    dueAt: '2026-11-09T18:00:00Z',
-    paidAt: '2026-11-09T14:30:00Z',
-    paymentTxnId: 'TXN-UPI-NPCI-88921102',
-    paymentMethod: 'UPI',
-    verificationHash: '9a7c3b2e5f1d4a8e6b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a',
-  },
-  {
-    id: 'inv-2026-0899',
-    invoiceNumber: 'INV-2026-0899',
-    projectId: 'proj-1',
-    projectName: 'Bharat Fleet ERP & Distributed Telematics',
-    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
-    clientId: 'kalinga-client-id',
-    clientName: 'Rajiv Sengupta',
-    clientEmail: 'kalinga@enterprise.in',
-    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
-    clientGstin: '21AAACK1924L1ZZ',
-    milestoneTitle: 'Milestone 04 — Release Candidate v2.4.1 Fleet Rollout & SOC-2 Audit',
-    milestoneTitleHi: 'माइलस्टोन 04 — रिलीज कैंडिडेट v2.4.1 फ्लीट रोलआउट एवं SOC-2 ऑडिट',
-    subtotal: 500000,
-    gstRate: 18,
-    gstAmount: 90000,
-    totalAmount: 590000,
-    currency: 'INR',
-    hsnSac: '998313',
-    status: 'issued',
-    issuedAt: '2026-11-10T10:00:00Z',
-    dueAt: '2026-11-25T18:00:00Z',
-    verificationHash: '1c4e7f9a2b5d8e0c3a6f9b2d5e8a1c4f7b0d3e6a9c2f5b8e1d4a7c0f3b6e9a2d',
-  },
-  {
-    id: 'inv-2026-0912',
-    invoiceNumber: 'INV-2026-0912',
-    projectId: 'proj-2',
-    projectName: 'Odisha Krushak Mandee Multi-Tenant Core',
-    projectNameHi: 'ओडिशा कृषक मंडी मल्टी-टेनेंट कोर',
-    clientId: 'utkal-client-id',
-    clientName: 'Er. Debi Prasad Mishra',
-    clientEmail: 'utkal@odisha.gov.in',
-    clientCompany: 'Utkal Agro Infrastructure Directorate',
-    clientGstin: '21GVDPM9910A1Z5',
-    milestoneTitle: 'Milestone 01 — Vernacular Voice AI Engine & Mandee Price Sync',
-    milestoneTitleHi: 'माइलस्टोन 01 — स्थानीय ध्वनि AI इंजन एवं मंडी मूल्य समन्वय',
-    subtotal: 320000,
-    gstRate: 18,
-    gstAmount: 57600,
-    totalAmount: 377600,
-    currency: 'INR',
-    hsnSac: '998313',
-    status: 'paid',
-    issuedAt: '2026-10-15T11:00:00Z',
-    dueAt: '2026-10-30T18:00:00Z',
-    paidAt: '2026-10-28T16:15:00Z',
-    paymentTxnId: 'TXN-RTGS-RBI-29004128',
-    paymentMethod: 'NEFT_RTGS',
-    verificationHash: '4b7d0a3c6e9f2b5a8d1c4e7f0b3d6a9c2e5f8b1d4a7c0e3f6b9d2a5c8e1f4b7a',
-  },
-];
-
-function getInvoices(): any[] {
-  try {
-    if (fs.existsSync(INVOICES_PATH)) {
-      return JSON.parse(fs.readFileSync(INVOICES_PATH, 'utf8'));
-    }
-  } catch {
-    // fallback
-  }
-  return INITIAL_INVOICES;
-}
-
-function saveInvoices(invoices: any[]) {
-  try {
-    fs.writeFileSync(INVOICES_PATH, JSON.stringify(invoices, null, 2), 'utf8');
-  } catch (err) {
-    console.error('[Invoices Save Error]', err);
-  }
-}
-
-function getPayments(): any[] {
-  try {
-    if (fs.existsSync(PAYMENTS_PATH)) {
-      return JSON.parse(fs.readFileSync(PAYMENTS_PATH, 'utf8'));
-    }
-  } catch {
-    // fallback
-  }
-  return [];
-}
-
-function savePayments(payments: any[]) {
-  try {
-    fs.writeFileSync(PAYMENTS_PATH, JSON.stringify(payments, null, 2), 'utf8');
-  } catch (err) {
-    console.error('[Payments Save Error]', err);
-  }
-}
-
-function getNewsletterSubscribers(): any[] {
-  try {
-    if (fs.existsSync(NEWSLETTER_PATH)) {
-      return JSON.parse(fs.readFileSync(NEWSLETTER_PATH, 'utf8'));
-    }
-  } catch {
-    // fallback
-  }
-  return [];
-}
-
-function saveNewsletterSubscribers(subs: any[]) {
-  try {
-    fs.writeFileSync(NEWSLETTER_PATH, JSON.stringify(subs, null, 2), 'utf8');
-  } catch (err) {
-    console.error('[Newsletter Save Error]', err);
-  }
 }
 
 /* =========================================================================
@@ -508,7 +450,7 @@ interface VerifiedAuthUser {
   email: string;
   emailVerified: boolean;
   isAdmin: boolean;
-  roleSource: 'user_roles' | 'root_admin_env' | 'custom_claim' | 'client';
+  roleSource: 'user_roles' | 'custom_claim' | 'client';
 }
 
 let certCache: { certs: Record<string, string>; expiresAt: number } = {
@@ -574,14 +516,22 @@ async function fetchFirestoreDocumentRest(
 }
 
 async function checkFirestoreAdminRole(uid: string, idToken: string): Promise<boolean> {
+  if (adminDb && SAFE_ID_REGEX.test(uid)) {
+    try {
+      const snap = await adminDb.collection('user_roles').doc(uid).get();
+      if (snap.exists && snap.data()?.role === 'admin') {
+        return true;
+      }
+    } catch {
+      // Fall back to REST API check below
+    }
+  }
   const doc = await fetchFirestoreDocumentRest('user_roles', uid, idToken);
   return doc?.fields?.role?.stringValue === 'admin';
 }
 
 async function resolveServerAdminStatus(params: {
   uid: string;
-  email: string;
-  emailVerified: boolean;
   idToken: string;
   hasCustomClaimAdmin: boolean;
 }): Promise<{ isAdmin: boolean; roleSource: VerifiedAuthUser['roleSource'] }> {
@@ -591,12 +541,7 @@ async function resolveServerAdminStatus(params: {
     return { isAdmin: true, roleSource: 'user_roles' };
   }
 
-  // 2. Env-configured root admin fallback (`process.env.ROOT_ADMIN_EMAIL`, with safe legacy bootstrap fallback)
-  if (isRootAdminEmail(params.email, params.emailVerified)) {
-    return { isAdmin: true, roleSource: 'root_admin_env' };
-  }
-
-  // 3. Verified Firebase custom claims fallback
+  // 2. Verified Firebase Auth custom claim (`admin: true` or `role: "admin"`)
   if (params.hasCustomClaimAdmin) {
     return { isAdmin: true, roleSource: 'custom_claim' };
   }
@@ -611,6 +556,16 @@ async function verifyProjectAuthorization(
 ): Promise<boolean> {
   if (!SAFE_ID_REGEX.test(projectId)) return false;
   if (user.isAdmin) return true;
+  if (adminDb) {
+    try {
+      const snap = await adminDb.collection('projects').doc(projectId).get();
+      if (snap.exists) {
+        return snap.data()?.clientId === user.uid;
+      }
+    } catch {
+      // Fall back to REST check
+    }
+  }
   const doc = await fetchFirestoreDocumentRest('projects', projectId, idToken);
   if (!doc || !doc.fields) return false;
   return doc.fields?.clientId?.stringValue === user.uid;
@@ -637,8 +592,6 @@ async function verifyFirebaseBearerToken(
       const emailVerified = Boolean(decoded.email_verified);
       const { isAdmin, roleSource } = await resolveServerAdminStatus({
         uid: decoded.uid,
-        email,
-        emailVerified,
         idToken: token,
         hasCustomClaimAdmin: decoded.admin === true || decoded.role === 'admin',
       });
@@ -698,8 +651,6 @@ async function verifyFirebaseBearerToken(
     const emailVerified = Boolean(payload.email_verified);
     const { isAdmin, roleSource } = await resolveServerAdminStatus({
       uid: payload.sub,
-      email,
-      emailVerified,
       idToken: token,
       hasCustomClaimAdmin: payload.admin === true || payload.role === 'admin',
     });
@@ -751,8 +702,8 @@ async function requireAdmin(
       error: 'Authentication required. Provide a valid Firebase Bearer ID token.',
     });
   }
-  if (!verified.user.isAdmin) {
-    appendServerAuditEvent({
+    if (!verified.user.isAdmin) {
+    void appendServerAuditEvent({
       action: 'ADMIN_ACCESS_DENIED',
       actorUid: verified.user.uid,
       actorEmail: verified.user.email || verified.user.uid,
@@ -770,11 +721,7 @@ async function requireAdmin(
   return next();
 }
 
-// Single-use server-tracked payment intents (prevent replay & double settlement)
-const paymentIntents = new Map<
-  string,
-  { invoiceId: string; amount: number; uid: string; expiresAt: number; used: boolean }
->();
+// Rate Limiting for API routes (durable payment intents are stored in Firestore `payment_intents`)
 
 // In-Memory Rate Limiting for API routes
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -994,6 +941,131 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
   return next();
 }
 
+async function verifyAppCheckForForm(
+  req: express.Request,
+  res: express.Response,
+  scope: 'inquiry' | 'newsletter'
+): Promise<boolean> {
+  const token = (req.header('x-firebase-appcheck') || '').trim();
+  const lang = resolveRequestedLanguage(req);
+
+  if (!HAS_RECAPTCHA_SITE_KEY) {
+    if (token && adminApp) {
+      try {
+        await getAppCheck(adminApp).verifyToken(token);
+      } catch (err) {
+        console.warn(`[AppCheck Notice] Optional ${scope} token verification failed:`, err);
+      }
+    }
+    return true;
+  }
+
+  if (!token) {
+    const errorEn = 'App Check verification token is missing. Please reload the page and try again.';
+    const errorHi = 'App Check सत्यापन टोकन अनुपस्थित है। कृपया पृष्ठ रीलोड करें और पुनः प्रयास करें।';
+    res.status(403).json({
+      code: 'APP_CHECK_REQUIRED',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
+    return false;
+  }
+
+  if (!adminApp) {
+    console.warn('[AppCheck Warning] Firebase Admin App not initialized; allowing request with warning.');
+    return true;
+  }
+
+  try {
+    await getAppCheck(adminApp).verifyToken(token);
+    return true;
+  } catch (err) {
+    console.warn(`[AppCheck Rejected] Invalid ${scope} App Check token:`, err);
+    const errorEn = 'App Check security verification failed. Please refresh the page and retry.';
+    const errorHi = 'App Check सुरक्षा सत्यापन विफल रहा। कृपया पृष्ठ रीफ़्रेश करें और पुनः प्रयास करें।';
+    res.status(403).json({
+      code: 'APP_CHECK_INVALID',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
+    return false;
+  }
+}
+
+const attachmentSchema = z
+  .object({
+    fileUrl: z.string().trim().max(300).optional(),
+    fileName: z.string().trim().max(200).optional(),
+    sha256: z.string().trim().max(128).optional(),
+    fileSizeFormatted: z.string().trim().max(40).optional(),
+  })
+  .optional()
+  .nullable();
+
+const quotationInputSchema = z.object({
+  fullName: z.string().trim().min(1, 'REQUIRED_NAME').max(160, 'MAX_NAME'),
+  email: z.string().trim().email('INVALID_EMAIL').max(160, 'MAX_EMAIL'),
+  phone: z.string().trim().max(40).optional().default(''),
+  company: z.string().trim().max(160).optional().default(''),
+  serviceType: z.string().trim().min(1, 'REQUIRED_SERVICE').max(160, 'MAX_SERVICE'),
+  timeline: z.string().trim().max(64).optional().default('3-6-months'),
+  budget: z.string().trim().max(80).optional().default('enterprise'),
+  brief: z.string().trim().max(3000).optional().default(''),
+  language: z.enum(['en', 'hi']).optional().default('en'),
+  attachment: attachmentSchema,
+});
+
+const inquiryValidateSchema = z.object({
+  fullName: z.string().trim().min(1, 'REQUIRED_NAME').max(160, 'MAX_NAME'),
+  email: z.string().trim().email('INVALID_EMAIL').max(160, 'MAX_EMAIL'),
+  serviceType: z.string().trim().min(1, 'REQUIRED_SERVICE').max(160, 'MAX_SERVICE'),
+  brief: z.string().trim().max(2000).optional().default(''),
+});
+
+const newsletterInputSchema = z.object({
+  email: z.string().trim().email('INVALID_EMAIL').max(160, 'MAX_EMAIL'),
+  language: z.enum(['en', 'hi']).optional().default('en'),
+});
+
+const auditEventInputSchema = z
+  .object({
+    action: z.string().trim().min(1).max(100),
+    resource: z.string().trim().min(1).max(200),
+    details: z.string().trim().max(1000).optional().default(''),
+    outcome: z.enum(['SUCCESS', 'DENIED', 'ERROR']).optional().default('SUCCESS'),
+  })
+  .strict();
+
+function mapFormZodError(
+  error: z.ZodError,
+  lang: 'hi' | 'en' | 'both'
+): { errorEn: string; errorHi: string; error: string } {
+  const firstCode = error.issues[0]?.message || '';
+  const field = String(error.issues[0]?.path?.[0] || '');
+
+  let errorEn = 'Invalid submission fields. Please verify your inputs.';
+  let errorHi = 'अमान्य फ़ॉर्म विवरण। कृपया अपने इनपुट जांचें।';
+
+  if (firstCode === 'REQUIRED_NAME' || field === 'fullName') {
+    errorEn = firstCode === 'MAX_NAME' ? 'Full name exceeds 160 characters.' : 'Full name is required and cannot be empty.';
+    errorHi = firstCode === 'MAX_NAME' ? 'पूरा नाम 160 अक्षरों से अधिक नहीं हो सकता।' : 'पूरा नाम आवश्यक है और इसे खाली नहीं छोड़ा जा सकता।';
+  } else if (firstCode === 'INVALID_EMAIL' || firstCode === 'MAX_EMAIL' || field === 'email') {
+    errorEn = 'Please enter a valid work email address.';
+    errorHi = 'कृपया एक मान्य कार्य ईमेल पता दर्ज करें।';
+  } else if (firstCode === 'REQUIRED_SERVICE' || firstCode === 'MAX_SERVICE' || field === 'serviceType') {
+    errorEn = 'Please select a technical service domain.';
+    errorHi = 'कृपया एक तकनीकी सेवा चुनें।';
+  }
+
+  return {
+    errorEn,
+    errorHi,
+    error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+  };
+}
+
 app.use('/api', rateLimiter);
 
 /* =========================================================================
@@ -1037,7 +1109,9 @@ app.get('/api/health', async (req, res) => {
     status: databaseStatus === 'CONNECTED' ? 'ONLINE' : 'DEGRADED',
     service: 'POWER WEB STUDIO AI ENTERPRISE BACKEND',
     company: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
-    cin: 'U72900OR2024PTC045812',
+    ...(process.env.COMPANY_REGISTRATION?.trim()
+      ? { companyRegistration: process.env.COMPANY_REGISTRATION.trim() }
+      : {}),
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
     database: {
@@ -1053,9 +1127,12 @@ app.get('/api/health', async (req, res) => {
     security: {
       defaultDeny: true,
       rbacEnforced: true,
+      adminRoleSource: 'user_roles_and_custom_claims',
       firebaseAdminMode: adminInitMode,
       firebaseAdminCredentialsPresent: adminHasCredentials,
       bearerTokenVerification: adminHasCredentials ? 'FIREBASE_ADMIN_SDK' : 'FIREBASE_RS256',
+      appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
+      helmetCspEnabled: true,
       corsStrictAllowlist: true,
       unauthenticatedUploadsDisabled: true,
       paymentSecretConfigured: HAS_EXPLICIT_PAYMENT_SECRET,
@@ -1064,14 +1141,12 @@ app.get('/api/health', async (req, res) => {
       hstsEnabled: true,
     },
     storage: {
-      mode: gcsBucketVerified ? 'google_cloud_storage' : 'local_container_disk',
-      fileUploadEnabled: true,
+      mode: isGcsConfiguredAndVerified() ? 'google_cloud_storage' : 'storage_not_configured',
+      fileUploadEnabled: isGcsConfiguredAndVerified(),
       gcsBucketConfigured: Boolean(EXPLICIT_GCS_BUCKET),
       gcsBucketVerified,
-      persistentAcrossCloudRunRestarts: gcsBucketVerified,
-      ephemeralDiskWarning: gcsBucketVerified
-        ? null
-        : 'Files are saved to local server disk vault (uploads/). Configure GCS_BUCKET in production for durable Cloud Storage across container restarts.',
+      persistentAcrossCloudRunRestarts: isGcsConfiguredAndVerified(),
+      ephemeralDiskWarning: null,
       note: gcsStatusNote,
     },
     deployment: {
@@ -1088,13 +1163,15 @@ app.get('/api/health', async (req, res) => {
 // 1b. Public Safe System Capabilities Endpoint (Exposes non-sensitive feature flags only)
 app.get('/api/system/capabilities', (_req, res) => {
   res.json({
-    fileUploadEnabled: true,
-    storageMode: gcsBucketVerified ? 'google_cloud_storage' : 'local_container_disk',
+    fileUploadEnabled: isGcsConfiguredAndVerified(),
+    storageMode: isGcsConfiguredAndVerified() ? 'google_cloud_storage' : 'storage_not_configured',
     gcsBucketVerified,
+    firestoreAdminReady: Boolean(adminDb),
+    appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
     paymentGatewayEnabled: HAS_EXPLICIT_PAYMENT_SECRET,
     paymentMode: HAS_EXPLICIT_PAYMENT_SECRET ? 'configured' : 'optional_mode',
     authProvider: 'Firebase Authentication',
-    rootAdminEnvConfigured: HAS_EXPLICIT_ROOT_ADMIN_EMAIL,
+    adminRbacMode: 'user_roles_and_custom_claims',
   });
 });
 
@@ -1110,8 +1187,8 @@ app.get('/api/auth/status', requireAuth, (req: AuthenticatedRequest, res) => {
   });
 });
 
-// 2. Real-time Node.js Telemetry
-app.get('/api/telemetry', (req, res) => {
+// 2. Real-time Node.js Telemetry (Strictly Admin-Only)
+app.get('/api/telemetry', requireAdmin, (_req: AuthenticatedRequest, res) => {
   const memoryUsage = process.memoryUsage();
   res.json({
     nodeVersion: process.version,
@@ -1129,162 +1206,218 @@ app.get('/api/telemetry', (req, res) => {
   });
 });
 
-// 3. Server-side Inbound Scoping Validator (Rate-limited per IP + anti-bot checks)
-app.post('/api/inquiries/validate', createFormRateLimiter('inquiry'), (req, res) => {
+// 3. Server-side Inbound Scoping Validator (Rate-limited per IP + anti-bot + App Check + Zod)
+app.post('/api/inquiries/validate', createFormRateLimiter('inquiry'), async (req, res) => {
   if (!validateAntiBotFields(req, res, 'inquiry')) {
     return;
   }
+  if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
+    return;
+  }
 
-  const { fullName, email, serviceType, brief } = req.body || {};
   const lang = resolveRequestedLanguage(req);
-
-  if (!fullName || typeof fullName !== 'string' || fullName.trim().length === 0) {
-    const errorEn = 'Full name is required and cannot be empty.';
-    const errorHi = 'पूरा नाम आवश्यक है और इसे खाली नहीं छोड़ा जा सकता।';
+  const parsed = inquiryValidateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    const mapped = mapFormZodError(parsed.error, lang);
     return res.status(400).json({
       code: 'VALIDATION_ERROR',
-      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
-      errorEn,
-      errorHi,
-    });
-  }
-  if (fullName.trim().length > 160) {
-    const errorEn = 'Full name exceeds 160 characters.';
-    const errorHi = 'पूरा नाम 160 अक्षरों से अधिक नहीं हो सकता।';
-    return res.status(400).json({
-      code: 'VALIDATION_ERROR',
-      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
-      errorEn,
-      errorHi,
+      ...mapped,
     });
   }
 
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || typeof email !== 'string' || !emailRegex.test(email.trim()) || email.trim().length > 160) {
-    const errorEn = 'Please enter a valid work email address.';
-    const errorHi = 'कृपया एक मान्य ईमेल पता दर्ज करें।';
-    return res.status(400).json({
-      code: 'VALIDATION_ERROR',
-      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
-      errorEn,
-      errorHi,
-    });
-  }
-
-  if (!serviceType || typeof serviceType !== 'string' || serviceType.trim().length === 0 || serviceType.trim().length > 160) {
-    const errorEn = 'Please select a technical service domain.';
-    const errorHi = 'कृपया एक तकनीकी सेवा चुनें।';
-    return res.status(400).json({
-      code: 'VALIDATION_ERROR',
-      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
-      errorEn,
-      errorHi,
-    });
-  }
-
-  const sanitizedBrief = typeof brief === 'string' ? brief.trim().substring(0, 2000) : '';
-
+  const { fullName, email, serviceType, brief } = parsed.data;
   return res.json({
     valid: true,
     message: 'Payload verified. Ready for immutable Firestore storage.',
     sanitized: {
-      fullName: fullName.trim(),
-      email: email.trim().toLowerCase(),
-      serviceType: serviceType.trim(),
-      brief: sanitizedBrief,
+      fullName,
+      email: email.toLowerCase(),
+      serviceType,
+      brief,
       receivedAt: new Date().toISOString(),
     },
   });
 });
 
-// 3b. Newsletter Dispatch Subscription Endpoint (Rate-limited per IP + anti-bot checks)
-app.post('/api/newsletter/subscribe', createFormRateLimiter('newsletter'), (req, res) => {
-  if (!validateAntiBotFields(req, res, 'newsletter')) {
+// 3a. Authoritative Server-Side Quotation Submission Endpoint (Rate-limited + Honeypot + App Check + Zod -> firebase-admin)
+app.post('/api/quotations', createFormRateLimiter('inquiry'), async (req, res) => {
+  if (!validateAntiBotFields(req, res, 'inquiry')) {
+    return;
+  }
+  if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
     return;
   }
 
-  const { email, language } = req.body || {};
   const lang = resolveRequestedLanguage(req);
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!email || typeof email !== 'string' || !emailRegex.test(email.trim()) || email.trim().length > 160) {
-    const errorEn = 'Please enter a valid work email address.';
-    const errorHi = 'कृपया एक मान्य कार्य ईमेल पता दर्ज करें।';
+  const parsed = quotationInputSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    const mapped = mapFormZodError(parsed.error, lang);
     return res.status(400).json({
       code: 'VALIDATION_ERROR',
-      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      ...mapped,
+    });
+  }
+
+  if (!adminDb) {
+    const errorEn = 'Quotation persistence requires Firebase Admin credentials on the server.';
+    const errorHi = 'कोटेशन सहेजने के लिए सर्वर पर Firebase Admin कॉन्फ़िगरेशन आवश्यक है।';
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: lang === 'hi' ? errorHi : errorEn,
       errorEn,
       errorHi,
     });
   }
 
-  const normalized = email.trim().toLowerCase();
-  const subscribers = getNewsletterSubscribers();
-  const existing = subscribers.find((s) => s.email === normalized);
-  if (existing) {
-    const msgEn = 'Email is already registered for Quarterly Architectural Dispatch.';
-    const msgHi = 'यह ईमेल पहले से ही त्रैमासिक आर्किटेक्चर डिस्पैच के लिए पंजीकृत है।';
-    return res.json({
+  const data = parsed.data;
+  const quoteId = `quote-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  const createdAt = new Date().toISOString();
+  const payload = {
+    id: quoteId,
+    clientName: data.fullName,
+    clientEmail: data.email.toLowerCase(),
+    phone: data.phone,
+    company: data.company,
+    serviceType: data.serviceType,
+    timeline: data.timeline,
+    estimatedBudget: data.budget,
+    brief: data.brief,
+    attachment: data.attachment
+      ? {
+          fileUrl: data.attachment.fileUrl || '',
+          fileName: data.attachment.fileName || '',
+          sha256: data.attachment.sha256 || '',
+          fileSizeFormatted: data.attachment.fileSizeFormatted || '',
+        }
+      : null,
+    status: 'pending',
+    createdAt,
+  };
+
+  try {
+    await adminDb.collection('quotations').doc(quoteId).set(payload);
+
+    const verifiedAuth = await verifyFirebaseBearerToken(req);
+    void appendServerAuditEvent({
+      action: 'QUOTATION_SUBMITTED',
+      actorUid: verifiedAuth?.user?.uid || 'anonymous_lead',
+      actorEmail: verifiedAuth?.user?.email || payload.clientEmail,
+      resource: `quotations/${quoteId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Submitted inquiry for ${payload.serviceType} (${payload.clientEmail})`,
+    });
+
+    const msgEn = 'Architectural scoping request securely submitted.';
+    const msgHi = 'तकनीकी परामर्श अनुरोध सफलतापूर्वक दर्ज किया गया।';
+    return res.status(201).json({
       success: true,
-      alreadySubscribed: true,
+      quoteId,
       message: lang === 'hi' ? msgHi : msgEn,
       messageEn: msgEn,
       messageHi: msgHi,
     });
+  } catch (err) {
+    console.error('[Quotation Submit Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to save architectural scoping request.', lang);
+  }
+});
+
+// 3b. Newsletter Dispatch Subscription Endpoint (Firestore via firebase-admin + rate limit + anti-bot + App Check + Zod)
+app.post('/api/newsletter/subscribe', createFormRateLimiter('newsletter'), async (req, res) => {
+  if (!validateAntiBotFields(req, res, 'newsletter')) {
+    return;
+  }
+  if (!(await verifyAppCheckForForm(req, res, 'newsletter'))) {
+    return;
   }
 
-  const entry = {
-    id: `sub-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
-    email: normalized,
-    language: language === 'hi' ? 'hi' : 'en',
-    subscribedAt: new Date().toISOString(),
-  };
-  subscribers.push(entry);
-  saveNewsletterSubscribers(subscribers);
+  const lang = resolveRequestedLanguage(req);
+  const parsed = newsletterInputSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    const mapped = mapFormZodError(parsed.error, lang);
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      ...mapped,
+    });
+  }
 
-  const msgEn = 'Subscribed to Quarterly Architectural Dispatch.';
-  const msgHi = 'त्रैमासिक आर्किटेक्चर डिस्पैच में सदस्यता सफल।';
-  return res.status(201).json({
-    success: true,
-    alreadySubscribed: false,
-    message: lang === 'hi' ? msgHi : msgEn,
-    messageEn: msgEn,
-    messageHi: msgHi,
-  });
+  const { email, language } = parsed.data;
+
+  if (!adminDb) {
+    const errorEn = 'Newsletter persistence requires Firebase Admin credentials on the server.';
+    const errorHi = 'न्यूज़लेटर सदस्यता सहेजने के लिए सर्वर पर Firebase Admin कॉन्फ़िगरेशन आवश्यक है।';
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: lang === 'hi' ? errorHi : errorEn,
+      errorEn,
+      errorHi,
+    });
+  }
+
+  try {
+    const normalized = email.toLowerCase();
+    const subscriberHash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 32);
+    const subId = `sub-${subscriberHash}`;
+    const docRef = adminDb.collection('newsletter_subscribers').doc(subId);
+    const existingSnap = await docRef.get();
+
+    if (existingSnap.exists) {
+      const msgEn = 'Email is already registered for Quarterly Architectural Dispatch.';
+      const msgHi = 'यह ईमेल पहले से ही त्रैमासिक आर्किटेक्चर डिस्पैच के लिए पंजीकृत है।';
+      return res.json({
+        success: true,
+        alreadySubscribed: true,
+        message: lang === 'hi' ? msgHi : msgEn,
+        messageEn: msgEn,
+        messageHi: msgHi,
+      });
+    }
+
+    const entry = {
+      id: subId,
+      email: normalized,
+      language: language === 'hi' ? 'hi' : 'en',
+      subscribedAt: new Date().toISOString(),
+    };
+    await docRef.set(entry);
+
+    const msgEn = 'Subscribed to Quarterly Architectural Dispatch.';
+    const msgHi = 'त्रैमासिक आर्किटेक्चर डिस्पैच में सदस्यता सफल।';
+    return res.status(201).json({
+      success: true,
+      alreadySubscribed: false,
+      message: lang === 'hi' ? msgHi : msgEn,
+      messageEn: msgEn,
+      messageHi: msgHi,
+    });
+  } catch (err) {
+    console.error('[Newsletter Subscribe Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to save newsletter subscription.', lang);
+  }
 });
 
 /* =========================================================================
-   4. AUTHENTICATED & VALIDATED FILE STORAGE ENGINE (ZERO UNAUTH UPLOADS)
+   4. AUTHENTICATED & VALIDATED CLOUD STORAGE ENGINE (GCS ONLY, ZERO LOCAL DISK)
    ========================================================================= */
 const ALLOWED_MIME_TYPES = new Set([
   'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/vnd.android.package-archive',
   'image/png',
   'image/jpeg',
-  'text/plain',
-  'application/json',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]);
 
-const ALLOWED_EXTENSIONS = new Set([
-  'pdf', 'docx', 'zip', 'apk', 'png', 'jpg', 'jpeg', 'txt', 'json',
-]);
+const ALLOWED_EXTENSIONS = new Set(['pdf', 'png', 'jpg', 'docx']);
 
 const EXTENSION_MIME_ALLOWLIST: Record<string, Set<string>> = {
   pdf: new Set(['application/pdf']),
+  png: new Set(['image/png']),
+  jpg: new Set(['image/jpeg']),
   docx: new Set([
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/zip',
     'application/octet-stream',
   ]),
-  zip: new Set(['application/zip', 'application/x-zip-compressed', 'application/octet-stream']),
-  apk: new Set(['application/vnd.android.package-archive', 'application/zip', 'application/octet-stream']),
-  png: new Set(['image/png']),
-  jpg: new Set(['image/jpeg']),
-  jpeg: new Set(['image/jpeg']),
-  txt: new Set(['text/plain']),
-  json: new Set(['application/json', 'text/plain']),
 };
 
 const ALLOWED_UPLOAD_CATEGORIES = new Set([
@@ -1296,7 +1429,7 @@ const ALLOWED_UPLOAD_CATEGORIES = new Set([
   'general_attachment',
 ]);
 
-const MAX_AUTH_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB max
+const MAX_AUTH_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB max
 const BASE64_STRICT_REGEX = /^[A-Za-z0-9+/]+={0,2}$/;
 
 app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -1315,11 +1448,28 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
       });
     }
 
+    // Enforce Cloud Storage only (never write to local disk)
+    if (!isGcsConfiguredAndVerified() || !gcsStorageClient || !EXPLICIT_GCS_BUCKET) {
+      return res.status(503).json({
+        code: 'STORAGE_NOT_CONFIGURED',
+        error: 'Cloud Storage (GCS_BUCKET) is not configured on this server. File uploads are disabled.',
+        errorEn: 'Cloud Storage (GCS_BUCKET) is not configured on this server. File uploads are disabled.',
+        errorHi: 'सर्वर पर Cloud Storage (GCS_BUCKET) कॉन्फ़िगर नहीं है। फ़ाइल अपलोड बंद है।',
+      });
+    }
+
+    if (!adminDb) {
+      return res.status(503).json({
+        code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+        error: 'Firestore Admin SDK is required to store file metadata.',
+      });
+    }
+
     const { fileName, fileType, fileData, category, projectId, notes } = req.body || {};
 
     // Reject client-supplied ownership spoofing attempts
     if ('ownerUid' in (req.body || {}) || 'uploadedBy' in (req.body || {})) {
-      appendServerAuditEvent({
+      void appendServerAuditEvent({
         action: 'FILE_UPLOAD_SPOOF_REJECTED',
         actorUid: user.uid,
         actorEmail: user.email || user.uid,
@@ -1353,7 +1503,7 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
       const trimmedProjectId = projectId.trim();
       const authorizedForProject = await verifyProjectAuthorization(trimmedProjectId, user, idToken);
       if (!authorizedForProject) {
-        appendServerAuditEvent({
+        void appendServerAuditEvent({
           action: 'FILE_UPLOAD_PROJECT_DENIED',
           actorUid: user.uid,
           actorEmail: user.email || user.uid,
@@ -1412,11 +1562,11 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
     }
     if (buffer.length > MAX_AUTH_FILE_SIZE_BYTES) {
       return res.status(400).json({
-        error: `File size (${(buffer.length / (1024 * 1024)).toFixed(2)} MB) exceeds allowed limit (25 MB).`,
+        error: `File size (${(buffer.length / (1024 * 1024)).toFixed(2)} MB) exceeds allowed limit (10 MB).`,
       });
     }
 
-    // Extension & MIME Consistency Validation
+    // Extension & MIME Consistency Validation (strictly pdf, png, jpg, docx)
     const ext = fileName.split('.').pop()?.toLowerCase() || '';
     if (!ALLOWED_EXTENSIONS.has(ext)) {
       return res.status(400).json({
@@ -1436,7 +1586,7 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
       }
     }
 
-    // Binary Magic Bytes & Structure Validation
+    // Binary Magic Bytes Validation
     if (ext === 'pdf') {
       if (buffer.length < 5 || !buffer.subarray(0, 5).toString('ascii').startsWith('%PDF-')) {
         return res.status(400).json({ error: 'Invalid PDF magic bytes: corrupted or spoofed document header.' });
@@ -1451,61 +1601,46 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
       if (!isPng) {
         return res.status(400).json({ error: 'Invalid PNG header: corrupted or spoofed image bytes.' });
       }
-    } else if (ext === 'jpg' || ext === 'jpeg') {
+    } else if (ext === 'jpg') {
       const isJpg = buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
       if (!isJpg) {
         return res.status(400).json({ error: 'Invalid JPEG header: corrupted or spoofed image bytes.' });
       }
-    } else if (ext === 'zip' || ext === 'apk' || ext === 'docx') {
+    } else if (ext === 'docx') {
       const isZip = buffer.length >= 4 && buffer[0] === 0x50 && buffer[1] === 0x4b;
       if (!isZip) {
-        return res.status(400).json({ error: 'Invalid Archive/DOCX/APK bytes: corrupted ZIP header.' });
-      }
-    } else if (ext === 'json') {
-      try {
-        JSON.parse(buffer.toString('utf8'));
-      } catch {
-        return res.status(400).json({ error: 'Invalid JSON document content.' });
+        return res.status(400).json({ error: 'Invalid DOCX bytes: corrupted OOXML archive header.' });
       }
     }
 
     const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
     const fileId = `file-${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     const sanitizedName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storageKey = `${fileId}-${sanitizedName}`;
+    // Randomized object key inside Cloud Storage (no user-controlled paths)
+    const randomizedFileName = `${crypto.randomUUID()}.${ext}`;
+    const gcsObjectPath = `vault/${user.uid}/${randomizedFileName}`;
 
-    let storageProvider: 'google_cloud_storage' | 'local_container_disk' = 'local_container_disk';
-    let gcsObjectPath: string | null = null;
-
-    if (gcsBucketVerified && gcsStorageClient && EXPLICIT_GCS_BUCKET) {
-      gcsObjectPath = `vault/${user.uid}/${storageKey}`;
-      await gcsStorageClient
-        .bucket(EXPLICIT_GCS_BUCKET)
-        .file(gcsObjectPath)
-        .save(buffer, {
-          contentType: mime || 'application/octet-stream',
-          resumable: false,
+    await gcsStorageClient
+      .bucket(EXPLICIT_GCS_BUCKET)
+      .file(gcsObjectPath)
+      .save(buffer, {
+        contentType: mime || 'application/octet-stream',
+        resumable: false,
+        metadata: {
           metadata: {
-            metadata: {
-              ownerUid: user.uid,
-              fileId,
-              sha256,
-              category: normalizedCategory,
-            },
+            ownerUid: user.uid,
+            fileId,
+            sha256,
+            category: normalizedCategory,
           },
-        });
-      storageProvider = 'google_cloud_storage';
-    } else {
-      const filePath = path.join(UPLOADS_DIR, path.basename(storageKey));
-      fs.writeFileSync(filePath, buffer);
-    }
+        },
+      });
 
     const record = {
       fileId,
       fileName: sanitizedName,
-      storageFileName: storageKey, // Internal only; stripped by toSafeFileDto
-      gcsObjectPath, // Internal only; stripped by toSafeFileDto
-      storageProvider,
+      gcsObjectPath,
+      storageProvider: 'google_cloud_storage',
       category: normalizedCategory,
       projectId: safeProjectId,
       fileSize: buffer.length,
@@ -1520,23 +1655,21 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
       downloadUrl: `/api/files/${fileId}`,
     };
 
-    const manifest = getManifest();
-    manifest[fileId] = record;
-    saveManifest(manifest);
+    await adminDb.collection('file_records').doc(fileId).set(record);
 
-    appendServerAuditEvent({
+    void appendServerAuditEvent({
       action: 'FILE_UPLOADED',
       actorUid: user.uid,
       actorEmail: user.email || user.uid,
       resource: `files/${fileId}`,
       outcome: 'SUCCESS',
       ip: clientIp,
-      details: `Uploaded ${sanitizedName} (${record.fileSizeFormatted}, ${storageProvider}) SHA:${sha256.substring(0, 12)}`,
+      details: `Uploaded ${sanitizedName} (${record.fileSizeFormatted}, google_cloud_storage) SHA:${sha256.substring(0, 12)}`,
     });
 
     return res.status(201).json({
       success: true,
-      message: 'File successfully verified, hashed, and committed to enterprise storage.',
+      message: 'File successfully verified, hashed, and committed to Cloud Storage.',
       file: toSafeFileDto(record),
     });
   } catch (error) {
@@ -1546,29 +1679,42 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
 });
 
 // 5. List Validated File Artifacts (Authenticated & Strict Ownership / Admin Scoped)
-app.get('/api/files/list', requireAuth, (req: AuthenticatedRequest, res) => {
+app.get('/api/files/list', requireAuth, async (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   const { projectId } = req.query as { projectId?: string };
-  const manifest = getManifest();
-  let list = Object.values(manifest) as any[];
 
-  if (!user.isAdmin) {
-    list = list.filter((f) => f.ownerUid && f.ownerUid === user.uid);
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to list stored files.',
+    });
   }
 
-  if (projectId && typeof projectId === 'string' && SAFE_ID_REGEX.test(projectId)) {
-    list = list.filter((f) => f.projectId === projectId);
+  try {
+    const colRef = adminDb.collection('file_records');
+    const snap = user.isAdmin
+      ? await colRef.get()
+      : await colRef.where('ownerUid', '==', user.uid).get();
+
+    let list = snap.docs.map((d) => d.data());
+
+    if (projectId && typeof projectId === 'string' && SAFE_ID_REGEX.test(projectId)) {
+      list = list.filter((f) => f.projectId === projectId);
+    }
+
+    list.sort((a: any, b: any) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+
+    return res.json({
+      count: list.length,
+      files: list.map(toSafeFileDto),
+    });
+  } catch (err) {
+    console.error('[File List Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to retrieve stored file list.');
   }
-
-  list.sort((a: any, b: any) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
-
-  res.json({
-    count: list.length,
-    files: list.map(toSafeFileDto),
-  });
 });
 
-// 6. Secure File Retrieval & Download (Authenticated & Ownership/Admin Checked)
+// 6. Secure File Retrieval & Download (Authenticated & Ownership/Admin Checked, GCS Only)
 app.get('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   const { fileId } = req.params;
@@ -1577,80 +1723,74 @@ app.get('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, res
     return res.status(400).json({ error: 'Invalid fileId format.' });
   }
 
-  const manifest = getManifest();
-  const record = manifest[fileId];
-
-  if (!record) {
-    return res.status(404).json({ error: 'File artifact not found.' });
-  }
-
-  const isOwner = Boolean(record.ownerUid && record.ownerUid === user.uid);
-  if (!user.isAdmin && !isOwner) {
-    appendServerAuditEvent({
-      action: 'FILE_DOWNLOAD_DENIED',
-      actorUid: user.uid,
-      actorEmail: user.email || user.uid,
-      resource: `files/${fileId}`,
-      outcome: 'DENIED',
-      ip: getClientIp(req),
-      details: `Unauthorized download attempt for owner ${record.ownerUid || 'unknown'}`,
-    });
-    return res.status(403).json({
-      error: 'Forbidden: You do not have permission to download this file artifact.',
+  if (!isGcsConfiguredAndVerified() || !gcsStorageClient || !EXPLICIT_GCS_BUCKET) {
+    return res.status(503).json({
+      code: 'STORAGE_NOT_CONFIGURED',
+      error: 'Cloud Storage (GCS_BUCKET) is not configured on this server.',
     });
   }
 
-  // GCS Storage Retrieval when persisted in verified GCS bucket
-  if (
-    record.storageProvider === 'google_cloud_storage' &&
-    record.gcsObjectPath &&
-    gcsBucketVerified &&
-    gcsStorageClient &&
-    EXPLICIT_GCS_BUCKET
-  ) {
-    try {
-      const gcsFile = gcsStorageClient.bucket(EXPLICIT_GCS_BUCKET).file(record.gcsObjectPath);
-      const [exists] = await gcsFile.exists();
-      if (!exists) {
-        return res.status(404).json({ error: 'Stored object missing from Cloud Storage bucket.' });
-      }
-      if (req.query.mode === 'signed_url') {
-        const [signedUrl] = await gcsFile.getSignedUrl({
-          version: 'v4',
-          action: 'read',
-          expires: Date.now() + 5 * 60 * 1000,
-        });
-        return res.json({ signedUrl, expiresInSeconds: 300 });
-      }
-      const safeDispositionName = String(record.fileName || 'artifact').replace(/["\r\n]/g, '_');
-      res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${safeDispositionName}"`);
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Cache-Control', 'private, no-store');
-      res.setHeader('X-Artifact-SHA256', record.sha256);
-      gcsFile.createReadStream().pipe(res);
-      return;
-    } catch (err) {
-      console.error('[GCS Download Exception]', err);
-      return res.status(500).json({ error: 'Failed to retrieve object from Cloud Storage.' });
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to look up file records.',
+    });
+  }
+
+  try {
+    const docSnap = await adminDb.collection('file_records').doc(fileId).get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'File artifact not found.' });
     }
+    const record = docSnap.data()!;
+
+    const isOwner = Boolean(record.ownerUid && record.ownerUid === user.uid);
+    if (!user.isAdmin && !isOwner) {
+      void appendServerAuditEvent({
+        action: 'FILE_DOWNLOAD_DENIED',
+        actorUid: user.uid,
+        actorEmail: user.email || user.uid,
+        resource: `files/${fileId}`,
+        outcome: 'DENIED',
+        ip: getClientIp(req),
+        details: `Unauthorized download attempt for owner ${record.ownerUid || 'unknown'}`,
+      });
+      return res.status(403).json({
+        error: 'Forbidden: You do not have permission to download this file artifact.',
+      });
+    }
+
+    if (!record.gcsObjectPath) {
+      return res.status(404).json({ error: 'Cloud Storage object reference missing.' });
+    }
+
+    const gcsFile = gcsStorageClient.bucket(EXPLICIT_GCS_BUCKET).file(record.gcsObjectPath);
+    const [exists] = await gcsFile.exists();
+    if (!exists) {
+      return res.status(404).json({ error: 'Stored object missing from Cloud Storage bucket.' });
+    }
+
+    if (req.query.mode === 'signed_url') {
+      const [signedUrl] = await gcsFile.getSignedUrl({
+        version: 'v4',
+        action: 'read',
+        expires: Date.now() + 5 * 60 * 1000,
+      });
+      return res.json({ signedUrl, expiresInSeconds: 300 });
+    }
+
+    const safeDispositionName = String(record.fileName || 'artifact').replace(/["\r\n]/g, '_');
+    res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeDispositionName}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Artifact-SHA256', record.sha256);
+    gcsFile.createReadStream().pipe(res);
+    return;
+  } catch (err) {
+    console.error('[GCS Download Exception]', err);
+    return res.status(500).json({ error: 'Failed to retrieve object from Cloud Storage.' });
   }
-
-  // Local Container Storage Retrieval
-  const filePath = path.join(UPLOADS_DIR, path.basename(record.storageFileName || ''));
-  if (!filePath.startsWith(UPLOADS_DIR) || !fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'Stored artifact unavailable.' });
-  }
-
-  const safeDispositionName = String(record.fileName || 'artifact').replace(/["\r\n]/g, '_');
-  res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${safeDispositionName}"`);
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cache-Control', 'private, no-store');
-  res.setHeader('X-Artifact-SHA256', record.sha256);
-
-  const stream = fs.createReadStream(filePath);
-  stream.pipe(res);
 });
 
 // 7. Secure Delete File Artifact (Verified Firebase Token + Owner/Admin Only + Audit Log)
@@ -1662,85 +1802,128 @@ app.delete('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, 
     return res.status(400).json({ error: 'Invalid fileId format.' });
   }
 
-  const manifest = getManifest();
-  const record = manifest[fileId];
-
-  if (!record) {
-    return res.status(404).json({ error: 'File not found.' });
-  }
-
-  const isOwner = Boolean(record.ownerUid && record.ownerUid === user.uid);
-  if (!user.isAdmin && !isOwner) {
-    appendServerAuditEvent({
-      action: 'FILE_DELETE_DENIED',
-      actorUid: user.uid,
-      actorEmail: user.email || user.uid,
-      resource: `files/${fileId}`,
-      outcome: 'DENIED',
-      ip: getClientIp(req),
-      details: `Unauthorized delete attempt for owner ${record.ownerUid || 'unknown'}`,
-    });
-    return res.status(403).json({
-      error: 'Forbidden: You do not have permission to delete this enterprise storage artifact.',
+  if (!isGcsConfiguredAndVerified() || !gcsStorageClient || !EXPLICIT_GCS_BUCKET) {
+    return res.status(503).json({
+      code: 'STORAGE_NOT_CONFIGURED',
+      error: 'Cloud Storage (GCS_BUCKET) is not configured on this server.',
     });
   }
 
-  if (
-    record.storageProvider === 'google_cloud_storage' &&
-    record.gcsObjectPath &&
-    gcsBucketVerified &&
-    gcsStorageClient &&
-    EXPLICIT_GCS_BUCKET
-  ) {
-    try {
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to delete file records.',
+    });
+  }
+
+  try {
+    const docRef = adminDb.collection('file_records').doc(fileId);
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      return res.status(404).json({ error: 'File not found.' });
+    }
+    const record = docSnap.data()!;
+
+    const isOwner = Boolean(record.ownerUid && record.ownerUid === user.uid);
+    if (!user.isAdmin && !isOwner) {
+      void appendServerAuditEvent({
+        action: 'FILE_DELETE_DENIED',
+        actorUid: user.uid,
+        actorEmail: user.email || user.uid,
+        resource: `files/${fileId}`,
+        outcome: 'DENIED',
+        ip: getClientIp(req),
+        details: `Unauthorized delete attempt for owner ${record.ownerUid || 'unknown'}`,
+      });
+      return res.status(403).json({
+        error: 'Forbidden: You do not have permission to delete this enterprise storage artifact.',
+      });
+    }
+
+    if (record.gcsObjectPath) {
       await gcsStorageClient
         .bucket(EXPLICIT_GCS_BUCKET)
         .file(record.gcsObjectPath)
         .delete({ ignoreNotFound: true });
-    } catch (err) {
-      console.error('[GCS Delete Exception]', err);
     }
-  } else {
-    const filePath = path.join(UPLOADS_DIR, path.basename(record.storageFileName || ''));
-    if (filePath.startsWith(UPLOADS_DIR) && fs.existsSync(filePath)) {
-      try {
-        fs.unlinkSync(filePath);
-      } catch {
-        // ignore
-      }
-    }
+
+    await docRef.delete();
+
+    void appendServerAuditEvent({
+      action: 'FILE_DELETED',
+      actorUid: user.uid,
+      actorEmail: user.email || user.uid,
+      resource: `files/${fileId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Deleted artifact ${record.fileName} (SHA:${String(record.sha256).substring(0, 12)})`,
+    });
+
+    return res.json({ success: true, message: `File ${fileId} securely removed from Cloud Storage.` });
+  } catch (err) {
+    console.error('[GCS Delete Exception]', err);
+    return res.status(500).json({ error: 'Failed to delete file artifact.' });
   }
-
-  delete manifest[fileId];
-  saveManifest(manifest);
-
-  appendServerAuditEvent({
-    action: 'FILE_DELETED',
-    actorUid: user.uid,
-    actorEmail: user.email || user.uid,
-    resource: `files/${fileId}`,
-    outcome: 'SUCCESS',
-    ip: getClientIp(req),
-    details: `Deleted artifact ${record.fileName} (SHA:${String(record.sha256).substring(0, 12)})`,
-  });
-
-  res.json({ success: true, message: `File ${fileId} securely removed from storage.` });
 });
 
-// Admin Server Audit Ledger Endpoint (Strict Admin Only)
-app.get('/api/audit-events', requireAdmin, (req: AuthenticatedRequest, res) => {
+// Authenticated Server Audit Event Ingestion (Derives actor & ip strictly on server; client cannot supply ipAddress)
+app.post('/api/audit-events', requireAuth, async (req: AuthenticatedRequest, res) => {
+  if ('ipAddress' in (req.body || {}) || 'ip' in (req.body || {})) {
+    return res.status(400).json({
+      error: 'Client-supplied ipAddress is forbidden. Audit IP is always derived on the server.',
+    });
+  }
+  const parsed = auditEventInputSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid audit event payload.' });
+  }
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to persist audit events.',
+    });
+  }
+  const user = req.authUser!;
   try {
-    const events = fs.existsSync(AUDIT_EVENTS_PATH)
-      ? JSON.parse(fs.readFileSync(AUDIT_EVENTS_PATH, 'utf8'))
-      : [];
-    res.json({ count: Array.isArray(events) ? events.length : 0, events });
-  } catch {
-    res.status(500).json({ error: 'Unable to read audit events.' });
+    await appendServerAuditEvent({
+      action: parsed.data.action,
+      actorUid: user.uid,
+      actorEmail: user.email || user.uid,
+      resource: parsed.data.resource,
+      outcome: parsed.data.outcome,
+      ip: getClientIp(req),
+      details: parsed.data.details,
+    });
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    return sendFirestoreRouteError(res, err, 'Unable to write audit event.');
+  }
+});
+
+// Admin Server Audit Ledger Endpoint (Strict Admin Only — Reads from Firestore audit_logs)
+app.get('/api/audit-events', requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to read audit logs.',
+    });
+  }
+  try {
+    const snap = await adminDb
+      .collection('audit_logs')
+      .orderBy('timestamp', 'desc')
+      .limit(200)
+      .get();
+    const events = snap.docs.map((d) => d.data());
+    return res.json({ count: events.length, events });
+  } catch (err) {
+    console.error('[Audit Events Read Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to read audit events.');
   }
 });
 
 /* =========================================================================
-   SECURE PAYMENTS & INVOICES ENGINE (AUTHORITATIVE SERVER AMOUNTS + RBAC)
+   SECURE PAYMENTS & INVOICES ENGINE (FIRESTORE VIA FIREBASE-ADMIN + RBAC)
    ========================================================================= */
 
 function canAccessInvoice(user: VerifiedAuthUser, invoice: any): boolean {
@@ -1757,55 +1940,123 @@ function canAccessInvoice(user: VerifiedAuthUser, invoice: any): boolean {
   return false;
 }
 
-// 8. Authoritative Invoices List (Authenticated & Tenant-Scoped)
-app.get('/api/invoices', requireAuth, (req: AuthenticatedRequest, res) => {
+async function findInvoiceDocByIdOrNumber(invoiceIdOrNumber: string) {
+  if (!adminDb) return null;
+  const directSnap = await adminDb.collection('invoices').doc(invoiceIdOrNumber).get();
+  if (directSnap.exists) {
+    return directSnap;
+  }
+  const byNumberSnap = await adminDb
+    .collection('invoices')
+    .where('invoiceNumber', '==', invoiceIdOrNumber)
+    .limit(1)
+    .get();
+  return byNumberSnap.empty ? null : byNumberSnap.docs[0];
+}
+
+// 8. Authoritative Invoices List (Authenticated & Tenant-Scoped via Firestore)
+app.get('/api/invoices', requireAuth, async (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   const { clientId, clientEmail } = req.query as { clientId?: string; clientEmail?: string };
-  let invoices = getInvoices();
 
-  if (user.isAdmin) {
-    if (clientId) {
-      invoices = invoices.filter((inv) => inv.clientId === clientId);
-    } else if (clientEmail) {
-      invoices = invoices.filter((inv) => inv.clientEmail.toLowerCase() === clientEmail.toLowerCase());
-    }
-  } else {
-    invoices = invoices.filter((inv) => canAccessInvoice(user, inv));
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to load invoices.',
+    });
   }
 
-  res.json({
-    count: invoices.length,
-    invoices,
-  });
+  try {
+    const colRef = adminDb.collection('invoices');
+    let invoices: any[] = [];
+
+    if (user.isAdmin) {
+      if (clientId) {
+        const snap = await colRef.where('clientId', '==', clientId).get();
+        invoices = snap.docs.map((d) => d.data());
+      } else if (clientEmail) {
+        const snap = await colRef.where('clientEmail', '==', clientEmail.toLowerCase()).get();
+        invoices = snap.docs.map((d) => d.data());
+      } else {
+        const snap = await colRef.orderBy('issuedAt', 'desc').get();
+        invoices = snap.docs.map((d) => d.data());
+      }
+    } else {
+      const merged = new Map<string, any>();
+      const byUidSnap = await colRef.where('clientId', '==', user.uid).get();
+      for (const d of byUidSnap.docs) {
+        merged.set(d.id, d.data());
+      }
+      if (user.emailVerified && user.email) {
+        const byEmailSnap = await colRef
+          .where('clientEmail', '==', user.email.toLowerCase())
+          .get();
+        for (const d of byEmailSnap.docs) {
+          merged.set(d.id, d.data());
+        }
+      }
+      invoices = Array.from(merged.values()).filter((inv) => canAccessInvoice(user, inv));
+    }
+
+    invoices.sort(
+      (a: any, b: any) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+    );
+
+    return res.json({
+      count: invoices.length,
+      invoices,
+    });
+  } catch (err) {
+    console.error('[Invoices Fetch Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to retrieve invoices from Firestore.');
+  }
 });
 
 // 9. Single Invoice Details (Authenticated & Owner/Admin Checked)
-app.get('/api/invoices/:invoiceId', requireAuth, (req: AuthenticatedRequest, res) => {
+app.get('/api/invoices/:invoiceId', requireAuth, async (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   const { invoiceId } = req.params;
   if (!SAFE_ID_REGEX.test(invoiceId)) {
     return res.status(400).json({ error: 'Invalid invoiceId format.' });
   }
-  const invoices = getInvoices();
-  const invoice = invoices.find((inv) => inv.id === invoiceId || inv.invoiceNumber === invoiceId);
-
-  if (!invoice) {
-    return res.status(404).json({ error: 'Invoice not found in billing ledger' });
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to load invoice details.',
+    });
   }
 
-  if (!canAccessInvoice(user, invoice)) {
-    return res.status(403).json({ error: 'Forbidden: You cannot access another tenant invoice.' });
-  }
+  try {
+    const docSnap = await findInvoiceDocByIdOrNumber(invoiceId);
+    if (!docSnap) {
+      return res.status(404).json({ error: 'Invoice not found in billing ledger' });
+    }
+    const invoice = docSnap.data()!;
 
-  res.json(invoice);
+    if (!canAccessInvoice(user, invoice)) {
+      return res.status(403).json({ error: 'Forbidden: You cannot access another tenant invoice.' });
+    }
+
+    return res.json(invoice);
+  } catch (err) {
+    console.error('[Invoice Detail Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to retrieve invoice.');
+  }
 });
 
-// 10. Secure Payment Intent Creator (Authenticated + Optional Mode Guard + Server-Derived Amount)
-app.post('/api/payments/create-intent', requireAuth, (req: AuthenticatedRequest, res) => {
+// 10. Secure Payment Intent Creator (Authenticated + Optional Mode Guard + Firestore Persistence)
+app.post('/api/payments/create-intent', requireAuth, async (req: AuthenticatedRequest, res) => {
   if (!HAS_EXPLICIT_PAYMENT_SECRET) {
     return res.status(503).json({
       error: 'Payment Gateway is currently in Optional Mode (PAYMENT_SECRET not configured). Invoices remain viewable without online charges.',
       code: 'PAYMENT_GATEWAY_OPTIONAL_MODE',
+    });
+  }
+
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to persist payment intents.',
     });
   }
 
@@ -1816,59 +2067,72 @@ app.post('/api/payments/create-intent', requireAuth, (req: AuthenticatedRequest,
     return res.status(400).json({ error: 'Valid invoiceId is required' });
   }
 
-  const invoices = getInvoices();
-  const invoice = invoices.find((inv) => inv.id === invoiceId || inv.invoiceNumber === invoiceId);
+  try {
+    const invoiceSnap = await findInvoiceDocByIdOrNumber(invoiceId);
+    if (!invoiceSnap) {
+      return res.status(404).json({ error: 'Referenced invoice does not exist in registry.' });
+    }
+    const invoice = invoiceSnap.data()!;
 
-  if (!invoice) {
-    return res.status(404).json({ error: 'Referenced invoice does not exist in registry.' });
+    if (!canAccessInvoice(user, invoice)) {
+      return res.status(403).json({ error: 'Forbidden: You are not authorized to pay this invoice.' });
+    }
+
+    if (invoice.status === 'paid') {
+      return res.status(400).json({ error: 'Invoice has already been settled and verified.' });
+    }
+
+    // Authoritative amount strictly from server Firestore invoice, never client body
+    const authoritativeAmount = Number(invoice.totalAmount);
+    const orderId = `ORDER_${Date.now()}_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const checksum = crypto
+      .createHmac('sha256', PAYMENT_SECRET)
+      .update(`${orderId}:${invoice.id}:${authoritativeAmount}:${user.uid}`)
+      .digest('hex');
+
+    await adminDb.collection('payment_intents').doc(orderId).set({
+      orderId,
+      invoiceId: invoice.id,
+      amount: authoritativeAmount,
+      uid: user.uid,
+      expiresAt: Date.now() + 30 * 60 * 1000,
+      used: false,
+      createdAt: new Date().toISOString(),
+    });
+
+    return res.json({
+      orderId,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      milestoneTitle: invoice.milestoneTitle,
+      amount: authoritativeAmount,
+      currency: 'INR',
+      gstRate: invoice.gstRate,
+      gstAmount: invoice.gstAmount,
+      clientCompany: invoice.clientCompany,
+      checksum,
+      paymentGateway: 'NPCI UPI 2.0 / Server-Verified Escrow Settlement',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[Payment Intent Error]', err);
+    return sendFirestoreRouteError(res, err, 'Failed to create payment intent.');
   }
-
-  if (!canAccessInvoice(user, invoice)) {
-    return res.status(403).json({ error: 'Forbidden: You are not authorized to pay this invoice.' });
-  }
-
-  if (invoice.status === 'paid') {
-    return res.status(400).json({ error: 'Invoice has already been settled and verified.' });
-  }
-
-  // Authoritative amount strictly from server ledger, never client body
-  const authoritativeAmount = Number(invoice.totalAmount);
-  const orderId = `ORDER_${Date.now()}_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-  const checksum = crypto
-    .createHmac('sha256', PAYMENT_SECRET)
-    .update(`${orderId}:${invoice.id}:${authoritativeAmount}:${user.uid}`)
-    .digest('hex');
-
-  paymentIntents.set(orderId, {
-    invoiceId: invoice.id,
-    amount: authoritativeAmount,
-    uid: user.uid,
-    expiresAt: Date.now() + 30 * 60 * 1000,
-    used: false,
-  });
-
-  res.json({
-    orderId,
-    invoiceId: invoice.id,
-    invoiceNumber: invoice.invoiceNumber,
-    milestoneTitle: invoice.milestoneTitle,
-    amount: authoritativeAmount,
-    currency: 'INR',
-    gstRate: invoice.gstRate,
-    gstAmount: invoice.gstAmount,
-    clientCompany: invoice.clientCompany,
-    checksum,
-    paymentGateway: 'NPCI UPI 2.0 / Server-Verified Escrow Settlement',
-    timestamp: new Date().toISOString(),
-  });
 });
 
-// 11. Cryptographic Payment Verification & Settlement (Timing-Safe + Optional Mode Guard)
-app.post('/api/payments/verify', requireAuth, (req: AuthenticatedRequest, res) => {
+// 11. Cryptographic Payment Verification & Transactional Settlement in Firestore
+app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, res) => {
   if (!HAS_EXPLICIT_PAYMENT_SECRET) {
     return res.status(503).json({
       error: 'Payment Gateway is currently in Optional Mode (PAYMENT_SECRET not configured).',
       code: 'PAYMENT_GATEWAY_OPTIONAL_MODE',
+    });
+  }
+
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to settle payments.',
     });
   }
 
@@ -1878,123 +2142,153 @@ app.post('/api/payments/verify', requireAuth, (req: AuthenticatedRequest, res) =
   if (
     !orderId ||
     typeof orderId !== 'string' ||
+    !SAFE_ID_REGEX.test(orderId) ||
     !invoiceId ||
     typeof invoiceId !== 'string' ||
+    !SAFE_ID_REGEX.test(invoiceId) ||
     !checksum ||
     typeof checksum !== 'string'
   ) {
-    return res.status(400).json({ error: 'orderId, invoiceId, and checksum are required' });
+    return res.status(400).json({ error: 'Valid orderId, invoiceId, and checksum are required' });
   }
 
-  const intent = paymentIntents.get(orderId);
-  if (!intent || intent.used || Date.now() > intent.expiresAt) {
-    return res.status(400).json({ error: 'Invalid, expired, or already-used payment intent.' });
+  try {
+    const initialInvoiceSnap = await findInvoiceDocByIdOrNumber(invoiceId);
+    if (!initialInvoiceSnap) {
+      return res.status(404).json({ error: 'Invoice record not found' });
+    }
+
+    const resolvedInvoiceDocRef = initialInvoiceSnap.ref;
+    const intentDocRef = adminDb.collection('payment_intents').doc(orderId);
+
+    const txResult = await adminDb.runTransaction(async (tx) => {
+      const [intentSnap, invoiceSnap] = await Promise.all([
+        tx.get(intentDocRef),
+        tx.get(resolvedInvoiceDocRef),
+      ]);
+
+      if (!intentSnap.exists) {
+        return { errorStatus: 400, error: 'Invalid, expired, or already-used payment intent.' };
+      }
+
+      const intent = intentSnap.data()!;
+      if (intent.used || Date.now() > Number(intent.expiresAt || 0)) {
+        return { errorStatus: 400, error: 'Invalid, expired, or already-used payment intent.' };
+      }
+
+      if (intent.uid !== user.uid && !user.isAdmin) {
+        return { errorStatus: 403, error: 'Forbidden: Payment intent belongs to a different user.' };
+      }
+
+      if (!invoiceSnap.exists) {
+        return { errorStatus: 404, error: 'Invoice record not found' };
+      }
+
+      const invoice = invoiceSnap.data()!;
+      if (invoice.id !== intent.invoiceId) {
+        return { errorStatus: 400, error: 'Invoice ID mismatch against payment intent.' };
+      }
+
+      if (!canAccessInvoice(user, invoice)) {
+        return { errorStatus: 403, error: 'Forbidden: Unauthorized invoice settlement attempt.' };
+      }
+
+      if (invoice.status === 'paid') {
+        return { errorStatus: 400, error: 'Invoice has already been settled.' };
+      }
+
+      const expectedChecksum = crypto
+        .createHmac('sha256', PAYMENT_SECRET)
+        .update(`${orderId}:${invoice.id}:${invoice.totalAmount}:${intent.uid}`)
+        .digest('hex');
+
+      const providedBuf = Buffer.from(checksum, 'utf8');
+      const expectedBuf = Buffer.from(expectedChecksum, 'utf8');
+      if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
+        return {
+          errorStatus: 400,
+          error: 'Cryptographic Checksum Mismatch: Payment payload has been tampered with or expired.',
+        };
+      }
+
+      const allowedMethods = new Set(['UPI', 'NEFT_RTGS', 'Corporate_Card', 'Escrow']);
+      const safeMethod = allowedMethods.has(method) ? method : 'UPI';
+
+      const paymentId = `PAY_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const verifiedTxnRef =
+        typeof transactionRef === 'string' && transactionRef.trim().length > 4
+          ? transactionRef.trim().substring(0, 64)
+          : `TXN_NPCI_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const paidAt = new Date().toISOString();
+
+      const updatedInvoice: Record<string, any> = {
+        ...invoice,
+        status: 'paid',
+        paidAt,
+        paymentTxnId: verifiedTxnRef,
+        paymentMethod: safeMethod,
+      };
+
+      const paymentRecord = {
+        id: paymentId,
+        orderId,
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        clientId: invoice.clientId,
+        clientEmail: invoice.clientEmail,
+        settledByUid: user.uid,
+        amount: invoice.totalAmount,
+        currency: 'INR',
+        method: safeMethod,
+        status: 'success',
+        transactionRef: verifiedTxnRef,
+        checksum,
+        timestamp: paidAt,
+        verifiedBy: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES // SECURE_LEDGER_KERNEL',
+      };
+
+      tx.update(intentDocRef, { used: true, settledAt: paidAt });
+      tx.set(resolvedInvoiceDocRef, updatedInvoice);
+      tx.set(adminDb!.collection('payments').doc(paymentId), paymentRecord);
+
+      return { errorStatus: null, paymentRecord, updatedInvoice, safeMethod };
+    });
+
+    if (txResult.errorStatus) {
+      return res.status(txResult.errorStatus).json({ error: txResult.error });
+    }
+
+    void appendServerAuditEvent({
+      action: 'PAYMENT_VERIFIED',
+      actorUid: user.uid,
+      actorEmail: user.email || user.uid,
+      resource: `invoices/${txResult.updatedInvoice!.id}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Settled ${txResult.updatedInvoice!.invoiceNumber} for INR ${txResult.updatedInvoice!.totalAmount} (${txResult.safeMethod})`,
+    });
+
+    return res.json({
+      success: true,
+      message: 'Payment verified and committed to Cloud Firestore ledger.',
+      payment: txResult.paymentRecord,
+      invoice: txResult.updatedInvoice,
+    });
+  } catch (err) {
+    console.error('[Payment Verify Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to verify and settle payment.');
   }
+});
 
-  if (intent.uid !== user.uid && !user.isAdmin) {
-    return res.status(403).json({ error: 'Forbidden: Payment intent belongs to a different user.' });
-  }
-
-  const invoices = getInvoices();
-  const invoiceIndex = invoices.findIndex(
-    (inv) => inv.id === invoiceId || inv.invoiceNumber === invoiceId
-  );
-
-  if (invoiceIndex === -1) {
-    return res.status(404).json({ error: 'Invoice record not found' });
-  }
-
-  const invoice = invoices[invoiceIndex];
-  if (invoice.id !== intent.invoiceId) {
-    return res.status(400).json({ error: 'Invoice ID mismatch against payment intent.' });
-  }
-
-  if (!canAccessInvoice(user, invoice)) {
-    return res.status(403).json({ error: 'Forbidden: Unauthorized invoice settlement attempt.' });
-  }
-
-  if (invoice.status === 'paid') {
-    return res.status(400).json({ error: 'Invoice has already been settled.' });
-  }
-
-  const expectedChecksum = crypto
-    .createHmac('sha256', PAYMENT_SECRET)
-    .update(`${orderId}:${invoice.id}:${invoice.totalAmount}:${intent.uid}`)
-    .digest('hex');
-
-  const providedBuf = Buffer.from(checksum, 'utf8');
-  const expectedBuf = Buffer.from(expectedChecksum, 'utf8');
-  if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
-    return res.status(400).json({
-      error: 'Cryptographic Checksum Mismatch: Payment payload has been tampered with or expired.',
+// 12. Admin Invoice Generator (Strict Verified Admin Only -> Firestore `invoices`)
+app.post('/api/invoices/generate', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (!adminDb) {
+    return res.status(503).json({
+      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+      error: 'Firestore Admin SDK is not configured to generate invoices.',
     });
   }
 
-  // Mark intent single-use immediately
-  intent.used = true;
-
-  const allowedMethods = new Set(['UPI', 'NEFT_RTGS', 'Corporate_Card', 'Escrow']);
-  const safeMethod = allowedMethods.has(method) ? method : 'UPI';
-
-  const paymentId = `PAY_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-  const verifiedTxnRef =
-    typeof transactionRef === 'string' && transactionRef.trim().length > 4
-      ? transactionRef.trim().substring(0, 64)
-      : `TXN_NPCI_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-
-  const updatedInvoice = {
-    ...invoice,
-    status: 'paid',
-    paidAt: new Date().toISOString(),
-    paymentTxnId: verifiedTxnRef,
-    paymentMethod: safeMethod,
-  };
-
-  invoices[invoiceIndex] = updatedInvoice;
-  saveInvoices(invoices);
-
-  const paymentRecord = {
-    id: paymentId,
-    orderId,
-    invoiceId: invoice.id,
-    invoiceNumber: invoice.invoiceNumber,
-    clientId: invoice.clientId,
-    clientEmail: invoice.clientEmail,
-    settledByUid: user.uid,
-    amount: invoice.totalAmount,
-    currency: 'INR',
-    method: safeMethod,
-    status: 'success',
-    transactionRef: verifiedTxnRef,
-    checksum,
-    timestamp: new Date().toISOString(),
-    verifiedBy: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES // SECURE_LEDGER_KERNEL',
-  };
-
-  const payments = getPayments();
-  payments.push(paymentRecord);
-  savePayments(payments);
-
-  appendServerAuditEvent({
-    action: 'PAYMENT_VERIFIED',
-    actorUid: user.uid,
-    actorEmail: user.email || user.uid,
-    resource: `invoices/${invoice.id}`,
-    outcome: 'SUCCESS',
-    ip: getClientIp(req),
-    details: `Settled ${invoice.invoiceNumber} for INR ${invoice.totalAmount} (${safeMethod})`,
-  });
-
-  res.json({
-    success: true,
-    message: 'Payment verified and committed to enterprise ledger.',
-    payment: paymentRecord,
-    invoice: updatedInvoice,
-  });
-});
-
-// 12. Admin Invoice Generator (Strict Verified Admin Only)
-app.post('/api/invoices/generate', requireAdmin, (req: AuthenticatedRequest, res) => {
   const {
     projectId,
     projectName,
@@ -2067,39 +2361,42 @@ app.post('/api/invoices/generate', requireAdmin, (req: AuthenticatedRequest, res
     verificationHash,
   };
 
-  const invoices = getInvoices();
-  invoices.unshift(newInvoice);
-  saveInvoices(invoices);
+  try {
+    await adminDb.collection('invoices').doc(invoiceId).set(newInvoice);
 
-  appendServerAuditEvent({
-    action: 'INVOICE_GENERATED',
-    actorUid: req.authUser!.uid,
-    actorEmail: req.authUser!.email || req.authUser!.uid,
-    resource: `invoices/${invoiceId}`,
-    outcome: 'SUCCESS',
-    ip: getClientIp(req),
-    details: `Generated ${invoiceNumber} for ${newInvoice.clientEmail} (INR ${totalAmount})`,
-  });
+    void appendServerAuditEvent({
+      action: 'INVOICE_GENERATED',
+      actorUid: req.authUser!.uid,
+      actorEmail: req.authUser!.email || req.authUser!.uid,
+      resource: `invoices/${invoiceId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Generated ${invoiceNumber} for ${newInvoice.clientEmail} (INR ${totalAmount})`,
+    });
 
-  res.status(201).json({
-    success: true,
-    message: 'Official GST tax invoice generated and committed to registry.',
-    invoice: newInvoice,
-  });
+    return res.status(201).json({
+      success: true,
+      message: 'Official GST tax invoice generated and committed to Cloud Firestore.',
+      invoice: newInvoice,
+    });
+  } catch (err) {
+    console.error('[Invoice Generate Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to persist generated invoice to Firestore.');
+  }
 });
 
 /* =========================================================================
    SEARCH ENGINE OPTIMIZATION & DISCOVERABILITY (SEO)
    ========================================================================= */
 
-const CANONICAL_SEO_DOMAIN = 'https://power-web-studio-ai-enterprise-digital-platform.ai.studio';
+const DEFAULT_SITE_URL = 'https://YOUR-DOMAIN.com';
 
 function resolveSeoBaseUrl(): string {
-  const envUrl = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  const envUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
   if (/^https?:\/\//i.test(envUrl)) {
     return envUrl;
   }
-  return CANONICAL_SEO_DOMAIN;
+  return DEFAULT_SITE_URL;
 }
 
 app.get('/robots.txt', (_req, res) => {
@@ -2111,7 +2408,7 @@ app.get('/robots.txt', (_req, res) => {
   if (fs.existsSync(targetFile)) {
     const content = fs
       .readFileSync(targetFile, 'utf8')
-      .replaceAll(CANONICAL_SEO_DOMAIN, baseUrl);
+      .replaceAll(DEFAULT_SITE_URL, baseUrl);
     return res.send(content);
   }
   return res.send(
@@ -2128,7 +2425,7 @@ app.get('/sitemap.xml', (_req, res) => {
   if (fs.existsSync(targetFile)) {
     const content = fs
       .readFileSync(targetFile, 'utf8')
-      .replaceAll(CANONICAL_SEO_DOMAIN, baseUrl);
+      .replaceAll(DEFAULT_SITE_URL, baseUrl);
     return res.send(content);
   }
   const lastMod = new Date().toISOString().split('T')[0];
@@ -2217,13 +2514,18 @@ async function startServer() {
       if (!cachedIndexHtml) {
         return res.sendFile(distIndexPath);
       }
-      const envOrigin = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+      const configuredSiteUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
       const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
       const reqHost = req.get('host');
-      const liveOrigin = envOrigin || (reqHost ? `${proto}://${reqHost}` : '');
+      const liveOrigin = /^https?:\/\//i.test(configuredSiteUrl)
+        ? configuredSiteUrl
+        : reqHost
+        ? `${proto}://${reqHost}`
+        : '';
 
       const html = liveOrigin
         ? cachedIndexHtml
+            .replaceAll(DEFAULT_SITE_URL, liveOrigin)
             .replace(/content="\/og-image\.jpg"/g, `content="${liveOrigin}/og-image.jpg"`)
             .replace(/property="og:url" content="\/"/g, `property="og:url" content="${liveOrigin}/"`)
         : cachedIndexHtml;

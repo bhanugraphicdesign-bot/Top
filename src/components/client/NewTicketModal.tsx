@@ -279,10 +279,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             {/* Validated Crash Dumps / Diagnostics File Upload */}
             <ValidatedFileUploader
               key={uploaderKey}
-              label="Attach Diagnostic Logs / Stack Trace / Screenshots (Optional)"
-              labelHi="त्रुटि लॉग / स्टैक ट्रेस / स्क्रीनशॉट संलग्न करें (वैकल्पिक)"
-              description="Upload TXT, JSON, PNG, JPG, ZIP (up to 25 MB with SHA-256 validation)"
-              descriptionHi="TXT, JSON, PNG, JPG, ZIP अपलोड करें (25 MB तक SHA-256 सत्यापन के साथ)"
+              label="Attach Diagnostic Report / Documents / Screenshots (Optional)"
+              labelHi="डायग्नोस्टिक रिपोर्ट / दस्तावेज़ / स्क्रीनशॉट संलग्न करें (वैकल्पिक)"
+              description="Upload PDF, PNG, JPG, or DOCX (up to 10 MB with SHA-256 validation)"
+              descriptionHi="PDF, PNG, JPG, या DOCX अपलोड करें (10 MB तक SHA-256 सत्यापन के साथ)"
               category="support_ticket_diagnostic"
               onUploadSuccess={(file) => setAttachment(file)}
               onRemove={() => setAttachment(null)}

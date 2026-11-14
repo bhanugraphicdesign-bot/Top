@@ -3,9 +3,30 @@ import { useLanguage } from '../../context/LanguageContext';
 import { PageRoute } from '../../types';
 import { OPTIMIZED_ASSETS } from '../../data/content';
 
-export const CANONICAL_ORIGIN = 'https://power-web-studio-ai-enterprise-digital-platform.ai.studio';
+export const PLACEHOLDER_SITE_URL = 'https://YOUR-DOMAIN.com';
 export const DEFAULT_OG_IMAGE_PATH = '/og-image.jpg';
 export const SITE_NAME = 'POWER WEB STUDIO AI';
+
+export function resolveSiteOrigin(): string {
+  const buildSiteUrl = (import.meta.env.VITE_SITE_URL || '').trim().replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(buildSiteUrl) && buildSiteUrl !== PLACEHOLDER_SITE_URL) {
+    return buildSiteUrl;
+  }
+  if (typeof document !== 'undefined') {
+    const metaSiteUrl = document.head
+      .querySelector<HTMLMetaElement>('meta[name="site-url"]')
+      ?.getAttribute('content')
+      ?.trim()
+      .replace(/\/+$/, '');
+    if (metaSiteUrl && /^https?:\/\//i.test(metaSiteUrl) && metaSiteUrl !== PLACEHOLDER_SITE_URL) {
+      return metaSiteUrl;
+    }
+  }
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin.replace(/\/+$/, '');
+  }
+  return PLACEHOLDER_SITE_URL;
+}
 
 export interface SEOProps {
   titleEn: string;
@@ -48,10 +69,7 @@ function upsertCanonicalLink(href: string): void {
 }
 
 export function resolveOgImageUrl(imageSrc?: string): string {
-  const origin =
-    typeof window !== 'undefined' && window.location?.origin
-      ? window.location.origin
-      : CANONICAL_ORIGIN;
+  const origin = resolveSiteOrigin();
 
   if (!imageSrc || imageSrc.startsWith('data:')) {
     return `${origin}${DEFAULT_OG_IMAGE_PATH}`;
@@ -64,14 +82,15 @@ export function resolveOgImageUrl(imageSrc?: string): string {
 }
 
 export function resolveCanonicalUrl(canonicalPath?: string): string {
+  const origin = resolveSiteOrigin();
   if (!canonicalPath || canonicalPath === '/') {
-    return `${CANONICAL_ORIGIN}/`;
+    return `${origin}/`;
   }
   if (/^https?:\/\//i.test(canonicalPath)) {
     return canonicalPath;
   }
   const normalized = canonicalPath.startsWith('/') ? canonicalPath : `/${canonicalPath}`;
-  return `${CANONICAL_ORIGIN}${normalized}`;
+  return `${origin}${normalized}`;
 }
 
 export function useSEO(props: SEOProps): void {

@@ -4,8 +4,13 @@ import path from 'path';
 import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
+  const siteUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+
   return {
     plugins: [react(), tailwindcss()],
+    define: {
+      'import.meta.env.VITE_SITE_URL': JSON.stringify(siteUrl),
+    },
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, '.'),

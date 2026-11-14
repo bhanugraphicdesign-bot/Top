@@ -29,7 +29,9 @@ export const TermsPage: React.FC = () => {
               )}
             </p>
             <div className="mt-4 text-xs text-slate-500 font-mono">
-              {siteContact.name} · {siteContact.registration} · Updated: November 2026
+              {[siteContact.name, siteContact.companyRegistration, 'Updated: November 2026']
+                .filter(Boolean)
+                .join(' · ')}
             </div>
           </div>
         </div>

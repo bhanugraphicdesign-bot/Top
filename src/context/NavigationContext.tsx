@@ -10,81 +10,159 @@ interface NavigationContextType {
 
 const NavigationContext = createContext<NavigationContextType | undefined>(undefined);
 
-export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const parseHash = () => {
-    const hash = window.location.hash.replace(/^#\/?/, '');
-    const pathname = (window.location.pathname || '').replace(/^\/+|\/+$/g, '');
+const VALID_ROUTES: PageRoute[] = [
+  'home',
+  'about',
+  'services',
+  'ai-solutions',
+  'android-portfolio',
+  'app-detail',
+  'process',
+  'contact',
+  'blog',
+  'privacy',
+  'terms',
+  'client-dashboard',
+  'admin-dashboard',
+];
 
-    let routeSource = hash;
-    let queryString = '';
+export function getPathForRoute(route: PageRoute, queryParams?: Record<string, string>): string {
+  const cleanParams: Record<string, string> = queryParams ? { ...queryParams } : {};
+  let basePath = '/';
 
-    if (routeSource) {
-      const [routePart, queryPart] = routeSource.split('?');
-      routeSource = routePart;
-      queryString = queryPart || '';
-    } else if (pathname) {
-      routeSource = pathname === 'admin' ? 'admin-dashboard' : pathname;
-      queryString = window.location.search.replace(/^\?/, '');
+  if (route === 'app-detail' && cleanParams.id) {
+    basePath = `/apps/${encodeURIComponent(cleanParams.id)}`;
+    delete cleanParams.id;
+  } else if (route !== 'home') {
+    basePath = `/${route}`;
+  }
+
+  const search = new URLSearchParams(cleanParams).toString();
+  return search ? `${basePath}?${search}` : basePath;
+}
+
+function parseRouteTarget(rawPath: string, rawSearch: string): { route: PageRoute; params: Record<string, string> } | null {
+  const cleanPath = rawPath.replace(/^\/+|\/+$/g, '');
+  const params: Record<string, string> = {};
+
+  if (rawSearch) {
+    const sp = new URLSearchParams(rawSearch.replace(/^\?/, ''));
+    sp.forEach((val, key) => {
+      params[key] = val;
+    });
+  }
+
+  if (!cleanPath) {
+    return { route: 'home', params };
+  }
+
+  if (cleanPath === 'admin') {
+    return { route: 'admin-dashboard', params };
+  }
+
+  if (cleanPath.startsWith('apps/')) {
+    const appId = decodeURIComponent(cleanPath.slice('apps/'.length)).split('/')[0]?.trim();
+    if (appId) {
+      params.id = appId;
+      return { route: 'app-detail', params };
     }
+    return { route: 'android-portfolio', params };
+  }
 
-    if (!routeSource) {
-      return { route: 'home' as PageRoute, params: {} };
+  const matchedRoute = VALID_ROUTES.find((r) => r === cleanPath);
+  if (!matchedRoute) {
+    return null;
+  }
+
+  return { route: matchedRoute, params };
+}
+
+function parseCurrentLocation(): {
+  route: PageRoute;
+  params: Record<string, string>;
+  redirectTo?: string;
+} {
+  const rawHash = window.location.hash || '';
+  if (rawHash.length > 1) {
+    const strippedHash = rawHash.replace(/^#\/?/, '');
+    const [hashPath, hashQuery = ''] = strippedHash.split('?');
+    const hashParsed = parseRouteTarget(hashPath, hashQuery);
+    if (hashParsed) {
+      return {
+        route: hashParsed.route,
+        params: hashParsed.params,
+        redirectTo: getPathForRoute(hashParsed.route, hashParsed.params),
+      };
     }
+  }
 
-    const params: Record<string, string> = {};
-    if (queryString) {
-      const searchParams = new URLSearchParams(queryString);
-      searchParams.forEach((val, key) => {
-        params[key] = val;
-      });
-    }
+  const pathname = window.location.pathname || '/';
+  const search = window.location.search || '';
+  const pathParsed = parseRouteTarget(pathname, search);
 
-    const validRoutes: PageRoute[] = [
-      'home',
-      'about',
-      'services',
-      'ai-solutions',
-      'android-portfolio',
-      'app-detail',
-      'process',
-      'contact',
-      'blog',
-      'privacy',
-      'terms',
-      'client-dashboard',
-      'admin-dashboard',
-    ];
+  if (pathParsed) {
+    const canonicalPath = getPathForRoute(pathParsed.route, pathParsed.params);
+    const currentFull = `${window.location.pathname}${window.location.search}`;
+    const shouldNormalize =
+      (pathname.startsWith('/app-detail') && pathParsed.route === 'app-detail' && Boolean(pathParsed.params.id)) ||
+      pathname === '/admin';
 
-    const matchedRoute = validRoutes.find((r) => r === routeSource);
     return {
-      route: matchedRoute || ('home' as PageRoute),
-      params,
+      route: pathParsed.route,
+      params: pathParsed.params,
+      redirectTo: shouldNormalize && currentFull !== canonicalPath ? canonicalPath : undefined,
     };
-  };
+  }
 
-  const initial = parseHash();
+  return { route: 'home', params: {} };
+}
+
+export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const initial = parseCurrentLocation();
   const [currentRoute, setCurrentRoute] = useState<PageRoute>(initial.route);
   const [params, setParams] = useState<Record<string, string>>(initial.params);
 
   useEffect(() => {
-    const handleHashChange = () => {
-      const parsed = parseHash();
+    const syncLocation = (scroll = false) => {
+      const parsed = parseCurrentLocation();
+      if (parsed.redirectTo) {
+        try {
+          window.history.replaceState(null, '', parsed.redirectTo);
+        } catch {
+          // ignore history errors in sandboxed frames
+        }
+      }
       setCurrentRoute(parsed.route);
       setParams(parsed.params);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (scroll) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     };
 
+    // Redirect legacy #/ links on initial load if present
+    syncLocation(false);
+
+    const handlePopState = () => syncLocation(true);
+    const handleHashChange = () => syncLocation(true);
+
+    window.addEventListener('popstate', handlePopState);
     window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('hashchange', handleHashChange);
+    };
   }, []);
 
   const navigate = (route: PageRoute, queryParams?: Record<string, string>) => {
-    let hash = `#${route}`;
-    if (queryParams && Object.keys(queryParams).length > 0) {
-      const search = new URLSearchParams(queryParams).toString();
-      hash += `?${search}`;
+    const nextUrl = getPathForRoute(route, queryParams);
+    const currentFull = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+    try {
+      if (currentFull !== nextUrl) {
+        window.history.pushState(null, '', nextUrl);
+      }
+    } catch {
+      // ignore history errors in sandboxed frames
     }
-    window.location.hash = hash;
     setCurrentRoute(route);
     setParams(queryParams || {});
     window.scrollTo({ top: 0, behavior: 'smooth' });

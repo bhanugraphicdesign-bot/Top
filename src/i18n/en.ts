@@ -37,8 +37,8 @@ export const enTranslations: TranslationSchema = {
     kpiLatencyDesc: 'High-concurrency microservices',
     kpiOwnership: 'Client IP Ownership',
     kpiOwnershipDesc: 'Zero proprietary vendor lock-in',
-    kpiCsat: 'Enterprise CSAT Score',
-    kpiCsatDesc: 'Across 40+ deployed platforms',
+    kpiCsat: 'Architecture Review',
+    kpiCsatDesc: 'Direct principal engineer collaboration',
   },
   common: {
     backToHome: 'Return to Homepage',

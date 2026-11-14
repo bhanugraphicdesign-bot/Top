@@ -90,15 +90,21 @@ async function runSecurityTests() {
         body: JSON.stringify({ subtotal: 1000, clientEmail: 'a@b.com' }),
       }),
       fetch(`${SERVER_BASE}/api/audit-events`),
+      fetch(`${SERVER_BASE}/api/audit-events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'TEST', resource: 'test' }),
+      }),
+      fetch(`${SERVER_BASE}/api/telemetry`),
     ]);
 
     const statuses = checks.map((c) => c.status);
     const all401 = statuses.every((s) => s === 401);
     record(
       'SEC-02',
-      'All 10 protected file, payment, invoice & audit endpoints reject missing Bearer tokens with 401',
+      'All 12 protected file, payment, invoice, audit & telemetry endpoints reject missing Bearer tokens with 401',
       all401 ? 'PASS' : 'FAIL',
-      `HTTP statuses across 10 protected routes: [${statuses.join(', ')}]`
+      `HTTP statuses across 12 protected routes: [${statuses.join(', ')}]`
     );
   } catch (err: any) {
     record('SEC-02', 'Protected endpoints unauthenticated 401 gate', 'FAIL', err.message);
@@ -177,19 +183,24 @@ async function runSecurityTests() {
     const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
     const checks = {
       defaultDeny: rules.includes('match /{document=**}') && rules.includes('allow read, write: if false;'),
-      emailVerifiedAdmin: rules.includes('request.auth.token.email_verified == true'),
+      noHardcodedAdminEmail: !rules.includes('ssbhanu41@gmail.com'),
+      roleAndClaimAdmin: rules.includes('hasAdminRole()') && rules.includes('hasAdminClaim()'),
       testLocked: rules.includes('match /test/{docId}') && !rules.includes('match /test/{docId} {\n      allow read: if true'),
       testAdminOnly: /match \/test\/\{docId\}\s*\{\s*allow read, write: if isAdmin\(\);/.test(rules),
       userRolesLocked: /match \/user_roles\/\{userId\}[\s\S]*allow create, update, delete: if isValidId\(userId\) && isAdmin\(\);/.test(rules),
-      auditImmutable: /match \/audit_logs\/\{logId\}[\s\S]*allow update, delete: if false;/.test(rules),
-      ticketClientUpdateLocked: rules.includes('isValidTicketClientUpdate') && rules.includes('affectedKeys().hasOnly'),
-      quotationStrictKeys: rules.includes('isValidQuotationCreate') && rules.includes("keys().hasOnly(['id', 'clientName'"),
+      auditServerOnly: /match \/audit_logs\/\{logId\}[\s\S]*allow create, update, delete: if false;/.test(rules),
+      ticketClientAppendOnly:
+        rules.includes('isValidTicketClientUpdate') &&
+        rules.includes('incoming.responses.size() == existing.responses.size() + 1') &&
+        rules.includes('reply.author == request.auth.uid') &&
+        rules.includes("reply.role == 'client'"),
+      quotationsServerOnly: /match \/quotations\/\{quotationId\}[\s\S]*allow create: if false;/.test(rules),
     };
 
     const allOk = Object.values(checks).every(Boolean);
     record(
       'SEC-05',
-      'Firestore security rules enforce default deny, locked /test, immutable logs, strict schemas & anti-elevation',
+      'Firestore rules enforce default deny, role/claim admin (no hardcoded email), server-only quotations/audit_logs, and append-only ticket replies',
       allOk ? 'PASS' : 'FAIL',
       Object.entries(checks)
         .map(([k, v]) => `${k}=${v}`)
@@ -203,28 +214,36 @@ async function runSecurityTests() {
   try {
     const servicesTs = fs.readFileSync(path.resolve(process.cwd(), 'src/firebase/services.ts'), 'utf8');
     const authCtx = fs.readFileSync(path.resolve(process.cwd(), 'src/context/AuthContext.tsx'), 'utf8');
+    const serverTs = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf8');
     const androidPage = fs.readFileSync(path.resolve(process.cwd(), 'src/pages/AndroidPortfolioPage.tsx'), 'utf8');
     const uploader = fs.readFileSync(path.resolve(process.cwd(), 'src/components/common/ValidatedFileUploader.tsx'), 'utf8');
 
-    const noClientRoleBootstrap = !servicesTs.includes("assignedBy: 'system_bootstrap'");
+    const noHardcodedAdminEmail =
+      !servicesTs.includes('ssbhanu41@gmail.com') &&
+      !authCtx.includes('ssbhanu41@gmail.com') &&
+      !serverTs.includes('ssbhanu41@gmail.com');
+    const noClientRoleBootstrap =
+      !servicesTs.includes('ensureBootstrapAdminRoleDoc') && !servicesTs.includes("assignedBy: 'system_bootstrap'");
     const noUnauthBootSeed = !authCtx.includes('seedInitialDatabaseIfEmpty()');
-    const rootEmailVerified =
-      authCtx.includes('user.emailVerified === true') && servicesTs.includes('currentUser.emailVerified === true');
     const portfolioAdminGated = androidPage.includes('{isAdmin && (') && androidPage.includes('AdminAppManagerModal');
     const uploaderRequiresAuth = uploader.includes('if (!currentUser)');
+    const auditViaServerOnly = !servicesTs.includes('setDoc(doc(db, COLLECTIONS.AUDIT_LOGS');
+    const createAdminScriptExists = fs.existsSync(path.resolve(process.cwd(), 'scripts/create-admin.ts'));
 
     const passed =
+      noHardcodedAdminEmail &&
       noClientRoleBootstrap &&
       noUnauthBootSeed &&
-      rootEmailVerified &&
       portfolioAdminGated &&
-      uploaderRequiresAuth;
+      uploaderRequiresAuth &&
+      auditViaServerOnly &&
+      createAdminScriptExists;
 
     record(
       'SEC-06',
-      'Frontend removes client user_roles write, unauth boot seeding, public admin UI triggers & requires verified auth',
+      'Zero hardcoded admin email, server-only audit/quotations, scripts/create-admin.ts present & strict UI auth gates',
       passed ? 'PASS' : 'FAIL',
-      `noClientRoleBootstrap=${noClientRoleBootstrap}, noUnauthBootSeed=${noUnauthBootSeed}, rootEmailVerified=${rootEmailVerified}, portfolioAdminGated=${portfolioAdminGated}, uploaderRequiresAuth=${uploaderRequiresAuth}`
+      `noHardcodedAdminEmail=${noHardcodedAdminEmail}, noClientRoleBootstrap=${noClientRoleBootstrap}, noUnauthBootSeed=${noUnauthBootSeed}, portfolioAdminGated=${portfolioAdminGated}, uploaderRequiresAuth=${uploaderRequiresAuth}, auditViaServerOnly=${auditViaServerOnly}, createAdminScript=${createAdminScriptExists}`
     );
   } catch (err: any) {
     record('SEC-06', 'Frontend RBAC & Auth checks', 'FAIL', err.message);

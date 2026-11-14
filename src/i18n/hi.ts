@@ -37,8 +37,8 @@ export const hiTranslations: TranslationSchema = {
     kpiLatencyDesc: 'उच्च समवर्ती माइक्रोसर्विस',
     kpiOwnership: 'ग्राहक कोड व आईपी स्वामित्व',
     kpiOwnershipDesc: 'शून्य मालिकाना वेंडर लॉक-इन',
-    kpiCsat: 'एंटरप्राइज ग्राहक संतुष्टि',
-    kpiCsatDesc: '40+ तैनात प्लेटफॉर्मों में',
+    kpiCsat: 'आर्किटेक्चर समीक्षा',
+    kpiCsatDesc: 'प्रमुख इंजीनियर के साथ सीधा सहयोग',
   },
   common: {
     backToHome: 'होमपेज पर वापस जाएं',

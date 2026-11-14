@@ -3,12 +3,14 @@ import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import {
   initializeFirestore,
   getFirestore,
+  enableNetwork,
   doc,
   getDocFromServer,
   Firestore,
 } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { initFirebaseAppCheck } from './appCheck';
 
 const resolvedMeasurementId =
   (import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID as string | undefined)?.trim() ||
@@ -24,15 +26,16 @@ const app = getApps().length === 0 ? initializeApp(resolvedFirebaseConfig) : get
 
 export const firebaseApp = app;
 export const MEASUREMENT_ID = resolvedMeasurementId;
+export const appCheck = initFirebaseAppCheck(app);
 
 // CRITICAL: Pass firestoreDatabaseId explicitly to bind to provisioned instance.
-// Use experimentalForceLongPolling in browser environments so iframe/proxy WebChannel buffering
-// never stalls streams for 10 seconds ("Could not reach Cloud Firestore backend").
+// Use experimentalAutoDetectLongPolling in browser environments so WebChannel prefers low-latency
+// streaming and automatically falls back to long-polling only when a buffering proxy is detected.
 function createFirestoreInstance(): Firestore {
   const settings =
     typeof window !== 'undefined'
       ? {
-          experimentalForceLongPolling: true,
+          experimentalAutoDetectLongPolling: true,
           ignoreUndefinedProperties: true,
         }
       : {
@@ -114,18 +117,16 @@ export async function validateFirestoreConnection(): Promise<boolean> {
   }
 }
 
-// Auto-run connection health check asynchronously on boot (and retry when coming back online)
+// Auto-run connection health check asynchronously on boot (and re-enable/re-check on reconnect)
 if (typeof window !== 'undefined') {
   if (typeof navigator === 'undefined' || navigator.onLine !== false) {
     void validateFirestoreConnection();
   }
-  window.addEventListener(
-    'online',
-    () => {
-      void validateFirestoreConnection();
-    },
-    { once: true }
-  );
+  window.addEventListener('online', () => {
+    void enableNetwork(db)
+      .catch(() => undefined)
+      .then(() => validateFirestoreConnection());
+  });
 }
 
 export default app;

@@ -70,11 +70,13 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
               </div>
             </div>
 
-            {/* Corporate Registration Strip (Unboxed metadata) */}
+            {/* Corporate Credentials Strip (Registration hidden until configured) */}
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
               <div className="flex items-center gap-2 min-w-0">
                 <Building2 className="w-4 h-4 text-blue-700 shrink-0" />
-                <span className="font-semibold text-slate-900 break-words">{siteContact.registration}</span>
+                <span className="font-semibold text-slate-900 break-words">
+                  {siteContact.companyRegistration || siteContact.name}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <Award className="w-4 h-4 text-blue-700 shrink-0" />

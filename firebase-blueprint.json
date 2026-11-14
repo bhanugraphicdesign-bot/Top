@@ -261,6 +261,53 @@
         "category": { "type": "string" }
       },
       "required": ["id", "title", "author", "date"]
+    },
+    "NewsletterSubscriber": {
+      "title": "NewsletterSubscriber",
+      "description": "Quarterly architectural dispatch email subscriber record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "language": { "type": "string", "enum": ["en", "hi"] },
+        "subscribedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "subscribedAt"]
+    },
+    "FileRecord": {
+      "title": "FileRecord",
+      "description": "Metadata for authenticated artifacts stored in Google Cloud Storage",
+      "type": "object",
+      "properties": {
+        "fileId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "gcsObjectPath": { "type": "string" },
+        "storageProvider": { "type": "string" },
+        "category": { "type": "string" },
+        "projectId": { "type": "string" },
+        "fileSize": { "type": "number" },
+        "mimeType": { "type": "string" },
+        "extension": { "type": "string" },
+        "sha256": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["fileId", "fileName", "ownerUid", "sha256", "uploadedAt"]
+    },
+    "PaymentIntent": {
+      "title": "PaymentIntent",
+      "description": "Server-only single-use payment intent record",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "invoiceId": { "type": "string" },
+        "amount": { "type": "number" },
+        "uid": { "type": "string" },
+        "expiresAt": { "type": "number" },
+        "used": { "type": "boolean" }
+      },
+      "required": ["orderId", "invoiceId", "amount", "uid", "used"]
     }
   },
   "firestore": {
@@ -331,6 +378,18 @@
     "/blog_posts/{postId}": {
       "schema": "BlogPost",
       "description": "Content management blog article document"
+    },
+    "/newsletter_subscribers/{subscriberId}": {
+      "schema": "NewsletterSubscriber",
+      "description": "Newsletter dispatch subscribers persisted via firebase-admin"
+    },
+    "/file_records/{fileId}": {
+      "schema": "FileRecord",
+      "description": "Cloud Storage uploaded artifact metadata persisted via firebase-admin"
+    },
+    "/payment_intents/{intentId}": {
+      "schema": "PaymentIntent",
+      "description": "Single-use server-tracked payment intents"
     }
   }
 }
