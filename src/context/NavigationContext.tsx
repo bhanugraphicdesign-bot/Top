@@ -13,15 +13,27 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const parseHash = () => {
     const hash = window.location.hash.replace(/^#\/?/, '');
-    if (!hash) {
+    const pathname = (window.location.pathname || '').replace(/^\/+|\/+$/g, '');
+
+    let routeSource = hash;
+    let queryString = '';
+
+    if (routeSource) {
+      const [routePart, queryPart] = routeSource.split('?');
+      routeSource = routePart;
+      queryString = queryPart || '';
+    } else if (pathname) {
+      routeSource = pathname === 'admin' ? 'admin-dashboard' : pathname;
+      queryString = window.location.search.replace(/^\?/, '');
+    }
+
+    if (!routeSource) {
       return { route: 'home' as PageRoute, params: {} };
     }
 
-    const [routePart, queryPart] = hash.split('?');
     const params: Record<string, string> = {};
-
-    if (queryPart) {
-      const searchParams = new URLSearchParams(queryPart);
+    if (queryString) {
+      const searchParams = new URLSearchParams(queryString);
       searchParams.forEach((val, key) => {
         params[key] = val;
       });
@@ -43,7 +55,7 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       'admin-dashboard',
     ];
 
-    const matchedRoute = validRoutes.find((r) => r === routePart);
+    const matchedRoute = validRoutes.find((r) => r === routeSource);
     return {
       route: matchedRoute || ('home' as PageRoute),
       params,

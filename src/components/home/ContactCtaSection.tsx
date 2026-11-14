@@ -1,14 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { COMPANY_INFO } from '../../data/content';
+import { useSiteContact } from '../../hooks/useSiteContact';
 import { Phone, Mail, MapPin, Send, CheckCircle, Shield, Clock, ArrowRight } from 'lucide-react';
 
 import { submitQuotation } from '../../firebase/services';
+import { trackConsultationFormSubmit } from '../../firebase/analytics';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
+import {
+  validateFormAntiBot,
+  extractBilingualApiError,
+  computeFillDurationMs,
+} from '../../utils/formProtection';
 
 export const ContactCtaSection: React.FC = () => {
   const { language, t, dict, showToast } = useLanguage();
+  const siteContact = useSiteContact();
 
   const [formData, setFormData] = useState({
     fullName: '',
@@ -21,13 +28,42 @@ export const ContactCtaSection: React.FC = () => {
     projectBrief: '',
   });
 
+  const [honeypot, setHoneypot] = useState('');
+  const formOpenedAtRef = useRef<number>(Date.now());
   const [attachment, setAttachment] = useState<UploadedFileRecord | null>(null);
+  const [uploaderKey, setUploaderKey] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  const handleResetInquiry = () => {
+    setSubmitted(false);
+    setHoneypot('');
+    formOpenedAtRef.current = Date.now();
+    setAttachment(null);
+    setErrorMsg('');
+    setUploaderKey((k) => k + 1);
+    setFormData((prev) => ({
+      ...prev,
+      projectBrief: '',
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const botCheck = validateFormAntiBot({
+      honeypotValue: honeypot,
+      formOpenedAt: formOpenedAtRef.current,
+      language,
+    });
+    if (!botCheck.ok) {
+      const msg = botCheck.message || '';
+      setErrorMsg(msg);
+      showToast(msg, 'alert');
+      return;
+    }
+
     if (!formData.fullName.trim()) {
       setErrorMsg(dict.validations.nameRequired);
       return;
@@ -44,7 +80,7 @@ export const ContactCtaSection: React.FC = () => {
     setSubmitting(true);
 
     try {
-      // 1. Validate against backend endpoint
+      // 1. Validate against backend endpoint & enforce IP rate limiting
       const valRes = await fetch('/api/inquiries/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,12 +89,24 @@ export const ContactCtaSection: React.FC = () => {
           email: formData.workEmail,
           serviceType: formData.serviceType,
           brief: formData.projectBrief,
+          language,
+          _hp: honeypot,
+          formOpenedAt: formOpenedAtRef.current,
+          fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),
         }),
       });
 
       if (!valRes.ok) {
         const errData = await valRes.json().catch(() => ({}));
-        throw new Error(errData.error || `Validation failed (HTTP ${valRes.status})`);
+        throw new Error(
+          extractBilingualApiError(
+            valRes.status,
+            errData,
+            language,
+            `Validation failed (HTTP ${valRes.status})`,
+            `सत्यापन विफल रहा (HTTP ${valRes.status})`
+          )
+        );
       }
 
       // 2. Submit to Cloud Firestore
@@ -81,6 +129,12 @@ export const ContactCtaSection: React.FC = () => {
           : undefined,
       });
 
+      trackConsultationFormSubmit({
+        source: 'contact_cta_form',
+        serviceType: formData.serviceType,
+        timeline: formData.timeline,
+        hasAttachment: Boolean(attachment),
+      });
       setSubmitted(true);
       showToast(dict.notifications.consultationBooked, 'success');
     } catch (err: any) {
@@ -158,10 +212,10 @@ export const ContactCtaSection: React.FC = () => {
                     {t('Headquarters & Innovation Campus', 'मुख्यालय और इनोवेशन कैंपस')}
                   </div>
                   <div className="text-xs text-slate-600 mt-0.5">
-                    {COMPANY_INFO.name}
+                    {siteContact.name}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">
-                    {COMPANY_INFO.headquarters}
+                    {siteContact.location}
                   </div>
                 </div>
               </div>
@@ -174,10 +228,10 @@ export const ContactCtaSection: React.FC = () => {
                       {t('Mobile / Enterprise Hotline', 'मोबाइल / हेल्पलाइन नंबर')}
                     </div>
                     <a
-                      href={`tel:${COMPANY_INFO.phone.replace(/\s+/g, '')}`}
+                      href={`tel:${siteContact.phone.replace(/\s+/g, '')}`}
                       className="text-xs text-slate-700 hover:text-blue-700 font-mono break-words inline-block"
                     >
-                      {COMPANY_INFO.phone}
+                      {siteContact.phone}
                     </a>
                   </div>
                 </div>
@@ -193,10 +247,10 @@ export const ContactCtaSection: React.FC = () => {
                     {t('Direct Engineering Inquiries', 'सीधा ईमेल संपर्क')}
                   </div>
                   <a
-                    href={`mailto:${COMPANY_INFO.email}`}
+                    href={`mailto:${siteContact.email}`}
                     className="text-xs text-blue-700 hover:underline font-mono font-medium break-all inline-block"
                   >
-                    {COMPANY_INFO.email}
+                    {siteContact.email}
                   </a>
                 </div>
               </div>
@@ -239,7 +293,8 @@ export const ContactCtaSection: React.FC = () => {
                   </p>
                   <div className="pt-4">
                     <button
-                      onClick={() => setSubmitted(false)}
+                      type="button"
+                      onClick={handleResetInquiry}
                       className="px-5 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors cursor-pointer"
                     >
                       {t('Submit Another Inquiry', 'एक और अनुरोध भेजें')}
@@ -248,6 +303,22 @@ export const ContactCtaSection: React.FC = () => {
                 </div>
               ) : (
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Honeypot anti-bot trap (isolated from browser autofill & screen readers) */}
+                  <div
+                    aria-hidden="true"
+                    className="pointer-events-none fixed -left-[9999px] top-auto h-px w-px overflow-hidden opacity-0"
+                  >
+                    <label htmlFor="contact-hp-code">Leave this field blank</label>
+                    <input
+                      id="contact-hp-code"
+                      name="contact_hp_code"
+                      type="text"
+                      tabIndex={-1}
+                      autoComplete="new-password"
+                      value={honeypot}
+                      onChange={(e) => setHoneypot(e.target.value)}
+                    />
+                  </div>
                   <div className="border-b border-slate-100 pb-3 mb-2">
                     <h3 className="text-xl font-bold text-slate-900">
                       {t('Project Scope & Architectural Inquiry', 'प्रोजेक्ट विवरण और पूछताछ')}
@@ -258,7 +329,10 @@ export const ContactCtaSection: React.FC = () => {
                   </div>
 
                   {errorMsg && (
-                    <div className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+                    <div
+                      role="alert"
+                      className="p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs"
+                    >
                       {errorMsg}
                     </div>
                   )}
@@ -372,6 +446,7 @@ export const ContactCtaSection: React.FC = () => {
 
                   {/* Validated File Upload (RFP / Technical Architecture Brief) */}
                   <ValidatedFileUploader
+                    key={uploaderKey}
                     label="Attach RFP / Architecture Specification (Optional)"
                     labelHi="RFP / तकनीकी विनिर्देश संलग्न करें (वैकल्पिक)"
                     description="Upload PDF, DOCX, ZIP, or diagram (up to 25 MB with SHA-256 validation)"

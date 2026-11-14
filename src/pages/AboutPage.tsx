@@ -1,8 +1,10 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
-import { COMPANY_INFO, ASSETS } from '../data/content';
+import { COMPANY_INFO } from '../data/content';
+import { useSiteContact } from '../hooks/useSiteContact';
 import { Building2, Award, ShieldCheck, MapPin, Compass, ArrowRight, Code2, Users, CheckCircle } from 'lucide-react';
+import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AboutPageProps {
   onOpenConsultation: () => void;
@@ -11,6 +13,7 @@ interface AboutPageProps {
 export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   const { language, t } = useLanguage();
   const { navigate } = useNavigation();
+  const siteContact = useSiteContact();
 
   return (
     <div className="bg-white">
@@ -50,13 +53,15 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           <div className="lg:col-span-6 space-y-4">
             <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-md">
-              <img
-                src={ASSETS.campusImage}
-                alt="Bhanu Ram Bariha Digital Technologies Innovation Campus"
+              <OptimizedImage
+                assetKey="campusImage"
+                alt="Bhanu Ram Bariha Digital Technologies Innovation Campus and Engineering Delivery Center"
+                altHi="भानु राम बरीहा डिजिटल टेक्नोलॉजीज इनोवेशन कैंपस और इंजीनियरिंग डिलीवरी सेंटर"
+                width={1376}
+                height={768}
                 loading="lazy"
-                decoding="async"
+                sizes="(max-width: 1024px) 100vw, 50vw"
                 className="w-full h-80 sm:h-96 object-cover"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
               <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -64,14 +69,14 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                   {t('Innovation Hub & Delivery Center', 'इनोवेशन हब एवं डिलीवरी सेंटर')}
                 </span>
                 <p className="text-sm font-semibold mt-0.5">
-                  {COMPANY_INFO.headquarters}
+                  {siteContact.location}
                 </p>
               </div>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600 space-y-2">
               <div className="flex items-center justify-between font-mono">
-                <span className="font-bold text-slate-900">{COMPANY_INFO.registration}</span>
+                <span className="font-bold text-slate-900">{siteContact.registration}</span>
                 <span>Est. {COMPANY_INFO.founded}</span>
               </div>
               <div>{t('Governed under Ministry of Corporate Affairs, Government of India.', 'कॉर्पोरेट कार्य मंत्रालय, भारत सरकार के अंतर्गत पंजीकृत।')}</div>

@@ -99,6 +99,7 @@
       "properties": {
         "id": { "type": "string" },
         "projectId": { "type": "string" },
+        "clientId": { "type": "string" },
         "title": { "type": "string" },
         "status": { "type": "string", "enum": ["todo", "in_progress", "done", "blocked"] },
         "priority": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
@@ -132,7 +133,7 @@
         "serviceType": { "type": "string" },
         "estimatedBudget": { "type": "string" },
         "timeline": { "type": "string" },
-        "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "rejected"] },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "rejected", "under_review", "approved"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "clientName", "clientEmail", "serviceType"]
@@ -178,7 +179,7 @@
         "clientId": { "type": "string" },
         "subject": { "type": "string" },
         "priority": { "type": "string", "enum": ["P1_Critical", "P2_High", "P3_Normal", "P4_Low"] },
-        "status": { "type": "string", "enum": ["open", "in_triage", "resolved", "closed"] },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "clientId", "subject", "priority", "status"]

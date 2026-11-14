@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useApps } from '../../context/AppsContext';
-import { ASSETS } from '../../data/content';
 import { AndroidApp } from '../../types';
 import { Smartphone, Check, ArrowRight, ExternalLink, ShieldCheck, Zap } from 'lucide-react';
+import { OptimizedImage } from '../common/OptimizedImage';
 
 interface AndroidPortfolioSectionProps {
   onSelectApp: (app: AndroidApp) => void;
@@ -177,13 +177,15 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
           {/* Right Column: High-Impact Android Hardware Showcase (5 cols) */}
           <div className="lg:col-span-5 space-y-4">
             <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-md bg-slate-50 group">
-              <img
-                src={ASSETS.androidImage}
-                alt="Bhanu Ram Bariha Digital Technologies Android Apps Showcase"
+              <OptimizedImage
+                assetKey="androidImage"
+                alt="Bhanu Ram Bariha Digital Technologies Enterprise Android Applications Showcase"
+                altHi="भानु राम बरीहा डिजिटल टेक्नोलॉजीज एंटरप्राइज एंड्रॉइड ऐप्स शोकेस"
+                width={1200}
+                height={896}
                 loading="lazy"
-                decoding="async"
+                sizes="(max-width: 1024px) 100vw, 42vw"
                 className="w-full h-80 sm:h-96 lg:h-[480px] object-cover transition-transform duration-500 group-hover:scale-102"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/20 to-transparent pointer-events-none" />
               <div className="absolute bottom-5 left-5 right-5 text-white">

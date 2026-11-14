@@ -1,10 +1,11 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { COMPANY_INFO } from '../data/content';
+import { useSiteContact } from '../hooks/useSiteContact';
 import { FileText, CheckCircle, Shield, Award } from 'lucide-react';
 
 export const TermsPage: React.FC = () => {
   const { language, t } = useLanguage();
+  const siteContact = useSiteContact();
 
   return (
     <div className="bg-white">
@@ -28,7 +29,7 @@ export const TermsPage: React.FC = () => {
               )}
             </p>
             <div className="mt-4 text-xs text-slate-500 font-mono">
-              {COMPANY_INFO.name} · CIN: {COMPANY_INFO.registration} · Updated: November 2026
+              {siteContact.name} · {siteContact.registration} · Updated: November 2026
             </div>
           </div>
         </div>

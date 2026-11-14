@@ -1,4 +1,4 @@
-import React, { useState, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { NavigationProvider, useNavigation } from './context/NavigationContext';
 import { AppsProvider } from './context/AppsContext';
@@ -20,6 +20,11 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { AuthProvider } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AuthModal } from './components/auth/AuthModal';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { PageLoadingFallback } from './components/common/PageLoadingFallback';
+import { NetworkStatusAlert } from './components/common/NetworkStatusAlert';
+import { RouteSEO } from './components/common/SEO';
+import { trackPageView, trackCtaClick } from './firebase/analytics';
 import { ServiceItem, AndroidApp } from './types';
 
 // Code-split secondary pages and protected portals to minimize initial JS payload
@@ -36,37 +41,38 @@ const TermsPage = lazy(() => import('./pages/TermsPage').then((m) => ({ default:
 const ClientDashboardPage = lazy(() => import('./pages/ClientDashboardPage').then((m) => ({ default: m.ClientDashboardPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
 
-function PageLoadingFallback() {
-  const { t } = useLanguage();
-  return (
-    <div className="min-h-[60vh] flex flex-col items-center justify-center p-8 text-slate-600">
-      <div className="w-8 h-8 border-3 border-blue-700 border-t-transparent rounded-full animate-spin mb-3" />
-      <p className="text-xs font-mono uppercase tracking-wider text-slate-500">
-        {t('Loading enterprise module...', 'एंटरप्राइज मॉड्यूल लोड हो रहा है...')}
-      </p>
-    </div>
-  );
-}
-
 function MainApp() {
   const { currentRoute, navigate } = useNavigation();
+  const { language } = useLanguage();
   const [isConsultationOpen, setIsConsultationOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
   const [selectedApp, setSelectedApp] = useState<AndroidApp | null>(null);
   const [preselectedConsultService, setPreselectedConsultService] = useState('enterprise-software');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const languageRef = useRef(language);
+  languageRef.current = language;
 
-  const handleOpenConsultation = (serviceType = 'enterprise-software') => {
+  useEffect(() => {
+    trackPageView(currentRoute, languageRef.current);
+  }, [currentRoute]);
+
+  const handleOpenConsultation = (
+    serviceType = 'enterprise-software',
+    ctaSource = 'schedule_consultation'
+  ) => {
+    trackCtaClick(ctaSource, serviceType);
     setPreselectedConsultService(serviceType);
     setIsConsultationOpen(true);
   };
 
   const handleSelectServiceForConsult = (serviceId: string) => {
+    trackCtaClick('service_detail_consultation', serviceId);
     setPreselectedConsultService(serviceId);
     setIsConsultationOpen(true);
   };
 
   const handleRequestApkDemo = (appId: string) => {
+    trackCtaClick('android_apk_demo', `Android APK Demo (${appId})`);
     setPreselectedConsultService(`Android APK Demo (${appId})`);
     setIsConsultationOpen(true);
   };
@@ -74,30 +80,52 @@ function MainApp() {
   const renderCurrentView = () => {
     switch (currentRoute) {
       case 'about':
-        return <AboutPage onOpenConsultation={() => handleOpenConsultation('leadership-briefing')} />;
+        return (
+          <AboutPage
+            onOpenConsultation={() =>
+              handleOpenConsultation('leadership-briefing', 'about_page_consultation')
+            }
+          />
+        );
       case 'services':
         return (
           <ServicesPage
             onSelectService={(service) => setSelectedService(service)}
-            onOpenConsultation={() => handleOpenConsultation('enterprise-services')}
+            onOpenConsultation={() =>
+              handleOpenConsultation('enterprise-services', 'services_page_consultation')
+            }
           />
         );
       case 'ai-solutions':
-        return <AiSolutionsPage onOpenConsultation={() => handleOpenConsultation('ai-solutions')} />;
+        return (
+          <AiSolutionsPage
+            onOpenConsultation={() =>
+              handleOpenConsultation('ai-solutions', 'ai_solutions_page_consultation')
+            }
+          />
+        );
       case 'android-portfolio':
         return (
           <AndroidPortfolioPage
-            onOpenConsultation={() => handleOpenConsultation('android-ecosystem')}
+            onOpenConsultation={() =>
+              handleOpenConsultation('android-ecosystem', 'android_portfolio_consultation')
+            }
           />
         );
       case 'app-detail':
         return (
           <AppDetailPage
-            onOpenConsultation={(req) => handleOpenConsultation(req)}
+            onOpenConsultation={(req) => handleOpenConsultation(req, 'app_detail_consultation')}
           />
         );
       case 'process':
-        return <ProcessPage onOpenConsultation={() => handleOpenConsultation('process-discovery')} />;
+        return (
+          <ProcessPage
+            onOpenConsultation={() =>
+              handleOpenConsultation('process-discovery', 'process_page_consultation')
+            }
+          />
+        );
       case 'contact':
         return <ContactPage />;
       case 'blog':
@@ -115,10 +143,18 @@ function MainApp() {
         return (
           <>
             {/* 1. Hero Section */}
-            <HeroSection onOpenConsultation={() => handleOpenConsultation('enterprise-software')} />
+            <HeroSection
+              onOpenConsultation={() =>
+                handleOpenConsultation('enterprise-software', 'hero_schedule_consultation')
+              }
+            />
 
             {/* 2. Company Introduction (Bhanu Ram Bariha Digital Technologies) */}
-            <CompanyIntroSection onOpenConsultation={() => handleOpenConsultation('leadership-briefing')} />
+            <CompanyIntroSection
+              onOpenConsultation={() =>
+                handleOpenConsultation('leadership-briefing', 'company_intro_consultation')
+              }
+            />
 
             {/* 3. Core Technology Services */}
             <ServicesSection onSelectService={(service) => setSelectedService(service)} />
@@ -132,7 +168,11 @@ function MainApp() {
             />
 
             {/* 5. Sovereign Enterprise AI Solutions & Interactive Scope Calculator */}
-            <AiSolutionsSection onOpenConsultation={() => handleOpenConsultation('ai-solutions')} />
+            <AiSolutionsSection
+              onOpenConsultation={() =>
+                handleOpenConsultation('ai-solutions', 'ai_solutions_section_consultation')
+              }
+            />
 
             {/* 6. Why Choose Us (Quantitative Rigor & Claim-to-Proof) */}
             <WhyChooseUsSection />
@@ -149,9 +189,13 @@ function MainApp() {
 
   return (
     <div className="min-h-screen flex flex-col bg-white text-slate-900 selection:bg-blue-600 selection:text-white font-sans">
+      <RouteSEO currentRoute={currentRoute} />
+
       {/* Header with strict Top Bar Contract & Multi-Page Navigation */}
       <Header
-        onOpenConsultation={() => handleOpenConsultation('enterprise-software')}
+        onOpenConsultation={() =>
+          handleOpenConsultation('enterprise-software', 'header_book_consultation')
+        }
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
       />
@@ -160,12 +204,21 @@ function MainApp() {
       <MobileMenu
         isOpen={mobileMenuOpen}
         onClose={() => setMobileMenuOpen(false)}
-        onOpenConsultation={() => handleOpenConsultation('enterprise-software')}
+        onOpenConsultation={() =>
+          handleOpenConsultation('enterprise-software', 'mobile_menu_consultation')
+        }
       />
+
+      {/* Offline / Network Connectivity Alert Banner */}
+      <NetworkStatusAlert variant="banner" dismissible />
 
       {/* Main Page Flow depending on currentRoute */}
       <main className="flex-1">
-        <Suspense fallback={<PageLoadingFallback />}>{renderCurrentView()}</Suspense>
+        <ErrorBoundary resetKey={currentRoute} onGoHome={() => navigate('home')}>
+          <Suspense fallback={<PageLoadingFallback variant="skeleton" />}>
+            {renderCurrentView()}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       {/* Professional Enterprise Footer */}
@@ -202,15 +255,17 @@ function MainApp() {
 export default function App() {
   return (
     <LanguageProvider>
-      <AuthProvider>
-        <NavigationProvider>
-          <NotificationProvider>
-            <AppsProvider>
-              <MainApp />
-            </AppsProvider>
-          </NotificationProvider>
-        </NavigationProvider>
-      </AuthProvider>
+      <ErrorBoundary>
+        <AuthProvider>
+          <NavigationProvider>
+            <NotificationProvider>
+              <AppsProvider>
+                <MainApp />
+              </AppsProvider>
+            </NotificationProvider>
+          </NavigationProvider>
+        </AuthProvider>
+      </ErrorBoundary>
     </LanguageProvider>
   );
 }

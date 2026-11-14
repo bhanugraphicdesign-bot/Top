@@ -1,14 +1,52 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore,
+  doc,
+  getDocFromServer,
+  Firestore,
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-// Initialize Firebase App instance singleton
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+const resolvedMeasurementId =
+  (import.meta.env?.VITE_FIREBASE_MEASUREMENT_ID as string | undefined)?.trim() ||
+  (firebaseConfig.measurementId || '').trim();
 
-// CRITICAL: Must pass firestoreDatabaseId explicitly to bind to provisioned instance
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const resolvedFirebaseConfig = {
+  ...firebaseConfig,
+  ...(resolvedMeasurementId ? { measurementId: resolvedMeasurementId } : {}),
+};
+
+// Initialize Firebase App instance singleton
+const app = getApps().length === 0 ? initializeApp(resolvedFirebaseConfig) : getApp();
+
+export const firebaseApp = app;
+export const MEASUREMENT_ID = resolvedMeasurementId;
+
+// CRITICAL: Pass firestoreDatabaseId explicitly to bind to provisioned instance.
+// Use experimentalForceLongPolling in browser environments so iframe/proxy WebChannel buffering
+// never stalls streams for 10 seconds ("Could not reach Cloud Firestore backend").
+function createFirestoreInstance(): Firestore {
+  const settings =
+    typeof window !== 'undefined'
+      ? {
+          experimentalForceLongPolling: true,
+          ignoreUndefinedProperties: true,
+        }
+      : {
+          ignoreUndefinedProperties: true,
+        };
+
+  try {
+    return initializeFirestore(app, settings, firebaseConfig.firestoreDatabaseId);
+  } catch {
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+}
+
+export const db = createFirestoreInstance();
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
@@ -37,6 +75,15 @@ export let lastFirestoreHealth: FirestoreConnectionHealth = {
  * while 'unavailable' / offline errors accurately report connectivity failure.
  */
 export async function validateFirestoreConnection(): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    lastFirestoreHealth = {
+      connected: false,
+      checkedAt: new Date().toISOString(),
+      error: 'Browser is offline',
+    };
+    return false;
+  }
+
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     lastFirestoreHealth = {
@@ -58,7 +105,6 @@ export async function validateFirestoreConnection(): Promise<boolean> {
       return true;
     }
 
-    console.warn('[Firebase] Live Cloud Firestore check failed:', msg);
     lastFirestoreHealth = {
       connected: false,
       checkedAt: new Date().toISOString(),
@@ -68,9 +114,18 @@ export async function validateFirestoreConnection(): Promise<boolean> {
   }
 }
 
-// Auto-run connection health check asynchronously on boot
-validateFirestoreConnection().catch((err) => {
-  console.warn('[Firebase Handshake]', err?.message || err);
-});
+// Auto-run connection health check asynchronously on boot (and retry when coming back online)
+if (typeof window !== 'undefined') {
+  if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+    void validateFirestoreConnection();
+  }
+  window.addEventListener(
+    'online',
+    () => {
+      void validateFirestoreConnection();
+    },
+    { once: true }
+  );
+}
 
 export default app;

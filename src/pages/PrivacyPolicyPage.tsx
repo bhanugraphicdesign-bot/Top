@@ -1,10 +1,11 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { COMPANY_INFO } from '../data/content';
+import { useSiteContact } from '../hooks/useSiteContact';
 import { ShieldCheck, Lock, FileText, CheckCircle } from 'lucide-react';
 
 export const PrivacyPolicyPage: React.FC = () => {
   const { language, t } = useLanguage();
+  const siteContact = useSiteContact();
 
   return (
     <div className="bg-white">
@@ -28,7 +29,7 @@ export const PrivacyPolicyPage: React.FC = () => {
               )}
             </p>
             <div className="mt-4 text-xs text-slate-500 font-mono">
-              {COMPANY_INFO.name} · CIN: {COMPANY_INFO.registration} · Effective Date: November 2026
+              {siteContact.name} · {siteContact.registration} · Effective Date: November 2026
             </div>
           </div>
         </div>
@@ -55,8 +56,8 @@ export const PrivacyPolicyPage: React.FC = () => {
           </h2>
           <p>
             {language === 'hi'
-              ? `यह गोपनीयता नीति भानु राम बरीहा डिजिटल टेक्नोलॉजीज (${COMPANY_INFO.registration}) द्वारा संचालित प्लेटफॉर्म 'पावर वेब स्टूडियो एआई' पर लागू होती है। हमारा पंजीकृत कार्यालय ${COMPANY_INFO.headquarters} में स्थित है।`
-              : `This Privacy Policy governs the operations of Bhanu Ram Bariha Digital Technologies (${COMPANY_INFO.registration}), operating the Power Web Studio AI platform. Our registered delivery hub is situated in ${COMPANY_INFO.headquarters}.`}
+              ? `यह गोपनीयता नीति भानु राम बरीहा डिजिटल टेक्नोलॉजीज (${siteContact.registration}) द्वारा संचालित प्लेटफॉर्म 'पावर वेब स्टूडियो एआई' पर लागू होती है। हमारा पंजीकृत कार्यालय ${siteContact.location} में स्थित है।`
+              : `This Privacy Policy governs the operations of Bhanu Ram Bariha Digital Technologies (${siteContact.registration}), operating the Power Web Studio AI platform. Our registered delivery hub is situated in ${siteContact.location}.`}
           </p>
         </section>
 
@@ -102,12 +103,22 @@ export const PrivacyPolicyPage: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-900">
             {t('5. Data Protection Officer (DPO) Contact', '5. डेटा संरक्षण अधिकारी (DPO) संपर्क')}
           </h2>
-          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600 font-mono space-y-1">
-            <div>Office of the Data Protection Officer</div>
-            <div>Bhanu Ram Bariha Digital Technologies</div>
-            <div>Email: {COMPANY_INFO.email}</div>
-            <div>Mobile: {COMPANY_INFO.phone}</div>
-            <div>Address: {COMPANY_INFO.headquarters}</div>
+          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-mono space-y-1.5 break-words">
+            <div className="font-sans font-bold text-slate-900">Office of the Data Protection Officer</div>
+            <div>{siteContact.name}</div>
+            <div>
+              Email:{' '}
+              <a href={`mailto:${siteContact.email}`} className="text-blue-700 hover:underline break-all">
+                {siteContact.email}
+              </a>
+            </div>
+            <div>
+              Mobile:{' '}
+              <a href={`tel:${siteContact.phone.replace(/\s+/g, '')}`} className="text-blue-700 hover:underline">
+                {siteContact.phone}
+              </a>
+            </div>
+            <div>Address: {siteContact.location}</div>
           </div>
         </section>
       </div>

@@ -9,6 +9,8 @@ interface BlogModalProps {
   onClose: () => void;
   onSuccess: () => void;
   post?: BlogPost | null;
+  isDemoSandbox?: boolean;
+  onSaveDemo?: (savedPost: BlogPost) => void;
 }
 
 export const BlogManagerModal: React.FC<BlogModalProps> = ({
@@ -16,6 +18,8 @@ export const BlogManagerModal: React.FC<BlogModalProps> = ({
   onClose,
   onSuccess,
   post,
+  isDemoSandbox = false,
+  onSaveDemo,
 }) => {
   const { language, t, showToast } = useLanguage();
 
@@ -92,11 +96,30 @@ export const BlogManagerModal: React.FC<BlogModalProps> = ({
         .map((p) => p.trim())
         .filter((p) => p.length > 0);
 
-      await saveBlogPost({
+      const finalContent = content.length > 0 ? content : ['Article content in drafting phase.'];
+      const payload: BlogPost = {
         ...formData,
-        content: content.length > 0 ? content : ['Article content in drafting phase.'],
-        contentHi: contentHi.length > 0 ? contentHi : content,
-      });
+        titleHi: formData.titleHi || formData.title,
+        excerptHi: formData.excerptHi || formData.excerpt,
+        content: finalContent,
+        contentHi: contentHi.length > 0 ? contentHi : finalContent,
+      };
+
+      if (isDemoSandbox) {
+        onSaveDemo?.(payload);
+        showToast(
+          t(
+            '[Demo Sandbox] Article saved locally for preview.',
+            '[डेमो सैंडबॉक्स] लेख केवल स्थानीय पूर्वावलोकन में सहेजा गया।'
+          ),
+          'info'
+        );
+        onSuccess();
+        onClose();
+        return;
+      }
+
+      await saveBlogPost(payload);
 
       showToast(
         language === 'hi' ? 'ब्लॉग लेख सफलतापूर्वक सहेजा गया।' : 'Blog article published successfully.',

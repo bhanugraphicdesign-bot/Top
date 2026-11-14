@@ -9,6 +9,8 @@ interface ServiceModalProps {
   onClose: () => void;
   onSuccess: () => void;
   service?: ServiceItem | null;
+  isDemoSandbox?: boolean;
+  onSaveDemo?: (savedService: ServiceItem) => void;
 }
 
 export const ServiceManagerModal: React.FC<ServiceModalProps> = ({
@@ -16,6 +18,8 @@ export const ServiceManagerModal: React.FC<ServiceModalProps> = ({
   onClose,
   onSuccess,
   service,
+  isDemoSandbox = false,
+  onSaveDemo,
 }) => {
   const { language, t, showToast } = useLanguage();
 
@@ -86,13 +90,32 @@ export const ServiceManagerModal: React.FC<ServiceModalProps> = ({
     try {
       const deliverables = deliverablesStr.split('\n').filter((s) => s.trim().length > 0);
       const techStack = techStackStr.split(',').map((s) => s.trim()).filter(Boolean);
-
-      await saveServiceItem({
+      const payload: ServiceItem = {
         ...formData,
+        titleHi: formData.titleHi || formData.title,
+        shortDescHi: formData.shortDescHi || formData.shortDesc,
+        fullDesc: formData.fullDesc || formData.shortDesc,
+        fullDescHi: formData.fullDescHi || formData.shortDescHi || formData.fullDesc || formData.shortDesc,
         deliverables,
         deliverablesHi: formData.deliverablesHi.length > 0 ? formData.deliverablesHi : deliverables,
         techStack,
-      });
+      };
+
+      if (isDemoSandbox) {
+        onSaveDemo?.(payload);
+        showToast(
+          t(
+            '[Demo Sandbox] Service catalog item updated locally.',
+            '[डेमो सैंडबॉक्स] सेवा कैटलॉग केवल स्थानीय पूर्वावलोकन में सहेजी गई।'
+          ),
+          'info'
+        );
+        onSuccess();
+        onClose();
+        return;
+      }
+
+      await saveServiceItem(payload);
 
       showToast(
         language === 'hi' ? 'सेवा कैटलॉग सफलतापूर्वक सहेज लिया गया।' : 'Service catalog item saved successfully.',

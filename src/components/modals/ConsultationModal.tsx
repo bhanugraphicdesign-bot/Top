@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { COMPANY_INFO } from '../../data/content';
+import { useSiteContact } from '../../hooks/useSiteContact';
 import { X, CheckCircle, Clock, Shield, Calendar, Send } from 'lucide-react';
 import { submitQuotation } from '../../firebase/services';
+import { trackConsultationFormOpen, trackConsultationFormSubmit } from '../../firebase/analytics';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
+import {
+  validateFormAntiBot,
+  extractBilingualApiError,
+  computeFillDurationMs,
+} from '../../utils/formProtection';
 
 interface ConsultationModalProps {
   isOpen: boolean;
@@ -12,33 +18,96 @@ interface ConsultationModalProps {
   preselectedService?: string;
 }
 
+function normalizeServiceDomain(raw?: string): { domain: string; demoContext: string } {
+  const val = (raw || '').trim();
+  if (!val) return { domain: 'enterprise-software', demoContext: '' };
+  if (
+    val.startsWith('Android APK Demo') ||
+    val.startsWith('Android App Demo')
+  ) {
+    return { domain: 'android-ecosystem', demoContext: val };
+  }
+  const map: Record<string, string> = {
+    'enterprise-software': 'enterprise-software',
+    'custom-enterprise-software': 'enterprise-software',
+    'leadership-briefing': 'enterprise-software',
+    'enterprise-services': 'enterprise-software',
+    'process-discovery': 'enterprise-software',
+    'android-ecosystem': 'android-ecosystem',
+    'android-app-ecosystem': 'android-ecosystem',
+    'ai-solutions': 'ai-solutions',
+    'ai-cognitive-engineering': 'ai-solutions',
+    'web-platforms': 'web-platforms',
+    'web-app-engineering': 'web-platforms',
+    'cloud-devops': 'cloud-devops',
+    'cloud-devops-infrastructure': 'cloud-devops',
+    'api-integration': 'api-integration',
+    'api-gateway': 'api-integration',
+    'api-security-gateway': 'api-integration',
+  };
+  return { domain: map[val] || 'enterprise-software', demoContext: '' };
+}
+
 export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   isOpen,
   onClose,
   preselectedService = 'enterprise-software',
 }) => {
-  const { t, dict, showToast } = useLanguage();
+  const { language, t, dict, showToast } = useLanguage();
+  const siteContact = useSiteContact();
 
+  const initialNormalized = normalizeServiceDomain(preselectedService);
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     phone: '',
     company: '',
-    service: preselectedService,
+    service: initialNormalized.domain,
     timeline: '3-6-months',
     budget: 'enterprise-custom',
-    brief: '',
+    brief: initialNormalized.demoContext ? `Requesting demo & walkthrough for: ${initialNormalized.demoContext}` : '',
   });
 
+  const [honeypot, setHoneypot] = useState('');
+  const formOpenedAtRef = useRef<number>(Date.now());
   const [attachment, setAttachment] = useState<UploadedFileRecord | null>(null);
+  const [uploaderKey, setUploaderKey] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    formOpenedAtRef.current = Date.now();
+    setHoneypot('');
+    const { domain, demoContext } = normalizeServiceDomain(preselectedService);
+    trackConsultationFormOpen(domain);
+    setErrorMessage('');
+    setIsSubmitted(false);
+    setFormData((prev) => ({
+      ...prev,
+      service: domain,
+      brief: demoContext ? `Requesting demo & walkthrough for: ${demoContext}` : prev.brief,
+    }));
+  }, [isOpen, preselectedService]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const botCheck = validateFormAntiBot({
+      honeypotValue: honeypot,
+      formOpenedAt: formOpenedAtRef.current,
+      language,
+    });
+    if (!botCheck.ok) {
+      const msg = botCheck.message || '';
+      setErrorMessage(msg);
+      showToast(msg, 'alert');
+      return;
+    }
+
     if (!formData.fullName.trim()) {
       setErrorMessage(dict.validations.nameRequired);
       return;
@@ -55,7 +124,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setSubmitting(true);
 
     try {
-      // 1. Server validation probe
+      // 1. Server validation & rate-limit enforcement
       const valRes = await fetch('/api/inquiries/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,12 +133,24 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           email: formData.email,
           serviceType: formData.service,
           brief: formData.brief,
+          language,
+          _hp: honeypot,
+          formOpenedAt: formOpenedAtRef.current,
+          fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),
         }),
       });
 
       if (!valRes.ok) {
         const errData = await valRes.json().catch(() => ({}));
-        throw new Error(errData.error || `Validation failed (HTTP ${valRes.status})`);
+        throw new Error(
+          extractBilingualApiError(
+            valRes.status,
+            errData,
+            language,
+            `Validation failed (HTTP ${valRes.status})`,
+            `सत्यापन विफल रहा (HTTP ${valRes.status})`
+          )
+        );
       }
 
       // 2. Commit to Cloud Firestore
@@ -91,6 +172,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             }
           : undefined,
       });
+      trackConsultationFormSubmit({
+        source: 'consultation_modal',
+        serviceType: formData.service,
+        timeline: formData.timeline,
+        hasAttachment: Boolean(attachment),
+      });
       setIsSubmitted(true);
       showToast(dict.notifications.consultationBooked, 'success');
     } catch (err: any) {
@@ -108,18 +195,33 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   };
 
   const handleReset = () => {
+    const { domain } = normalizeServiceDomain(preselectedService);
     setIsSubmitted(false);
+    setHoneypot('');
+    formOpenedAtRef.current = Date.now();
     setFormData({
       fullName: '',
       email: '',
       phone: '',
       company: '',
-      service: preselectedService,
+      service: domain,
       timeline: '3-6-months',
       budget: 'enterprise-custom',
       brief: '',
     });
+    setAttachment(null);
+    setUploaderKey((k) => k + 1);
+    setErrorMessage('');
     onClose();
+  };
+
+  const handleClose = () => {
+    if (isSubmitted) {
+      handleReset();
+    } else {
+      setErrorMessage('');
+      onClose();
+    }
   };
 
   return (
@@ -127,7 +229,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       {/* Backdrop */}
       <div
         className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity"
-        onClick={onClose}
+        onClick={handleClose}
         aria-hidden="true"
       />
 
@@ -141,7 +243,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         >
           {/* Close button */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
@@ -158,8 +260,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </h3>
               <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
                 {t(
-                  `Thank you, ${formData.fullName}. A Principal Solutions Architect from ${COMPANY_INFO.name} will review your project requirements and connect via ${formData.email} within 4 business hours.`,
-                  `धन्यवाद, ${formData.fullName}। ${COMPANY_INFO.name} के प्रमुख समाधान आर्किटेक्ट आपकी आवश्यकताओं की समीक्षा करेंगे और 4 व्यावसायिक घंटों के भीतर आपसे संपर्क करेंगे।`
+                  `Thank you, ${formData.fullName}. A Principal Solutions Architect from ${siteContact.name} will review your project requirements and connect via ${formData.email} within 4 business hours.`,
+                  `धन्यवाद, ${formData.fullName}। ${siteContact.name} के प्रमुख समाधान आर्किटेक्ट आपकी आवश्यकताओं की समीक्षा करेंगे और 4 व्यावसायिक घंटों के भीतर आपसे संपर्क करेंगे।`
                 )}
               </p>
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 max-w-md mx-auto text-xs text-slate-600 text-left space-y-1.5">
@@ -168,7 +270,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   {Math.floor(100000 + Math.random() * 900000)}
                 </p>
                 <p>
-                  <span className="font-bold text-slate-900">{t('Direct Line:', 'सीधा संपर्क:')}</span> {COMPANY_INFO.phone}
+                  <span className="font-bold text-slate-900">{t('Direct Line:', 'सीधा संपर्क:')}</span> {siteContact.phone}
                 </p>
                 <p>
                   <span className="font-bold text-slate-900">{t('Confidentiality:', 'गोपनीयता:')}</span> {t('Protected under mutual NDA', 'सख्त एनडीए के तहत सुरक्षित')}
@@ -187,7 +289,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             <div>
               <div className="mb-6">
                 <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-1">
-                  {COMPANY_INFO.name}
+                  {siteContact.name}
                 </div>
                 <h3 id="consultation-modal-title" className="text-2xl font-bold text-slate-900">
                   {t('Schedule an Architecture Review', 'आर्किटेक्चर समीक्षा शेड्यूल करें')}
@@ -201,12 +303,31 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </div>
 
               {errorMessage && (
-                <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs">
+                <div
+                  role="alert"
+                  className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-700 text-xs"
+                >
                   {errorMessage}
                 </div>
               )}
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Honeypot anti-bot trap (isolated from browser autofill & screen readers) */}
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none fixed -left-[9999px] top-auto h-px w-px overflow-hidden opacity-0"
+                >
+                  <label htmlFor="consultation-hp-code">Leave this field blank</label>
+                  <input
+                    id="consultation-hp-code"
+                    name="contact_hp_code"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="new-password"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                  />
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -315,6 +436,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 {/* Validated File Uploader for RFP / Scope Document */}
                 <ValidatedFileUploader
+                  key={uploaderKey}
                   label="Attach RFP / Scope Document (Optional)"
                   labelHi="RFP / स्कोप दस्तावेज़ संलग्न करें (वैकल्पिक)"
                   description="PDF, DOCX, ZIP, or diagram (up to 25 MB with SHA-256 validation)"

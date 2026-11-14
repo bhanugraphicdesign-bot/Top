@@ -8,6 +8,8 @@ interface QuotationModalProps {
   onClose: () => void;
   onSuccess: () => void;
   quotation?: any | null;
+  isDemoSandbox?: boolean;
+  onSaveDemo?: (savedQuotation: any) => void;
 }
 
 export const QuotationManagerModal: React.FC<QuotationModalProps> = ({
@@ -15,6 +17,8 @@ export const QuotationManagerModal: React.FC<QuotationModalProps> = ({
   onClose,
   onSuccess,
   quotation,
+  isDemoSandbox = false,
+  onSaveDemo,
 }) => {
   const { language, t, showToast } = useLanguage();
 
@@ -73,10 +77,24 @@ export const QuotationManagerModal: React.FC<QuotationModalProps> = ({
 
     setSaving(true);
     try {
-      await saveQuotation({
+      const payload = {
         ...formData,
         createdAt: quotation?.createdAt || new Date().toISOString(),
-      });
+      };
+      if (isDemoSandbox) {
+        onSaveDemo?.(payload);
+        showToast(
+          t(
+            '[Demo Sandbox] Quotation saved locally for preview.',
+            '[डेमो सैंडबॉक्स] कोटेशन केवल स्थानीय पूर्वावलोकन में सहेजी गई।'
+          ),
+          'info'
+        );
+        onSuccess();
+        onClose();
+        return;
+      }
+      await saveQuotation(payload);
       showToast(
         language === 'hi' ? 'कोटेशन सफलतापूर्वक सहेज लिया गया।' : 'Quotation saved successfully.',
         'success'
@@ -211,8 +229,10 @@ export const QuotationManagerModal: React.FC<QuotationModalProps> = ({
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none bg-white font-bold"
                 >
                   <option value="pending">Pending Review / नई पूछताछ</option>
-                  <option value="reviewed">Under Technical Scoping / तकनीकी समीक्षा</option>
-                  <option value="accepted">Approved & Contract Signed / स्वीकृत</option>
+                  <option value="under_review">Under Review / तकनीकी समीक्षा</option>
+                  <option value="reviewed">Technical Scoping Complete / समीक्षित</option>
+                  <option value="approved">Approved / स्वीकृत</option>
+                  <option value="accepted">Contract Signed / अनुबंध स्वीकृत</option>
                   <option value="rejected">Archived / Lost / अस्वीकृत</option>
                 </select>
               </div>

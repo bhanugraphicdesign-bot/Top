@@ -58,6 +58,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   const [, setClientSha256] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [fileUploadEnabled, setFileUploadEnabled] = useState<boolean | null>(null);
+  const [storageMode, setStorageMode] = useState<string>('local_container_disk');
 
   useEffect(() => {
     let active = true;
@@ -65,10 +66,17 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!active) return;
-        setFileUploadEnabled(Boolean(data?.fileUploadEnabled));
+        if (data && typeof data.fileUploadEnabled === 'boolean') {
+          setFileUploadEnabled(data.fileUploadEnabled);
+          if (typeof data.storageMode === 'string') {
+            setStorageMode(data.storageMode);
+          }
+        } else {
+          setFileUploadEnabled(true);
+        }
       })
       .catch(() => {
-        if (active) setFileUploadEnabled(false);
+        if (active) setFileUploadEnabled(true);
       });
     return () => {
       active = false;
@@ -90,10 +98,10 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   const processFile = async (file: File) => {
     setErrorMessage('');
 
-    if (fileUploadEnabled !== true) {
+    if (fileUploadEnabled === false) {
       const storageErr = t(
-        'File upload is safely disabled until Google Cloud Storage (GCS_BUCKET) is configured.',
-        'Google Cloud Storage (GCS_BUCKET) कॉन्फ़िगर न होने तक फ़ाइल अपलोड सुरक्षित रूप से बंद है।'
+        'File upload is temporarily disabled on the server.',
+        'सर्वर पर फ़ाइल अपलोड अस्थायी रूप से बंद है।'
       );
       setErrorMessage(storageErr);
       showToast(storageErr, 'info');
@@ -220,8 +228,10 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
+    const selectedFile = e.target.files?.[0];
+    e.target.value = '';
+    if (selectedFile) {
+      processFile(selectedFile);
     }
   };
 
@@ -251,7 +261,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
         </div>
       )}
 
-      {/* Safe Disabled Storage State (When GCS_BUCKET is Not Configured) */}
+      {/* Disabled Storage State (Only if backend explicitly disables uploads) */}
       {fileUploadEnabled === false ? (
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-start gap-3 text-xs">
           <div className="w-8 h-8 rounded bg-slate-200/70 text-slate-600 flex items-center justify-center shrink-0">
@@ -260,14 +270,14 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
           <div className="space-y-1">
             <div className="font-bold text-slate-800">
               {t(
-                'File Upload Safely Disabled (Cloud Storage Not Configured)',
-                'फ़ाइल अपलोड सुरक्षित रूप से बंद है (Cloud Storage सेट नहीं है)'
+                'File Upload Temporarily Unavailable',
+                'फ़ाइल अपलोड अस्थायी रूप से उपलब्ध नहीं है'
               )}
             </div>
             <p className="text-slate-600 leading-relaxed">
               {t(
-                'Google Cloud Storage (GCS_BUCKET) is not configured yet in this preview environment. No local or fake uploads are simulated — you can submit the form cleanly without attachments.',
-                'इस Preview मोड में Google Cloud Storage (GCS_BUCKET) अभी कॉन्फ़िगर नहीं है। कोई नकली अपलोड नहीं दिखाया जा रहा है — आप बिना फ़ाइल जोड़े ही फॉर्म या टिकट सुरक्षित रूप से भेज सकते हैं।'
+                'Server file storage is currently disabled. You can submit the form cleanly without attachments.',
+                'सर्वर फ़ाइल स्टोरेज अभी बंद है। आप बिना फ़ाइल जोड़े भी फॉर्म या टिकट सुरक्षित रूप से भेज सकते हैं।'
               )}
             </p>
           </div>
@@ -275,7 +285,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
       ) : fileUploadEnabled === null ? (
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex items-center gap-2.5 text-xs text-slate-500">
           <RefreshCw className="w-4 h-4 animate-spin text-blue-700 shrink-0" />
-          <span>{t('Checking Cloud Storage status...', 'Cloud Storage स्थिति की जांच हो रही है...')}</span>
+          <span>{t('Checking Storage Vault status...', 'स्टोरेज वॉल्ट स्थिति की जांच हो रही है...')}</span>
         </div>
       ) : !currentUser ? (
         <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
@@ -291,7 +301,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
           <button
             type="button"
             onClick={() => openAuthModal('login')}
-            className="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shrink-0"
+            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shrink-0"
           >
             {t('Sign In to Attach File', 'फ़ाइल अपलोड हेतु साइन इन करें')}
           </button>
@@ -307,7 +317,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
               <div className="font-bold text-slate-900 truncate">
                 {uploadedRecord.fileName}
               </div>
-              <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2">
+              <div className="text-[11px] text-slate-500 font-mono flex flex-wrap items-center gap-1.5">
                 <span>{uploadedRecord.fileSizeFormatted}</span>
                 <span>·</span>
                 <span className="text-emerald-700 font-bold flex items-center gap-1">
@@ -330,11 +340,19 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
       ) : (
         /* Dropzone / Upload Trigger */
         <div
+          role="button"
+          tabIndex={0}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           className={`relative border-2 border-dashed rounded-lg p-4 sm:p-5 text-center cursor-pointer transition-all ${
             dragActive
               ? 'border-blue-700 bg-blue-50/50'
@@ -345,8 +363,9 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
             ref={fileInputRef}
             type="file"
             onChange={handleInputChange}
+            onClick={(e) => e.stopPropagation()}
             accept={allowedExtensions.map((e) => `.${e}`).join(',')}
-            className="hidden"
+            className="sr-only"
           />
 
           {uploading ? (
@@ -376,6 +395,11 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
                   `PDF, DOCX, ZIP, APK, PNG, JPG (up to ${maxSizeMb} MB)`
                 )}
               </p>
+              <div className="text-[10px] font-mono text-slate-400">
+                {storageMode === 'google_cloud_storage'
+                  ? t('Encrypted Google Cloud Storage Vault · SHA-256', 'एन्क्रिप्टेड Cloud Storage वॉल्ट · SHA-256')
+                  : t('Authenticated Server Vault · Magic-Byte & SHA-256 Checked', 'प्रमाणित सर्वर वॉल्ट · Magic-Byte व SHA-256 सत्यापित')}
+              </div>
             </div>
           )}
         </div>

@@ -10,9 +10,13 @@ import {
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth, googleProvider } from '../firebase/config';
-import { syncUserAccount, fetchUserRole, logAuditEvent } from '../firebase/services';
-
-const ROOT_ADMIN_EMAIL = 'ssbhanu41@gmail.com';
+import {
+  syncUserAccount,
+  fetchUserRole,
+  logAuditEvent,
+  isLegacyOrEnvRootAdminEmail,
+  ensureBootstrapAdminRoleDoc,
+} from '../firebase/services';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -53,9 +57,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        const isVerifiedRootAdmin =
+        const isClientBootstrapAdmin =
           user.emailVerified === true &&
-          user.email?.toLowerCase() === ROOT_ADMIN_EMAIL;
+          isLegacyOrEnvRootAdminEmail(user.email, user.emailVerified);
 
         try {
           await syncUserAccount({
@@ -66,10 +70,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
 
           const role = await fetchUserRole(user.uid);
-          setUserRole(isVerifiedRootAdmin || role === 'admin' ? 'admin' : 'client');
+          let resolvedAdmin = role === 'admin' || isClientBootstrapAdmin;
+
+          if (!resolvedAdmin) {
+            try {
+              const idToken = await user.getIdToken();
+              const statusRes = await fetch('/api/auth/status', {
+                headers: { Authorization: `Bearer ${idToken}` },
+              });
+              if (statusRes.ok) {
+                const statusData = await statusRes.json();
+                resolvedAdmin = statusData?.isAdmin === true;
+              }
+            } catch {
+              // Offline fallback keeps client role strict
+            }
+          }
+
+          if (resolvedAdmin && role !== 'admin') {
+            await ensureBootstrapAdminRoleDoc({ uid: user.uid, email: user.email });
+          }
+
+          setUserRole(resolvedAdmin ? 'admin' : 'client');
         } catch (err) {
           console.warn('[Auth Sync Warning]', err);
-          setUserRole(isVerifiedRootAdmin ? 'admin' : 'client');
+          setUserRole(isClientBootstrapAdmin ? 'admin' : 'client');
         }
       } else {
         setUserRole('client');
@@ -89,20 +114,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const loginWithEmail = useCallback(async (email: string, pass: string) => {
-    const result = await signInWithEmailAndPassword(auth, email, pass);
+    const cleanEmail = email.trim();
+    const result = await signInWithEmailAndPassword(auth, cleanEmail, pass);
     if (result.user) {
-      await logAuditEvent('AUTH_LOGIN_EMAIL', `users/${result.user.uid}`, `Signed in with Email: ${email}`);
+      await logAuditEvent('AUTH_LOGIN_EMAIL', `users/${result.user.uid}`, `Signed in with Email: ${cleanEmail}`);
     }
     closeAuthModal();
   }, []);
 
   const registerWithEmail = useCallback(async (email: string, pass: string, name?: string) => {
-    const result = await createUserWithEmailAndPassword(auth, email, pass);
+    const cleanEmail = email.trim();
+    const cleanName = (name || '').trim();
+    const result = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
     if (result.user) {
-      if (name) {
-        await updateProfile(result.user, { displayName: name });
+      if (cleanName) {
+        await updateProfile(result.user, { displayName: cleanName });
+        await syncUserAccount({
+          uid: result.user.uid,
+          email: result.user.email,
+          displayName: cleanName,
+          photoURL: result.user.photoURL,
+        });
       }
-      await logAuditEvent('AUTH_REGISTER', `users/${result.user.uid}`, `Registered new account: ${email}`);
+      await logAuditEvent('AUTH_REGISTER', `users/${result.user.uid}`, `Registered new account: ${cleanEmail}`);
     }
     closeAuthModal();
   }, []);
@@ -115,8 +149,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [currentUser]);
 
   const resetPassword = useCallback(async (email: string) => {
-    await sendPasswordResetEmail(auth, email);
-    await logAuditEvent('AUTH_RESET_PASSWORD', 'auth', `Password reset email sent to: ${email}`);
+    const cleanEmail = email.trim();
+    await sendPasswordResetEmail(auth, cleanEmail);
+    await logAuditEvent('AUTH_RESET_PASSWORD', 'auth', `Password reset email sent to: ${cleanEmail}`);
   }, []);
 
   return (

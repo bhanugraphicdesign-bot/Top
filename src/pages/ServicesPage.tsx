@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { useNavigation } from '../context/NavigationContext';
 import { SERVICES_DATA } from '../data/content';
+import { fetchServicesCatalog } from '../firebase/services';
 import { ServiceItem } from '../types';
-import { ArrowUpRight, Check, ArrowRight, Layers, Globe, Smartphone, Cpu, Cloud, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, Check, ArrowRight } from 'lucide-react';
 
 interface ServicesPageProps {
   onSelectService: (service: ServiceItem) => void;
@@ -15,7 +15,25 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
   onOpenConsultation,
 }) => {
   const { language, t } = useLanguage();
+  const [services, setServices] = useState<ServiceItem[]>(SERVICES_DATA);
   const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  useEffect(() => {
+    let mounted = true;
+    fetchServicesCatalog()
+      .then((cloudServices) => {
+        if (mounted && Array.isArray(cloudServices) && cloudServices.length > 0) {
+          const sorted = [...cloudServices].sort((a, b) =>
+            String(a.number || '').localeCompare(String(b.number || ''), undefined, { numeric: true })
+          );
+          setServices(sorted);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const categories = [
     { id: 'all', label: 'All Services', labelHi: 'सभी सेवाएं' },
@@ -26,7 +44,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
     { id: 'Integration Suite', label: 'Integration & APIs', labelHi: 'एपीआई गेटवे' },
   ];
 
-  const filtered = SERVICES_DATA.filter((s) => {
+  const filtered = services.filter((s) => {
     if (activeCategory === 'all') return true;
     return s.category === activeCategory;
   });
@@ -67,7 +85,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 space-y-12">
         {/* Category Filter Controls */}
-        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 rounded-lg border border-slate-200 w-fit">
+        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 rounded-lg border border-slate-200 w-fit max-w-full">
           {categories.map((cat) => (
             <button
               key={cat.id}
@@ -93,20 +111,20 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pb-4 border-b border-slate-100">
                 <div>
                   <div className="text-xs font-mono font-bold text-blue-700 uppercase tracking-wider mb-1">
-                    {service.number}. {language === 'hi' ? service.categoryHi : service.category}
+                    {service.number}. {language === 'hi' ? (service.categoryHi || service.category) : service.category}
                   </div>
                   <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
-                    {language === 'hi' ? service.titleHi : service.title}
+                    {language === 'hi' ? (service.titleHi || service.title) : service.title}
                   </h2>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex flex-wrap items-center gap-3 shrink-0">
                   <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-200 text-right">
                     <span className="text-xs font-mono font-extrabold text-blue-700 block tabular-nums">
                       {service.metric}
                     </span>
                     <span className="text-[10px] text-slate-500 font-medium">
-                      {language === 'hi' ? service.metricLabelHi : service.metricLabel}
+                      {language === 'hi' ? (service.metricLabelHi || service.metricLabel) : service.metricLabel}
                     </span>
                   </div>
                   <button
@@ -120,7 +138,9 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
               </div>
 
               <p className="text-sm text-slate-600 leading-relaxed">
-                {language === 'hi' ? service.fullDescHi : service.fullDesc}
+                {language === 'hi'
+                  ? (service.fullDescHi || service.shortDescHi || service.fullDesc || service.shortDesc)
+                  : (service.fullDesc || service.shortDesc)}
               </p>
 
               {/* Deliverables Grid */}
@@ -129,17 +149,18 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                   {t('Production Deliverables & Artifacts', 'प्रमुख उत्पादन परिणाम व कोड आर्टिफैक्ट्स')}
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                  {(language === 'hi' ? service.deliverablesHi : service.deliverables).map(
-                    (d, i) => (
-                      <div
-                        key={i}
-                        className="flex items-start gap-2 p-2.5 rounded-md bg-slate-50 border border-slate-200/80 text-xs text-slate-700"
-                      >
-                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                        <span>{d}</span>
-                      </div>
-                    )
-                  )}
+                  {(language === 'hi'
+                    ? (service.deliverablesHi?.length ? service.deliverablesHi : service.deliverables)
+                    : service.deliverables
+                  ).map((d, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-2 p-2.5 rounded-md bg-slate-50 border border-slate-200/80 text-xs text-slate-700"
+                    >
+                      <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <span>{d}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
 

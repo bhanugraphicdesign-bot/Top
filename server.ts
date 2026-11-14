@@ -51,7 +51,27 @@ function loadFirebasePublicConfig(): FirebasePublicConfig {
 }
 
 const FIREBASE_CONFIG = loadFirebasePublicConfig();
-const ROOT_ADMIN_EMAIL = 'ssbhanu41@gmail.com';
+const LEGACY_ROOT_ADMIN_FALLBACK = 'ssbhanu41@gmail.com';
+const RAW_ROOT_ADMIN_EMAIL = (process.env.ROOT_ADMIN_EMAIL || '').trim();
+const HAS_EXPLICIT_ROOT_ADMIN_EMAIL = RAW_ROOT_ADMIN_EMAIL.length > 0;
+const ROOT_ADMIN_EMAILS = new Set<string>(
+  (HAS_EXPLICIT_ROOT_ADMIN_EMAIL ? RAW_ROOT_ADMIN_EMAIL : LEGACY_ROOT_ADMIN_FALLBACK)
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+if (!HAS_EXPLICIT_ROOT_ADMIN_EMAIL) {
+  console.warn(
+    '[Security Notice] ROOT_ADMIN_EMAIL env var not set; using legacy bootstrap admin fallback alongside Firestore user_roles.'
+  );
+}
+
+function isRootAdminEmail(email: string, emailVerified: boolean): boolean {
+  if (!emailVerified || !email) return false;
+  return ROOT_ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
+
 const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
 
 /* =========================================================================
@@ -123,7 +143,7 @@ const EXPLICIT_GCS_BUCKET = (process.env.GCS_BUCKET || '').trim();
 let gcsStorageClient: Storage | null = null;
 let gcsBucketVerified = false;
 let gcsStatusNote =
-  'GCS_BUCKET env var not set; file upload is safely disabled until Google Cloud Storage is configured.';
+  'GCS_BUCKET not set; file upload is active using authenticated local server disk vault (uploads/). Configure GCS_BUCKET for persistent Cloud Storage across container restarts.';
 
 async function verifyGcsStorageAvailability(): Promise<void> {
   if (!EXPLICIT_GCS_BUCKET) {
@@ -148,12 +168,12 @@ async function verifyGcsStorageAvailability(): Promise<void> {
       console.log(`[Storage] ${gcsStatusNote}`);
     } else {
       gcsBucketVerified = false;
-      gcsStatusNote = `Configured GCS_BUCKET (${EXPLICIT_GCS_BUCKET}) does not exist or is unreachable; file upload safely disabled.`;
+      gcsStatusNote = `Configured GCS_BUCKET (${EXPLICIT_GCS_BUCKET}) does not exist or is unreachable; using authenticated local server disk vault fallback.`;
       console.warn(`[Storage Warning] ${gcsStatusNote}`);
     }
   } catch (err: any) {
     gcsBucketVerified = false;
-    gcsStatusNote = `GCS verification unavailable (${err?.code || 'missing credentials'}); file upload safely disabled.`;
+    gcsStatusNote = `GCS verification unavailable (${err?.code || 'missing credentials'}); using authenticated local server disk vault fallback.`;
     console.warn(`[Storage Notice] ${gcsStatusNote}`);
   }
 }
@@ -488,6 +508,7 @@ interface VerifiedAuthUser {
   email: string;
   emailVerified: boolean;
   isAdmin: boolean;
+  roleSource: 'user_roles' | 'root_admin_env' | 'custom_claim' | 'client';
 }
 
 let certCache: { certs: Record<string, string>; expiresAt: number } = {
@@ -557,6 +578,32 @@ async function checkFirestoreAdminRole(uid: string, idToken: string): Promise<bo
   return doc?.fields?.role?.stringValue === 'admin';
 }
 
+async function resolveServerAdminStatus(params: {
+  uid: string;
+  email: string;
+  emailVerified: boolean;
+  idToken: string;
+  hasCustomClaimAdmin: boolean;
+}): Promise<{ isAdmin: boolean; roleSource: VerifiedAuthUser['roleSource'] }> {
+  // 1. Primary RBAC source of truth: Firestore `user_roles/{uid}` document
+  const hasFirestoreRole = await checkFirestoreAdminRole(params.uid, params.idToken);
+  if (hasFirestoreRole) {
+    return { isAdmin: true, roleSource: 'user_roles' };
+  }
+
+  // 2. Env-configured root admin fallback (`process.env.ROOT_ADMIN_EMAIL`, with safe legacy bootstrap fallback)
+  if (isRootAdminEmail(params.email, params.emailVerified)) {
+    return { isAdmin: true, roleSource: 'root_admin_env' };
+  }
+
+  // 3. Verified Firebase custom claims fallback
+  if (params.hasCustomClaimAdmin) {
+    return { isAdmin: true, roleSource: 'custom_claim' };
+  }
+
+  return { isAdmin: false, roleSource: 'client' };
+}
+
 async function verifyProjectAuthorization(
   projectId: string,
   user: VerifiedAuthUser,
@@ -588,14 +635,13 @@ async function verifyFirebaseBearerToken(
       const decoded = await getAuth(adminApp).verifyIdToken(token, true);
       const email = typeof decoded.email === 'string' ? decoded.email : '';
       const emailVerified = Boolean(decoded.email_verified);
-      let isAdmin =
-        (email.toLowerCase() === ROOT_ADMIN_EMAIL.toLowerCase() && emailVerified) ||
-        decoded.admin === true ||
-        decoded.role === 'admin';
-
-      if (!isAdmin) {
-        isAdmin = await checkFirestoreAdminRole(decoded.uid, token);
-      }
+      const { isAdmin, roleSource } = await resolveServerAdminStatus({
+        uid: decoded.uid,
+        email,
+        emailVerified,
+        idToken: token,
+        hasCustomClaimAdmin: decoded.admin === true || decoded.role === 'admin',
+      });
 
       return {
         rawToken: token,
@@ -604,6 +650,7 @@ async function verifyFirebaseBearerToken(
           email,
           emailVerified,
           isAdmin,
+          roleSource,
         },
       };
     }
@@ -649,14 +696,13 @@ async function verifyFirebaseBearerToken(
 
     const email = typeof payload.email === 'string' ? payload.email : '';
     const emailVerified = Boolean(payload.email_verified);
-    let isAdmin =
-      (email.toLowerCase() === ROOT_ADMIN_EMAIL.toLowerCase() && emailVerified) ||
-      payload.admin === true ||
-      payload.role === 'admin';
-
-    if (!isAdmin) {
-      isAdmin = await checkFirestoreAdminRole(payload.sub, token);
-    }
+    const { isAdmin, roleSource } = await resolveServerAdminStatus({
+      uid: payload.sub,
+      email,
+      emailVerified,
+      idToken: token,
+      hasCustomClaimAdmin: payload.admin === true || payload.role === 'admin',
+    });
 
     return {
       rawToken: token,
@@ -665,6 +711,7 @@ async function verifyFirebaseBearerToken(
         email,
         emailVerified,
         isAdmin,
+        roleSource,
       },
     };
   } catch {
@@ -737,6 +784,28 @@ const MAX_REQUESTS_PER_WINDOW = 100;
 const uploadRateMap = new Map<string, { count: number; resetTime: number }>();
 const MAX_UPLOADS_PER_WINDOW = 20;
 
+const formRateMap = new Map<string, { count: number; resetTime: number }>();
+const FORM_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const parsedFormRateMax = parseInt(process.env.FORM_RATE_LIMIT_MAX || '8', 10);
+const MAX_FORM_SUBMISSIONS_PER_WINDOW =
+  Number.isFinite(parsedFormRateMax) && parsedFormRateMax > 0 ? parsedFormRateMax : 8;
+const MIN_FORM_FILL_TIME_MS = 1200; // 1.2 seconds minimum fill duration
+
+function pruneExpiredRateBuckets(map: Map<string, { count: number; resetTime: number }>): void {
+  const now = Date.now();
+  for (const [key, entry] of map.entries()) {
+    if (now > entry.resetTime) {
+      map.delete(key);
+    }
+  }
+}
+
+setInterval(() => {
+  pruneExpiredRateBuckets(rateLimitMap);
+  pruneExpiredRateBuckets(uploadRateMap);
+  pruneExpiredRateBuckets(formRateMap);
+}, 15 * 60 * 1000).unref();
+
 function getClientIp(req: express.Request): string {
   const forwarded = req.headers['x-forwarded-for'] as string | undefined;
   return (forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress) || '127.0.0.1';
@@ -745,27 +814,180 @@ function getClientIp(req: express.Request): string {
 function checkRateBucket(
   map: Map<string, { count: number; resetTime: number }>,
   key: string,
-  limit: number
-): { allowed: boolean; retryAfterMs: number } {
+  limit: number,
+  windowMs: number = RATE_LIMIT_WINDOW_MS
+): { allowed: boolean; remaining: number; resetTime: number; retryAfterMs: number } {
   const now = Date.now();
   const record = map.get(key);
   if (!record || now > record.resetTime) {
-    map.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
-    return { allowed: true, retryAfterMs: 0 };
+    const resetTime = now + windowMs;
+    map.set(key, { count: 1, resetTime });
+    return {
+      allowed: true,
+      remaining: Math.max(0, limit - 1),
+      resetTime,
+      retryAfterMs: 0,
+    };
   }
   if (record.count >= limit) {
-    return { allowed: false, retryAfterMs: record.resetTime - now };
+    return {
+      allowed: false,
+      remaining: 0,
+      resetTime: record.resetTime,
+      retryAfterMs: Math.max(1000, record.resetTime - now),
+    };
   }
   record.count += 1;
-  return { allowed: true, retryAfterMs: 0 };
+  return {
+    allowed: true,
+    remaining: Math.max(0, limit - record.count),
+    resetTime: record.resetTime,
+    retryAfterMs: 0,
+  };
+}
+
+function resolveRequestedLanguage(req: express.Request): 'hi' | 'en' | 'both' {
+  const bodyLang = typeof req.body?.language === 'string' ? req.body.language.trim().toLowerCase() : '';
+  if (bodyLang === 'hi') return 'hi';
+  if (bodyLang === 'en') return 'en';
+  const acceptLang = (req.headers['accept-language'] || '').toString().toLowerCase();
+  if (acceptLang.startsWith('hi')) return 'hi';
+  return 'both';
+}
+
+function createFormRateLimiter(scope: 'inquiry' | 'newsletter') {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const clientIp = getClientIp(req);
+    const bucketKey = `${scope}:${clientIp}`;
+    const check = checkRateBucket(
+      formRateMap,
+      bucketKey,
+      MAX_FORM_SUBMISSIONS_PER_WINDOW,
+      FORM_RATE_LIMIT_WINDOW_MS
+    );
+
+    const retryAfterSeconds = Math.ceil(check.retryAfterMs / 1000);
+    res.setHeader('X-RateLimit-Limit', String(MAX_FORM_SUBMISSIONS_PER_WINDOW));
+    res.setHeader('X-RateLimit-Remaining', String(check.remaining));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil(check.resetTime / 1000)));
+
+    if (!check.allowed) {
+      const waitMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+      const errorEn = `Too many form submissions from your IP address. Please wait ${waitMinutes} minute(s) before trying again.`;
+      const errorHi = `आपके आईपी पते से बहुत अधिक फॉर्म अनुरोध भेजे गए हैं। कृपया ${waitMinutes} मिनट बाद पुनः प्रयास करें।`;
+      const lang = resolveRequestedLanguage(req);
+
+      appendServerAuditEvent({
+        action: 'FORM_RATE_LIMIT_EXCEEDED',
+        actorUid: 'anonymous',
+        actorEmail: typeof req.body?.email === 'string' ? req.body.email.trim().slice(0, 120) : 'unknown',
+        resource: req.originalUrl,
+        outcome: 'DENIED',
+        ip: clientIp,
+        details: `Blocked ${scope} submission: exceeded ${MAX_FORM_SUBMISSIONS_PER_WINDOW} requests per 15 min window`,
+      });
+
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        code: 'RATE_LIMIT_EXCEEDED',
+        error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+        errorEn,
+        errorHi,
+        retryAfterSeconds,
+        retryAfterMs: check.retryAfterMs,
+      });
+    }
+
+    return next();
+  };
+}
+
+function validateAntiBotFields(
+  req: express.Request,
+  res: express.Response,
+  scope: 'inquiry' | 'newsletter'
+): boolean {
+  const { website, _hp, hpVerification, formOpenedAt, fillDurationMs } = req.body || {};
+  const rawHoneypot = [website, _hp, hpVerification].find(
+    (val) => typeof val === 'string' && val.trim().length > 0
+  );
+  const lang = resolveRequestedLanguage(req);
+
+  if (rawHoneypot) {
+    const errorEn = 'Automated form submission rejected by spam protection.';
+    const errorHi = 'स्पैम सुरक्षा द्वारा स्वचालित फॉर्म अनुरोध अस्वीकार कर दिया गया है।';
+    appendServerAuditEvent({
+      action: 'FORM_HONEYPOT_TRIGGERED',
+      actorUid: 'anonymous',
+      actorEmail: 'bot_suspect',
+      resource: req.originalUrl,
+      outcome: 'DENIED',
+      ip: getClientIp(req),
+      details: `Honeypot field populated on ${scope} form`,
+    });
+    res.status(400).json({
+      code: 'BOT_PROTECTION_TRIGGERED',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
+    return false;
+  }
+
+  // Evaluate fill duration safely without falsely blocking legitimate users whose device clock is slightly ahead
+  const hasClientDuration =
+    fillDurationMs !== undefined &&
+    fillDurationMs !== null &&
+    Number.isFinite(Number(fillDurationMs)) &&
+    Number(fillDurationMs) >= 0;
+
+  let submittedTooFast = false;
+  if (hasClientDuration) {
+    submittedTooFast = Number(fillDurationMs) < MIN_FORM_FILL_TIME_MS;
+  } else if (formOpenedAt !== undefined && formOpenedAt !== null) {
+    const openedMs = Number(formOpenedAt);
+    const elapsedMs = Date.now() - openedMs;
+    const SKEW_TOLERANCE_MS = 5 * 60 * 1000;
+    if (!Number.isFinite(openedMs)) {
+      submittedTooFast = true;
+    } else if (elapsedMs >= 0 && elapsedMs < MIN_FORM_FILL_TIME_MS) {
+      submittedTooFast = true;
+    } else if (elapsedMs < -SKEW_TOLERANCE_MS) {
+      // Timestamp claimed more than 5 minutes in the future
+      submittedTooFast = true;
+    }
+  }
+
+  if (submittedTooFast) {
+    const errorEn = 'Submission sent too quickly. Please review your details and try again.';
+    const errorHi = 'अनुरोध बहुत तेज़ी से भेजा गया है। कृपया अपने विवरण जांचें और पुनः प्रयास करें।';
+    res.status(400).json({
+      code: 'SUBMISSION_TOO_FAST',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
+    return false;
+  }
+
+  return true;
 }
 
 function rateLimiter(req: express.Request, res: express.Response, next: express.NextFunction) {
   const clientIp = getClientIp(req);
   const check = checkRateBucket(rateLimitMap, clientIp, MAX_REQUESTS_PER_WINDOW);
   if (!check.allowed) {
+    const retryAfterSeconds = Math.ceil(check.retryAfterMs / 1000);
+    const errorEn = 'Rate limit exceeded. Please retry in 1 minute.';
+    const errorHi = 'अनुरोध सीमा पार हो गई है। कृपया 1 मिनट बाद पुनः प्रयास करें।';
+    const lang = resolveRequestedLanguage(req);
+    res.setHeader('Retry-After', String(retryAfterSeconds));
     return res.status(429).json({
-      error: 'Rate limit exceeded. Please retry in 1 minute.',
+      code: 'RATE_LIMIT_EXCEEDED',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+      retryAfterSeconds,
       retryAfterMs: check.retryAfterMs,
     });
   }
@@ -842,11 +1064,14 @@ app.get('/api/health', async (req, res) => {
       hstsEnabled: true,
     },
     storage: {
-      mode: gcsBucketVerified ? 'google_cloud_storage' : 'disabled_no_gcs_bucket',
-      fileUploadEnabled: gcsBucketVerified,
+      mode: gcsBucketVerified ? 'google_cloud_storage' : 'local_container_disk',
+      fileUploadEnabled: true,
       gcsBucketConfigured: Boolean(EXPLICIT_GCS_BUCKET),
       gcsBucketVerified,
       persistentAcrossCloudRunRestarts: gcsBucketVerified,
+      ephemeralDiskWarning: gcsBucketVerified
+        ? null
+        : 'Files are saved to local server disk vault (uploads/). Configure GCS_BUCKET in production for durable Cloud Storage across container restarts.',
       note: gcsStatusNote,
     },
     deployment: {
@@ -863,11 +1088,25 @@ app.get('/api/health', async (req, res) => {
 // 1b. Public Safe System Capabilities Endpoint (Exposes non-sensitive feature flags only)
 app.get('/api/system/capabilities', (_req, res) => {
   res.json({
-    fileUploadEnabled: gcsBucketVerified,
-    storageMode: gcsBucketVerified ? 'google_cloud_storage' : 'disabled_no_gcs_bucket',
+    fileUploadEnabled: true,
+    storageMode: gcsBucketVerified ? 'google_cloud_storage' : 'local_container_disk',
+    gcsBucketVerified,
     paymentGatewayEnabled: HAS_EXPLICIT_PAYMENT_SECRET,
     paymentMode: HAS_EXPLICIT_PAYMENT_SECRET ? 'configured' : 'optional_mode',
     authProvider: 'Firebase Authentication',
+    rootAdminEnvConfigured: HAS_EXPLICIT_ROOT_ADMIN_EMAIL,
+  });
+});
+
+// 1c. Authenticated Caller Role Status Endpoint (Never leaks admin emails)
+app.get('/api/auth/status', requireAuth, (req: AuthenticatedRequest, res) => {
+  const user = req.authUser!;
+  res.json({
+    uid: user.uid,
+    emailVerified: user.emailVerified,
+    isAdmin: user.isAdmin,
+    role: user.isAdmin ? 'admin' : 'client',
+    roleSource: user.roleSource,
   });
 });
 
@@ -890,24 +1129,57 @@ app.get('/api/telemetry', (req, res) => {
   });
 });
 
-// 3. Server-side Inbound Scoping Validator
-app.post('/api/inquiries/validate', (req, res) => {
+// 3. Server-side Inbound Scoping Validator (Rate-limited per IP + anti-bot checks)
+app.post('/api/inquiries/validate', createFormRateLimiter('inquiry'), (req, res) => {
+  if (!validateAntiBotFields(req, res, 'inquiry')) {
+    return;
+  }
+
   const { fullName, email, serviceType, brief } = req.body || {};
+  const lang = resolveRequestedLanguage(req);
 
   if (!fullName || typeof fullName !== 'string' || fullName.trim().length === 0) {
-    return res.status(400).json({ error: 'fullName is required and cannot be empty' });
+    const errorEn = 'Full name is required and cannot be empty.';
+    const errorHi = 'पूरा नाम आवश्यक है और इसे खाली नहीं छोड़ा जा सकता।';
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
   }
   if (fullName.trim().length > 160) {
-    return res.status(400).json({ error: 'fullName exceeds 160 characters' });
+    const errorEn = 'Full name exceeds 160 characters.';
+    const errorHi = 'पूरा नाम 160 अक्षरों से अधिक नहीं हो सकता।';
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!email || typeof email !== 'string' || !emailRegex.test(email.trim()) || email.trim().length > 160) {
-    return res.status(400).json({ error: 'A valid email address is required' });
+    const errorEn = 'Please enter a valid work email address.';
+    const errorHi = 'कृपया एक मान्य ईमेल पता दर्ज करें।';
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
   }
 
   if (!serviceType || typeof serviceType !== 'string' || serviceType.trim().length === 0 || serviceType.trim().length > 160) {
-    return res.status(400).json({ error: 'serviceType is required' });
+    const errorEn = 'Please select a technical service domain.';
+    const errorHi = 'कृपया एक तकनीकी सेवा चुनें।';
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
   }
 
   const sanitizedBrief = typeof brief === 'string' ? brief.trim().substring(0, 2000) : '';
@@ -925,22 +1197,38 @@ app.post('/api/inquiries/validate', (req, res) => {
   });
 });
 
-// 3b. Newsletter Dispatch Subscription Endpoint (persisted server-side)
-app.post('/api/newsletter/subscribe', (req, res) => {
+// 3b. Newsletter Dispatch Subscription Endpoint (Rate-limited per IP + anti-bot checks)
+app.post('/api/newsletter/subscribe', createFormRateLimiter('newsletter'), (req, res) => {
+  if (!validateAntiBotFields(req, res, 'newsletter')) {
+    return;
+  }
+
   const { email, language } = req.body || {};
+  const lang = resolveRequestedLanguage(req);
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!email || typeof email !== 'string' || !emailRegex.test(email.trim()) || email.trim().length > 160) {
-    return res.status(400).json({ error: 'Please enter a valid work email address.' });
+    const errorEn = 'Please enter a valid work email address.';
+    const errorHi = 'कृपया एक मान्य कार्य ईमेल पता दर्ज करें।';
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
   }
 
   const normalized = email.trim().toLowerCase();
   const subscribers = getNewsletterSubscribers();
   const existing = subscribers.find((s) => s.email === normalized);
   if (existing) {
+    const msgEn = 'Email is already registered for Quarterly Architectural Dispatch.';
+    const msgHi = 'यह ईमेल पहले से ही त्रैमासिक आर्किटेक्चर डिस्पैच के लिए पंजीकृत है।';
     return res.json({
       success: true,
       alreadySubscribed: true,
-      message: 'Email is already registered for Quarterly Architectural Dispatch.',
+      message: lang === 'hi' ? msgHi : msgEn,
+      messageEn: msgEn,
+      messageHi: msgHi,
     });
   }
 
@@ -953,10 +1241,14 @@ app.post('/api/newsletter/subscribe', (req, res) => {
   subscribers.push(entry);
   saveNewsletterSubscribers(subscribers);
 
+  const msgEn = 'Subscribed to Quarterly Architectural Dispatch.';
+  const msgHi = 'त्रैमासिक आर्किटेक्चर डिस्पैच में सदस्यता सफल।';
   return res.status(201).json({
     success: true,
     alreadySubscribed: false,
-    message: 'Subscribed to Quarterly Architectural Dispatch.',
+    message: lang === 'hi' ? msgHi : msgEn,
+    messageEn: msgEn,
+    messageHi: msgHi,
   });
 });
 
@@ -1013,14 +1305,6 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
   const clientIp = getClientIp(req);
 
   try {
-    // Reject file uploads safely when Google Cloud Storage is not configured (no fake storage success)
-    if (!gcsBucketVerified || !gcsStorageClient || !EXPLICIT_GCS_BUCKET) {
-      return res.status(503).json({
-        error: 'File upload is safely disabled until Google Cloud Storage (GCS_BUCKET) is configured.',
-        code: 'STORAGE_NOT_CONFIGURED',
-      });
-    }
-
     // Upload Rate Limit per authenticated user & IP
     const userLimit = checkRateBucket(uploadRateMap, `uid:${user.uid}`, MAX_UPLOADS_PER_WINDOW);
     const ipLimit = checkRateBucket(uploadRateMap, `ip:${clientIp}`, MAX_UPLOADS_PER_WINDOW);
@@ -1338,8 +1622,9 @@ app.get('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, res
         });
         return res.json({ signedUrl, expiresInSeconds: 300 });
       }
+      const safeDispositionName = String(record.fileName || 'artifact').replace(/["\r\n]/g, '_');
       res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${record.fileName}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="${safeDispositionName}"`);
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'private, no-store');
       res.setHeader('X-Artifact-SHA256', record.sha256);
@@ -1357,8 +1642,9 @@ app.get('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, res
     return res.status(404).json({ error: 'Stored artifact unavailable.' });
   }
 
+  const safeDispositionName = String(record.fileName || 'artifact').replace(/["\r\n]/g, '_');
   res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
-  res.setHeader('Content-Disposition', `attachment; filename="${record.fileName}"`);
+  res.setHeader('Content-Disposition', `attachment; filename="${safeDispositionName}"`);
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'private, no-store');
   res.setHeader('X-Artifact-SHA256', record.sha256);
@@ -1806,41 +2092,73 @@ app.post('/api/invoices/generate', requireAdmin, (req: AuthenticatedRequest, res
    SEARCH ENGINE OPTIMIZATION & DISCOVERABILITY (SEO)
    ========================================================================= */
 
-app.get('/robots.txt', (req, res) => {
-  res.setHeader('Content-Type', 'text/plain');
-  res.send(
-    `User-agent: *\nAllow: /\nDisallow: /admin-dashboard\n\nSitemap: https://power-web-studio-ai-enterprise-digital-platform.ai.studio/sitemap.xml\n`
+const CANONICAL_SEO_DOMAIN = 'https://power-web-studio-ai-enterprise-digital-platform.ai.studio';
+
+function resolveSeoBaseUrl(): string {
+  const envUrl = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(envUrl)) {
+    return envUrl;
+  }
+  return CANONICAL_SEO_DOMAIN;
+}
+
+app.get('/robots.txt', (_req, res) => {
+  const baseUrl = resolveSeoBaseUrl();
+  const publicFile = path.resolve(__dirname, 'public', 'robots.txt');
+  const distFile = path.resolve(__dirname, 'dist', 'robots.txt');
+  const targetFile = fs.existsSync(publicFile) ? publicFile : distFile;
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  if (fs.existsSync(targetFile)) {
+    const content = fs
+      .readFileSync(targetFile, 'utf8')
+      .replaceAll(CANONICAL_SEO_DOMAIN, baseUrl);
+    return res.send(content);
+  }
+  return res.send(
+    `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /admin-dashboard\nDisallow: /client-dashboard\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml\n`
   );
 });
 
-app.get('/sitemap.xml', (req, res) => {
-  res.setHeader('Content-Type', 'application/xml');
-  const routes = [
-    '',
-    '#about',
-    '#services',
-    '#ai-solutions',
-    '#android-portfolio',
-    '#process',
-    '#contact',
-    '#blog',
-    '#privacy',
-    '#terms',
-    '#client-dashboard',
-  ];
-  const baseUrl = 'https://power-web-studio-ai-enterprise-digital-platform.ai.studio';
+app.get('/sitemap.xml', (_req, res) => {
+  const baseUrl = resolveSeoBaseUrl();
+  const publicFile = path.resolve(__dirname, 'public', 'sitemap.xml');
+  const distFile = path.resolve(__dirname, 'dist', 'sitemap.xml');
+  const targetFile = fs.existsSync(publicFile) ? publicFile : distFile;
+  res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+  if (fs.existsSync(targetFile)) {
+    const content = fs
+      .readFileSync(targetFile, 'utf8')
+      .replaceAll(CANONICAL_SEO_DOMAIN, baseUrl);
+    return res.send(content);
+  }
   const lastMod = new Date().toISOString().split('T')[0];
-
-  const xmlUrls = routes
+  const entries = [
+    { path: '/', changefreq: 'weekly', priority: '1.0' },
+    { path: '/services', changefreq: 'weekly', priority: '0.9' },
+    { path: '/ai-solutions', changefreq: 'weekly', priority: '0.9' },
+    { path: '/android-portfolio', changefreq: 'weekly', priority: '0.9' },
+    { path: '/process', changefreq: 'monthly', priority: '0.8' },
+    { path: '/about', changefreq: 'monthly', priority: '0.8' },
+    { path: '/contact', changefreq: 'monthly', priority: '0.8' },
+    { path: '/blog', changefreq: 'weekly', priority: '0.8' },
+    { path: '/privacy', changefreq: 'yearly', priority: '0.5' },
+    { path: '/terms', changefreq: 'yearly', priority: '0.5' },
+  ];
+  const xmlUrls = entries
     .map(
-      (r) =>
-        `  <url>\n    <loc>${baseUrl}/${r}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${r === '' ? '1.0' : '0.8'}</priority>\n  </url>`
+      (e) =>
+        `  <url>\n    <loc>${baseUrl}${e.path}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`
     )
     .join('\n');
 
-  res.send(
+  return res.send(
     `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${xmlUrls}\n</urlset>`
   );
+});
+
+// Explicit 404 JSON fallback for unknown /api/* routes (prevents SPA HTML fallthrough)
+app.use('/api', (req: express.Request, res: express.Response) => {
+  return res.status(404).json({ error: 'API endpoint not found.', path: req.originalUrl });
 });
 
 // Safe API Error Handler (Never exposes stack traces or internal paths)
@@ -1877,9 +2195,41 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath, { maxAge: '1h' }));
+    const distIndexPath = path.resolve(distPath, 'index.html');
+    const cachedIndexHtml = fs.existsSync(distIndexPath)
+      ? fs.readFileSync(distIndexPath, 'utf8')
+      : '';
+
+    app.use(
+      express.static(distPath, {
+        maxAge: '1h',
+        index: false,
+        setHeaders: (res, filePath) => {
+          if (filePath.endsWith(`${path.sep}sw.js`)) {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          } else if (filePath.endsWith(`${path.sep}manifest.json`)) {
+            res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+          }
+        },
+      })
+    );
     app.get('*', (req, res) => {
-      res.sendFile(path.resolve(distPath, 'index.html'));
+      if (!cachedIndexHtml) {
+        return res.sendFile(distIndexPath);
+      }
+      const envOrigin = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+      const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
+      const reqHost = req.get('host');
+      const liveOrigin = envOrigin || (reqHost ? `${proto}://${reqHost}` : '');
+
+      const html = liveOrigin
+        ? cachedIndexHtml
+            .replace(/content="\/og-image\.jpg"/g, `content="${liveOrigin}/og-image.jpg"`)
+            .replace(/property="og:url" content="\/"/g, `property="og:url" content="${liveOrigin}/"`)
+        : cachedIndexHtml;
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
     });
   }
 

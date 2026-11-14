@@ -7,6 +7,7 @@ import {
   fetchSupportTickets,
   updateSupportTicketStatus,
   addTicketResponse,
+  fetchProjectsForClient,
 } from '../firebase/services';
 import { EnterpriseInvoice } from '../types';
 import { COMPANY_INFO } from '../data/content';
@@ -133,6 +134,66 @@ const DEMO_SAMPLE_INVOICES: EnterpriseInvoice[] = [
   },
 ];
 
+const DEMO_SAMPLE_TICKETS: any[] = [
+  {
+    id: 'TKT-2026-904',
+    subject: 'BLE Soundbox latency validation report request for Odisha deployment',
+    priority: 'P2_High',
+    category: 'Hardware Telemetry',
+    projectCode: 'PRJ-FLT-2026',
+    environment: 'Android 14 / Teltonika FMB920',
+    status: 'in_progress',
+    createdAt: '2026-11-08T10:15:00Z',
+    details: 'Requesting certified latency logs across 500 field terminals prior to district rollout.',
+    attachment: {
+      fileName: 'telemetry_sampling_odisha_v2.json',
+      fileSizeFormatted: '1.4 MB',
+      sha256: '9f83c12a4b821703e456efc829107412ab34cd56ef781290ab1234567890cdef',
+      downloadUrl: '/api/files/telemetry_sampling_odisha_v2.json',
+    },
+    responses: [
+      {
+        id: 'resp-001',
+        author: 'Er. Bhanu Ram Bariha',
+        authorRole: 'Lead Platform Architect',
+        message: 'Telemetry simulation successfully completed on Sambalpur cluster. BLE P99 latency measured at 24ms across 500 nodes. Cryptographic verification report attached.',
+        timestamp: '2026-11-08T13:45:00Z',
+      },
+    ],
+  },
+  {
+    id: 'TKT-2026-882',
+    subject: 'Add 2 new authorized client tester emails to Google Play Internal Track',
+    priority: 'P3_Normal',
+    category: 'Release & Distribution',
+    projectCode: 'PRJ-FLT-2026',
+    environment: 'Google Play Console / Production Track',
+    status: 'resolved',
+    createdAt: '2026-11-04T14:20:00Z',
+    details: 'Added r.sengupta@kalingalogistics.in and devops@kalingalogistics.in to staging track.',
+    responses: [
+      {
+        id: 'resp-002',
+        author: 'DevOps & Release Team',
+        authorRole: 'Platform Architect',
+        message: 'Both tester accounts provisioned and invites dispatched with internal app-sharing certificate.',
+        timestamp: '2026-11-04T15:10:00Z',
+      },
+    ],
+  },
+  {
+    id: 'TKT-2026-871',
+    subject: 'Emergency Architect escalation: Scrutinize NPCI UPI 2.0 dual-webhook payload',
+    priority: 'P1_Critical',
+    category: 'Payment Core',
+    projectCode: 'PRJ-MED-2026',
+    environment: 'PCI-DSS Bare-metal Cluster',
+    status: 'resolved',
+    createdAt: '2026-10-29T08:00:00Z',
+    details: 'Lead Architect resolved within 18 minutes. Verified idempotent ledger keys.',
+  },
+];
+
 export const ClientDashboardPage: React.FC = () => {
   const { language, t, formatDate, showToast } = useLanguage();
   const { navigate } = useNavigation();
@@ -189,73 +250,127 @@ export const ClientDashboardPage: React.FC = () => {
   // Filter states
   const [ticketFilter, setTicketFilter] = useState<'all' | 'open' | 'resolved'>('all');
   const [updateFilter, setUpdateFilter] = useState<string>('All');
-  const [expandedTicketId, setExpandedTicketId] = useState<string | null>('TKT-2026-904');
+  const [expandedTicketId, setExpandedTicketId] = useState<string | null>(null);
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [submittingReply, setSubmittingReply] = useState<Record<string, boolean>>({});
+  const [firestoreProjects, setFirestoreProjects] = useState<any[] | null>(null);
 
-  // Data: Projects
-  const clientProjects = useMemo(() => [
-    {
-      id: 'proj-1',
-      name: 'Bharat Fleet ERP & Distributed Telematics',
-      nameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स सिस्टम',
-      code: 'PRJ-FLT-2026',
-      clientOrg: 'Kalinga Logistics Infrastructure Ltd.',
-      sprint: 'Sprint 14 of 16 (Release Candidate Phase)',
-      sprintHi: 'स्प्रिंट 14 / 16 (रिलीज कैंडिडेट चरण)',
-      completion: 88,
-      status: 'In Sprints',
-      statusHi: 'सक्रिय स्प्रिंट',
-      health: 'Nominal (P99: 38ms)',
-      healthHi: 'उत्कृष्ट (P99: 38ms)',
-      leadArchitect: 'Er. Bhanu Ram Bariha',
-      leadArchitectRole: 'Principal Systems Architect',
-      leadArchitectHi: 'भानु राम बरीहा / प्रधान सिस्टम्स वास्तुकार',
-      stack: ['Kotlin Multiplatform', 'Go 1.23', 'PostgreSQL', 'Kafka', 'Jetpack Compose'],
-      targetSdk: 'Android 14 (API 34) · BLE 5.3',
-      contractValue: '₹38,50,000 Enterprise Retainer',
-    },
-    {
-      id: 'proj-2',
-      name: 'Odisha Cold-Chain Offline-First Android Core',
-      nameHi: 'ओडिशा कोल्ड-चेन ऑफलाइन-फर्स्ट एंड्रॉइड कोर',
-      code: 'PRJ-COLD-2026',
-      clientOrg: 'Utkal Health Sciences Foundation',
-      sprint: 'Sprint 9 of 10 (Pilot Verification)',
-      sprintHi: 'स्प्रिंट 9 / 10 (पायलट सत्यापन चरण)',
-      completion: 94,
-      status: 'Testing',
-      statusHi: 'अंतिम परीक्षण',
-      health: 'Optimal (Zero Sync Drop)',
-      healthHi: 'इष्टतम (शून्य सिंक ड्रॉप)',
-      leadArchitect: 'Senior Mobility Squad Alpha',
-      leadArchitectRole: 'Android Mobility Lead',
-      leadArchitectHi: 'वरिष्ठ मोबिलिटी दल अल्फा',
-      stack: ['Jetpack Compose', 'Room DB', 'gRPC-Web', 'TLS 1.3', 'SQLCipher'],
-      targetSdk: 'Android 14 (API 34) · Geofencing Core',
-      contractValue: '₹22,00,000 Pilot Engagement',
-    },
-    {
-      id: 'proj-3',
-      name: 'Sovereign Indic Document Intelligence Engine',
-      nameHi: 'संप्रभु इंडिक दस्तावेज़ विश्लेषण इंजन',
-      code: 'PRJ-IND-2026',
-      clientOrg: 'Kalinga Logistics Infrastructure Ltd.',
-      sprint: 'Sprint 5 of 8 (Fine-Tuning Loop)',
-      sprintHi: 'स्प्रिंट 5 / 8 (मॉडल ट्यूनिंग लूप)',
-      completion: 64,
-      status: 'Training',
-      statusHi: 'प्रशिक्षण जारी',
-      health: 'Cluster Stable (H100)',
-      healthHi: 'क्लस्टर सुरक्षित (H100)',
-      leadArchitect: 'AI Research Pod Bhubaneswar',
-      leadArchitectRole: 'Senior NLP Architect',
-      leadArchitectHi: 'एआई रिसर्च पॉड भुवनेश्वर',
-      stack: ['PyTorch', 'vLLM', 'FastAPI', 'ONNX Runtime', 'BM25 RRF'],
-      targetSdk: 'Private Cloud VPC · REST / gRPC',
-      contractValue: '₹28,00,000 Autonomous AI Suite',
-    },
-  ], []);
+  // Data: Projects (Sandbox presets vs Live Firestore client engagements)
+  const clientProjects = useMemo(() => {
+    if (!isDemoSandbox) {
+      if (firestoreProjects && firestoreProjects.length > 0) {
+        return firestoreProjects.map((p: any, idx: number) => ({
+          id: p.id || `proj-${idx + 1}`,
+          name: p.name || 'Enterprise Software Engagement',
+          nameHi: p.nameHi || p.name || 'एंटरप्राइज सॉफ्टवेयर प्रोजेक्ट',
+          code: p.code || `PRJ-${String(idx + 1).padStart(3, '0')}`,
+          clientOrg: p.clientName || currentUser?.displayName || currentUser?.email || 'Verified Enterprise Client',
+          sprint: p.sprint || p.currentSprint || 'Active Delivery Sprint',
+          sprintHi: p.sprintHi || p.sprint || 'सक्रिय डिलीवरी स्प्रिंट',
+          completion: typeof p.completion === 'number' ? p.completion : 0,
+          status: p.status || 'Active',
+          statusHi: p.statusHi || p.status || 'सक्रिय',
+          health: p.health || 'Nominal',
+          healthHi: p.health || 'सामान्य',
+          leadArchitect: p.leadArchitect || 'Er. Bhanu Ram Bariha',
+          leadArchitectRole: 'Principal Systems Architect',
+          leadArchitectHi: 'भानु राम बरीहा / प्रधान सिस्टम्स वास्तुकार',
+          stack: (Array.isArray(p.techStack)
+            ? p.techStack.map((item: unknown) => String(item))
+            : Array.isArray(p.stack)
+            ? p.stack.map((item: unknown) => String(item))
+            : ['TypeScript', 'Cloud Firestore', 'Cloud Run']) as string[],
+          targetSdk: p.targetSdk || 'Cloud Run & Android Enterprise',
+          contractValue: p.contractValue || 'SOW Assigned',
+        }));
+      }
+      return [
+        {
+          id: 'proj-onboarding',
+          name: 'Client Workspace Onboarding (No Active SOW Assigned)',
+          nameHi: 'क्लाइंट कार्यक्षेत्र ऑनबोर्डिंग (कोई सक्रिय प्रोजेक्ट असाइन नहीं)',
+          code: 'PRJ-ONBOARD',
+          clientOrg: currentUser?.displayName || currentUser?.email || 'Verified Enterprise Client',
+          sprint: 'Awaiting Project Assignment from Lead Architect',
+          sprintHi: 'प्रधान वास्तुकार द्वारा प्रोजेक्ट असाइनमेंट प्रतीक्षित',
+          completion: 0,
+          status: 'Onboarding',
+          statusHi: 'ऑनबोर्डिंग',
+          health: 'Verified Session',
+          healthHi: 'सत्यापित सत्र',
+          leadArchitect: 'Er. Bhanu Ram Bariha',
+          leadArchitectRole: 'Principal Systems Architect',
+          leadArchitectHi: 'भानु राम बरीहा / प्रधान सिस्टम्स वास्तुकार',
+          stack: ['Enterprise Scoping', 'Architecture Review'],
+          targetSdk: 'SOW Scoped',
+          contractValue: 'Pending Scoping Proposal',
+        },
+      ];
+    }
+
+    return [
+      {
+        id: 'proj-1',
+        name: 'Bharat Fleet ERP & Distributed Telematics',
+        nameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स सिस्टम',
+        code: 'PRJ-FLT-2026',
+        clientOrg: 'Kalinga Logistics Infrastructure Ltd.',
+        sprint: 'Sprint 14 of 16 (Release Candidate Phase)',
+        sprintHi: 'स्प्रिंट 14 / 16 (रिलीज कैंडिडेट चरण)',
+        completion: 88,
+        status: 'In Sprints',
+        statusHi: 'सक्रिय स्प्रिंट',
+        health: 'Nominal (P99: 38ms)',
+        healthHi: 'उत्कृष्ट (P99: 38ms)',
+        leadArchitect: 'Er. Bhanu Ram Bariha',
+        leadArchitectRole: 'Principal Systems Architect',
+        leadArchitectHi: 'भानु राम बरीहा / प्रधान सिस्टम्स वास्तुकार',
+        stack: ['Kotlin Multiplatform', 'Go 1.23', 'PostgreSQL', 'Kafka', 'Jetpack Compose'],
+        targetSdk: 'Android 14 (API 34) · BLE 5.3',
+        contractValue: '₹38,50,000 Enterprise Retainer',
+      },
+      {
+        id: 'proj-2',
+        name: 'Odisha Cold-Chain Offline-First Android Core',
+        nameHi: 'ओडिशा कोल्ड-चेन ऑफलाइन-फर्स्ट एंड्रॉइड कोर',
+        code: 'PRJ-COLD-2026',
+        clientOrg: 'Utkal Health Sciences Foundation',
+        sprint: 'Sprint 9 of 10 (Pilot Verification)',
+        sprintHi: 'स्प्रिंट 9 / 10 (पायलट सत्यापन चरण)',
+        completion: 94,
+        status: 'Testing',
+        statusHi: 'अंतिम परीक्षण',
+        health: 'Optimal (Zero Sync Drop)',
+        healthHi: 'इष्टतम (शून्य सिंक ड्रॉप)',
+        leadArchitect: 'Senior Mobility Squad Alpha',
+        leadArchitectRole: 'Android Mobility Lead',
+        leadArchitectHi: 'वरिष्ठ मोबिलिटी दल अल्फा',
+        stack: ['Jetpack Compose', 'Room DB', 'gRPC-Web', 'TLS 1.3', 'SQLCipher'],
+        targetSdk: 'Android 14 (API 34) · Geofencing Core',
+        contractValue: '₹22,00,000 Pilot Engagement',
+      },
+      {
+        id: 'proj-3',
+        name: 'Sovereign Indic Document Intelligence Engine',
+        nameHi: 'संप्रभु इंडिक दस्तावेज़ विश्लेषण इंजन',
+        code: 'PRJ-IND-2026',
+        clientOrg: 'Kalinga Logistics Infrastructure Ltd.',
+        sprint: 'Sprint 5 of 8 (Fine-Tuning Loop)',
+        sprintHi: 'स्प्रिंट 5 / 8 (मॉडल ट्यूनिंग लूप)',
+        completion: 64,
+        status: 'Training',
+        statusHi: 'प्रशिक्षण जारी',
+        health: 'Cluster Stable (H100)',
+        healthHi: 'क्लस्टर सुरक्षित (H100)',
+        leadArchitect: 'POWER WEB STUDIO AI Research Pod',
+        leadArchitectRole: 'Senior NLP Architect',
+        leadArchitectHi: 'POWER WEB STUDIO AI रिसर्च पॉड',
+        stack: ['PyTorch', 'vLLM', 'FastAPI', 'ONNX Runtime', 'BM25 RRF'],
+        targetSdk: 'Private Cloud VPC · REST / gRPC',
+        contractValue: '₹28,00,000 Autonomous AI Suite',
+      },
+    ];
+  }, [isDemoSandbox, firestoreProjects, currentUser]);
 
   const activeProject = useMemo(() => {
     return clientProjects.find((p) => p.id === selectedProjectId) || clientProjects[0];
@@ -599,94 +714,51 @@ export const ClientDashboardPage: React.FC = () => {
     },
   ], []);
 
-  // Data: Support Tickets
-  const [supportTickets, setSupportTickets] = useState<any[]>([
-    {
-      id: 'TKT-2026-904',
-      subject: 'BLE Soundbox latency validation report request for Odisha deployment',
-      priority: 'P2_High',
-      category: 'Hardware Telemetry',
-      projectCode: 'PRJ-FLT-2026',
-      environment: 'Android 14 / Teltonika FMB920',
-      status: 'in_progress',
-      createdAt: '2026-11-08T10:15:00Z',
-      details: 'Requesting certified latency logs across 500 field terminals prior to district rollout.',
-      attachment: {
-        fileName: 'telemetry_sampling_odisha_v2.json',
-        fileSizeFormatted: '1.4 MB',
-        sha256: '9f83c12a4b821703e456efc829107412ab34cd56ef781290ab1234567890cdef',
-        downloadUrl: '/api/files/telemetry_sampling_odisha_v2.json',
-      },
-      responses: [
-        {
-          id: 'resp-001',
-          author: 'Er. Bhanu Ram Bariha',
-          authorRole: 'Lead Platform Architect',
-          message: 'Telemetry simulation successfully completed on Sambalpur cluster. BLE P99 latency measured at 24ms across 500 nodes. Cryptographic verification report attached.',
-          timestamp: '2026-11-08T13:45:00Z',
-        },
-      ],
-    },
-    {
-      id: 'TKT-2026-882',
-      subject: 'Add 2 new authorized client tester emails to Google Play Internal Track',
-      priority: 'P3_Normal',
-      category: 'Release & Distribution',
-      projectCode: 'PRJ-FLT-2026',
-      environment: 'Google Play Console / Production Track',
-      status: 'resolved',
-      createdAt: '2026-11-04T14:20:00Z',
-      details: 'Added r.sengupta@kalingalogistics.in and devops@kalingalogistics.in to staging track.',
-      responses: [
-        {
-          id: 'resp-002',
-          author: 'DevOps & Release Team',
-          authorRole: 'Platform Architect',
-          message: 'Both tester accounts provisioned and invites dispatched with internal app-sharing certificate.',
-          timestamp: '2026-11-04T15:10:00Z',
-        },
-      ],
-    },
-    {
-      id: 'TKT-2026-871',
-      subject: 'Emergency Architect escalation: Scrutinize NPCI UPI 2.0 dual-webhook payload',
-      priority: 'P1_Critical',
-      category: 'Payment Core',
-      projectCode: 'PRJ-MED-2026',
-      environment: 'PCI-DSS Bare-metal Cluster',
-      status: 'resolved',
-      createdAt: '2026-10-29T08:00:00Z',
-      details: 'Lead Architect resolved within 18 minutes. Verified idempotent ledger keys.',
-    },
-  ]);
+  // Data: Support Tickets (strictly separated: demo fixtures only loaded in Demo Sandbox)
+  const [supportTickets, setSupportTickets] = useState<any[]>([]);
 
-  // Load Firestore tickets & authoritative server invoices when authenticated (or demo samples in sandbox)
+  // Load Firestore tickets, projects & authoritative server invoices when authenticated (or demo samples in sandbox)
   useEffect(() => {
     if (isDemoSandbox) {
       setInvoicesList(DEMO_SAMPLE_INVOICES);
+      setSupportTickets(DEMO_SAMPLE_TICKETS);
+      setExpandedTicketId('TKT-2026-904');
+      setFirestoreProjects(null);
       return;
     }
     if (!currentUser) {
       setInvoicesList([]);
+      setSupportTickets([]);
+      setFirestoreProjects(null);
+      setExpandedTicketId(null);
       return;
     }
 
+    fetchProjectsForClient(currentUser.uid)
+      .then((projects) => {
+        setFirestoreProjects(Array.isArray(projects) ? projects : []);
+        if (projects && projects.length > 0 && projects[0]?.id) {
+          setSelectedProjectId(projects[0].id);
+        }
+      })
+      .catch((err) => {
+        console.warn('[Client Projects Load]', err?.message || err);
+        setFirestoreProjects([]);
+      });
+
     fetchSupportTickets(currentUser.uid)
       .then((tickets) => {
-        if (tickets && tickets.length > 0) {
-          setSupportTickets((prev) => {
-            const combined = [...tickets];
-            for (const p of prev) {
-              if (!combined.some((c) => c.id === p.id)) {
-                combined.push(p);
-              }
-            }
-            return combined;
-          });
+        const list = Array.isArray(tickets) ? tickets : [];
+        setSupportTickets(list);
+        if (list.length > 0 && list[0]?.id) {
+          setExpandedTicketId(list[0].id);
+        } else {
+          setExpandedTicketId(null);
         }
       })
       .catch((err) => {
         console.warn('[Client Tickets Load]', err?.message || err);
+        setSupportTickets([]);
       });
 
     setLoadingInvoices(true);
@@ -1065,15 +1137,38 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
     }
 
     try {
-      await createSupportTicket({
-        subject: `[EMERGENCY SLA ESCALATION] Priority Dispatch from ${activeProject.code}`,
+      const subject = `[EMERGENCY SLA ESCALATION] Priority Dispatch from ${activeProject.code}`;
+      const details = `Client triggered emergency hotline dispatch for ${activeProject.name}. Target on-call architect response governed by project SOW.`;
+      const createdTicketId = await createSupportTicket({
+        subject,
         priority: 'P1_Critical',
-        details: `Client triggered emergency hotline dispatch for ${activeProject.name}. Guaranteed on-call architect page: <15 mins.`,
+        details,
+        category: 'Emergency Escalation',
+        projectCode: activeProject.code,
       });
+      if (createdTicketId) {
+        const createdTicket = {
+          id: createdTicketId,
+          clientId: currentUser?.uid,
+          clientEmail: currentUser?.email || '',
+          subject,
+          priority: 'P1_Critical',
+          category: 'Emergency Escalation',
+          projectCode: activeProject.code,
+          environment: 'Production / SLA Hotline',
+          status: 'open',
+          details,
+          responses: [],
+          createdAt: new Date().toISOString(),
+        };
+        setSupportTickets((prev) => [createdTicket, ...prev]);
+        setExpandedTicketId(createdTicketId);
+        setActiveTab('support');
+      }
       showToast(
         language === 'hi'
-          ? 'आपातकालीन SLA अलर्ट (#P1) दर्ज हुआ। प्रधान आर्किटेक्ट को 15 मिनट के भीतर प्रतिक्रिया का संदेश भेजा गया।'
-          : 'Emergency P1 SLA Alert triggered in Firestore. Lead Architect response guaranteed < 15 mins.',
+          ? 'आपातकालीन SLA अलर्ट (#P1) Firestore में दर्ज हुआ। सहायता टैब में विवरण देखें।'
+          : 'Emergency P1 SLA Alert logged in Cloud Firestore. Check the SLA Support tab for tracking.',
         'alert'
       );
     } catch (err: any) {
@@ -1226,7 +1321,9 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                   <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
-                  {t('Role-Isolated Access · Sample Sandbox', 'रोल-आधारित सुरक्षा · सैंपल सैंडबॉक्स')}
+                  {isDemoSandbox
+                    ? t('Role-Isolated Access · Sample Sandbox', 'रोल-आधारित सुरक्षा · सैंपल सैंडबॉक्स')
+                    : t('Role-Isolated Verified Session', 'रोल-आधारित सत्यापित सत्र')}
                 </span>
                 <span className="text-xs text-slate-500 font-mono hidden sm:inline">
                   CIN: U72900OR2024PTC045812
@@ -1234,7 +1331,11 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
               </div>
 
               <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                {activePersona === 'kalinga' ? 'Kalinga Logistics Infrastructure Ltd.' : 'Utkal Health Sciences Foundation'}
+                {isDemoSandbox
+                  ? activePersona === 'kalinga'
+                    ? 'Kalinga Logistics Infrastructure Ltd.'
+                    : 'Utkal Health Sciences Foundation'
+                  : currentUser?.displayName || currentUser?.email || t('Verified Enterprise Client', 'सत्यापित एंटरप्राइज क्लाइंट')}
               </h1>
               <p className="mt-1 text-xs sm:text-sm text-slate-600 max-w-2xl">
                 {t(
@@ -1268,14 +1369,14 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
           {/* Project Engagement Selector & 4 Metric Cards */}
           <div className="mt-6 flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 min-w-0 w-full md:w-auto">
+              <span className="text-xs font-bold text-slate-700 uppercase tracking-wider shrink-0">
                 {t('Active Engagement:', 'सक्रिय अनुबंध:')}
               </span>
               <select
-                value={selectedProjectId}
+                value={activeProject.id}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="px-3 py-1.5 text-xs font-bold text-blue-900 bg-blue-50/70 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-700 cursor-pointer"
+                className="w-full sm:w-auto max-w-full min-w-0 px-3 py-1.5 text-xs font-bold text-blue-900 bg-blue-50/70 border border-blue-200 rounded-lg focus:outline-none focus:border-blue-700 cursor-pointer truncate"
               >
                 {clientProjects.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -1493,7 +1594,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
               {/* Tech Stack Chips */}
               <div className="flex flex-wrap items-center gap-1.5 pt-2">
                 <span className="text-xs text-slate-500 font-medium mr-2">{t('Verified Tech Stack:', 'सत्यापित तकनीकी स्टैक:')}</span>
-                {activeProject.stack.map((tech) => (
+                {activeProject.stack.map((tech: string) => (
                   <span
                     key={tech}
                     className="px-2.5 py-1 text-xs font-mono font-medium bg-slate-50 border border-slate-200 text-slate-700 rounded-md"
@@ -2090,7 +2191,15 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             </div>
 
             <div className="space-y-4">
-              {filteredTickets.map((ticket) => {
+              {filteredTickets.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 bg-white rounded-xl border border-dashed border-slate-200">
+                  {t(
+                    'No SLA support tickets found for this filter. Use "New SLA Ticket" to open a tracked engineering request.',
+                    'इस फ़िल्टर के लिए कोई SLA सहायता टिकट नहीं मिला। नया अनुरोध दर्ज करने के लिए "नया टिकट दर्ज करें" दबाएं।'
+                  )}
+                </div>
+              ) : (
+              filteredTickets.map((ticket) => {
                 const isExpanded = expandedTicketId === ticket.id;
                 const responses = ticket.responses || [];
                 const attachment = ticket.attachment;
@@ -2325,7 +2434,8 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                     )}
                   </div>
                 );
-              })}
+              })
+              )}
             </div>
           </div>
         )}

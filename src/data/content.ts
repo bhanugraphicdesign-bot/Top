@@ -1,16 +1,82 @@
 import { ServiceItem, AndroidApp, AiSolution, ProcessStep, WhyChooseUsPillar } from '../types';
 import heroEnterpriseImg from '../assets/images/hero_enterprise_tech_1794321127395.jpg';
+import heroEnterpriseWebp from '../assets/images/hero_enterprise_tech_1794321127395.webp';
 import companyHqImg from '../assets/images/company_headquarters_1794321127887.jpg';
+import companyHqWebp from '../assets/images/company_headquarters_1794321127887.webp';
 import androidEcosystemImg from '../assets/images/android_app_ecosystem_1794321127603.jpg';
+import androidEcosystemWebp from '../assets/images/android_app_ecosystem_1794321127603.webp';
 import aiNeuralImg from '../assets/images/ai_neural_architecture_1794321127723.jpg';
+import aiNeuralWebp from '../assets/images/ai_neural_architecture_1794321127723.webp';
 
 export const ASSETS = {
-  heroImage: heroEnterpriseImg,
-  campusImage: companyHqImg,
-  androidImage: androidEcosystemImg,
-  aiImage: aiNeuralImg,
-  appMockupImage: androidEcosystemImg,
-  blogImage: aiNeuralImg,
+  heroImage: heroEnterpriseWebp,
+  campusImage: companyHqWebp,
+  androidImage: androidEcosystemWebp,
+  aiImage: aiNeuralWebp,
+  appMockupImage: androidEcosystemWebp,
+  blogImage: aiNeuralWebp,
+};
+
+export type AssetKey = keyof typeof ASSETS;
+
+export interface OptimizedAssetMeta {
+  webp: string;
+  jpg: string;
+  width: number;
+  height: number;
+  altEn: string;
+  altHi: string;
+}
+
+export const OPTIMIZED_ASSETS: Record<AssetKey, OptimizedAssetMeta> = {
+  heroImage: {
+    webp: heroEnterpriseWebp,
+    jpg: heroEnterpriseImg,
+    width: 1376,
+    height: 768,
+    altEn: 'Power Web Studio AI Enterprise Software Engineering and Command Studio',
+    altHi: 'पावर वेब स्टूडियो एआई एंटरप्राइज सॉफ्टवेयर इंजीनियरिंग एवं कमांड स्टूडियो',
+  },
+  campusImage: {
+    webp: companyHqWebp,
+    jpg: companyHqImg,
+    width: 1376,
+    height: 768,
+    altEn: 'Bhanu Ram Bariha Digital Technologies Innovation Campus and Engineering Delivery Center',
+    altHi: 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज इनोवेशन कैंपस और इंजीनियरिंग डिलीवरी सेंटर',
+  },
+  androidImage: {
+    webp: androidEcosystemWebp,
+    jpg: androidEcosystemImg,
+    width: 1200,
+    height: 896,
+    altEn: 'Bhanu Ram Bariha Digital Technologies Enterprise Android Applications Showcase',
+    altHi: 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज एंटरप्राइज एंड्रॉइड ऐप्स शोकेस',
+  },
+  aiImage: {
+    webp: aiNeuralWebp,
+    jpg: aiNeuralImg,
+    width: 1200,
+    height: 896,
+    altEn: 'Enterprise AI Neural Architecture and Sovereign Model Engineering Studio',
+    altHi: 'एंटरप्राइज एआई न्यूरल आर्किटेक्चर और सॉवरेन मॉडल इंजीनियरिंग स्टूडियो',
+  },
+  appMockupImage: {
+    webp: androidEcosystemWebp,
+    jpg: androidEcosystemImg,
+    width: 1200,
+    height: 896,
+    altEn: 'Enterprise Android Application Interface and Device Architecture Preview',
+    altHi: 'एंटरप्राइज एंड्रॉइड एप्लिकेशन इंटरफ़ेस एवं डिवाइस आर्किटेक्चर पूर्वावलोकन',
+  },
+  blogImage: {
+    webp: aiNeuralWebp,
+    jpg: aiNeuralImg,
+    width: 1200,
+    height: 896,
+    altEn: 'Power Web Studio AI Engineering Research and Technical Architecture Blog',
+    altHi: 'पावर वेब स्टूडियो एआई इंजीनियरिंग शोध एवं तकनीकी आर्किटेक्चर ब्लॉग',
+  },
 };
 
 export const COMPANY_INFO = {
@@ -20,6 +86,7 @@ export const COMPANY_INFO = {
   registration: 'CIN: U72900OR2024PTC045812',
   founded: '2024',
   headquarters: 'Fingeshwar Borid Mod, Rajim Subdistrict, Gariaband District, Chhattisgarh - 493992',
+  headquartersHi: 'फिंगेश्वर बोरिद मोड़, राजिम उपखंड, गरियाबंद जिला, छत्तीसगढ़ - 493992',
   email: 'powerusertopuser@gmail.com',
   supportEmail: 'powerusertopuser@gmail.com',
   phone: '+91 8305457717',

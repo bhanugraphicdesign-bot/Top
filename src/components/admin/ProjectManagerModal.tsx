@@ -8,6 +8,9 @@ interface ProjectModalProps {
   onClose: () => void;
   onSuccess: () => void;
   project?: any | null;
+  usersList?: any[];
+  isDemoSandbox?: boolean;
+  onSaveDemo?: (savedProject: any) => void;
 }
 
 export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
@@ -15,6 +18,9 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
   onClose,
   onSuccess,
   project,
+  usersList = [],
+  isDemoSandbox = false,
+  onSaveDemo,
 }) => {
   const { language, t, showToast } = useLanguage();
 
@@ -25,6 +31,7 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
     nameHi: '',
     clientId: 'client-default',
     clientName: '',
+    clientEmail: '',
     sprint: '',
     sprintHi: '',
     completion: 50,
@@ -40,6 +47,11 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
 
   useEffect(() => {
     if (project) {
+      const existingStack = Array.isArray(project.techStack)
+        ? project.techStack
+        : Array.isArray(project.stack)
+        ? project.stack
+        : ['Kotlin', 'Go', 'PostgreSQL'];
       setFormData({
         id: project.id || `proj-${Date.now()}`,
         code: project.code || 'PRJ-ENG-2026',
@@ -47,6 +59,7 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
         nameHi: project.nameHi || project.name || '',
         clientId: project.clientId || 'client-default',
         clientName: project.clientName || 'Enterprise Partner',
+        clientEmail: project.clientEmail || '',
         sprint: project.sprint || 'Sprint 1 of 8',
         sprintHi: project.sprintHi || 'स्प्रिंट 1 / 8',
         completion: project.completion || 0,
@@ -56,7 +69,7 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
         healthHi: project.healthHi || 'उत्कृष्ट',
         leadArchitect: project.leadArchitect || 'Bhanu Ram Bariha',
         leadArchitectHi: project.leadArchitectHi || 'भानु राम बरीहा',
-        stackStr: Array.isArray(project.stack) ? project.stack.join(', ') : 'Kotlin, Go, PostgreSQL',
+        stackStr: existingStack.join(', '),
       });
     } else {
       setFormData({
@@ -66,6 +79,7 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
         nameHi: '',
         clientId: 'client-default',
         clientName: '',
+        clientEmail: '',
         sprint: 'Sprint 1 of 12 (Foundation)',
         sprintHi: 'स्प्रिंट 1 / 12 (आधारशिला)',
         completion: 10,
@@ -82,6 +96,20 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleSelectRegisteredClient = (selectedUid: string) => {
+    const found = usersList.find((u) => (u.uid || u.id) === selectedUid);
+    if (found) {
+      setFormData((prev) => ({
+        ...prev,
+        clientId: found.uid || found.id,
+        clientName: found.displayName || found.companyName || prev.clientName,
+        clientEmail: found.email || prev.clientEmail,
+      }));
+    } else {
+      setFormData((prev) => ({ ...prev, clientId: selectedUid }));
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
@@ -92,11 +120,28 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
     setSaving(true);
     try {
       const stack = formData.stackStr.split(',').map((s) => s.trim()).filter(Boolean);
-      await saveProject({
+      const payload = {
         ...formData,
+        clientId: formData.clientId.trim() || 'client-default',
+        clientEmail: formData.clientEmail.trim(),
+        techStack: stack,
         stack,
         updatedAt: new Date().toISOString(),
-      });
+      };
+      if (isDemoSandbox) {
+        onSaveDemo?.(payload);
+        showToast(
+          t(
+            '[Demo Sandbox] Project saved locally for preview.',
+            '[डेमो सैंडबॉक्स] परियोजना केवल स्थानीय पूर्वावलोकन में सहेजी गई।'
+          ),
+          'info'
+        );
+        onSuccess();
+        onClose();
+        return;
+      }
+      await saveProject(payload);
       showToast(
         language === 'hi' ? 'परियोजना सफलतापूर्वक सहेज ली गई।' : 'Project saved successfully.',
         'success'
@@ -160,7 +205,7 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
                 />
               </div>
 
-              <div className="sm:col-span-2">
+              <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   {t('Client / Organization Name', 'ग्राहक / संस्था का नाम')}
                 </label>
@@ -170,6 +215,54 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
                   onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
                   placeholder="e.g. Apex Bharat Logistics Ltd."
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {t('Client Email', 'ग्राहक ईमेल')}
+                </label>
+                <input
+                  type="email"
+                  value={formData.clientEmail}
+                  onChange={(e) => setFormData({ ...formData, clientEmail: e.target.value })}
+                  placeholder="client@enterprise.in"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {usersList.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('Assign Registered Client Account', 'पंजीकृत ग्राहक खाता चुनें')}
+                  </label>
+                  <select
+                    value={usersList.some((u) => (u.uid || u.id) === formData.clientId) ? formData.clientId : ''}
+                    onChange={(e) => e.target.value && handleSelectRegisteredClient(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none bg-white"
+                  >
+                    <option value="">{t('-- Select Client from Directory --', '-- सूची से ग्राहक चुनें --')}</option>
+                    {usersList.map((u) => (
+                      <option key={u.uid || u.id} value={u.uid || u.id}>
+                        {(u.displayName || u.email)} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div className={usersList.length > 0 ? '' : 'sm:col-span-2'}>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  {t('Assigned Client UID (Firestore Access Key)', 'क्लाइंट UID (फ़ायरस्टोर एक्सेस कुंजी)')}
+                </label>
+                <input
+                  type="text"
+                  value={formData.clientId}
+                  onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                  placeholder="Firebase Auth UID"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
                 />
               </div>
             </div>

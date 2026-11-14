@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { createSupportTicket } from '../../firebase/services';
 import { X, AlertCircle, Check, LifeBuoy, Clock, ShieldAlert } from 'lucide-react';
@@ -39,7 +39,24 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
   });
 
   const [attachment, setAttachment] = useState<UploadedFileRecord | null>(null);
+  const [uploaderKey, setUploaderKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        subject: '',
+        priority: 'P2_High',
+        category: 'Mobile Runtime & Hardware Driver',
+        projectCode: defaultProjectCode,
+        environment: 'Android 14 (API 34) / Enterprise Fleet',
+        details: '',
+      });
+      setAttachment(null);
+      setUploaderKey((k) => k + 1);
+      setSubmitting(false);
+    }
+  }, [isOpen, defaultProjectCode]);
 
   if (!isOpen) return null;
 
@@ -261,6 +278,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
             {/* Validated Crash Dumps / Diagnostics File Upload */}
             <ValidatedFileUploader
+              key={uploaderKey}
               label="Attach Diagnostic Logs / Stack Trace / Screenshots (Optional)"
               labelHi="त्रुटि लॉग / स्टैक ट्रेस / स्क्रीनशॉट संलग्न करें (वैकल्पिक)"
               description="Upload TXT, JSON, PNG, JPG, ZIP (up to 25 MB with SHA-256 validation)"

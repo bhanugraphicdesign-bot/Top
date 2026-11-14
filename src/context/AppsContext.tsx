@@ -12,7 +12,9 @@ function normalizeAppAssets(list: AndroidApp[]): AndroidApp[] {
   return list.map((app) => ({
     ...app,
     screenshots: (app.screenshots || []).map((src) =>
-      src.startsWith('/src/assets/') ? ASSETS.androidImage : src
+      src.startsWith('/src/assets/') || src.includes('android_app_ecosystem_')
+        ? ASSETS.androidImage
+        : src
     ),
   }));
 }

@@ -3,6 +3,7 @@ import { useApps } from '../../context/AppsContext';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { AndroidApp, AppCategory, AppReleaseStatus } from '../../types';
+import { ASSETS } from '../../data/content';
 import { X, Plus, Edit2, Trash2, RotateCcw, Check, Smartphone, ShieldCheck, AlertCircle } from 'lucide-react';
 
 interface AdminAppManagerModalProps {
@@ -18,6 +19,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
 
   const [mode, setMode] = useState<'list' | 'add' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState<{
     name: string;
@@ -54,6 +56,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
   });
 
   React.useEffect(() => {
+    setConfirmDeleteId(null);
     if (editingApp) {
       handleStartEdit(editingApp);
     } else if (isOpen) {
@@ -124,6 +127,16 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
       published: { en: 'Google Play Release', hi: 'गूगल प्ले रिलीज' },
     };
 
+    const categoryHiMap: Record<AppCategory, string> = {
+      'Business Apps': 'बिजनेस ऐप्स',
+      'Education Apps': 'शिक्षा ऐप्स',
+      'Productivity Apps': 'उत्पादकता ऐप्स',
+      'Utility Apps': 'उपयोगिता ऐप्स',
+      'E-commerce Apps': 'ई-कॉमर्स ऐप्स',
+      'Enterprise Apps': 'एंटरप्राइज ऐप्स',
+      'AI-powered Apps': 'एआई संचालित ऐप्स',
+    };
+
     try {
       if (mode === 'add') {
         const newApp: AndroidApp = {
@@ -133,7 +146,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
           tagline: formData.tagline,
           taglineHi: formData.taglineHi || formData.tagline,
           category: formData.category,
-          categoryHi: formData.category,
+          categoryHi: categoryHiMap[formData.category] || formData.category,
           version: formData.version,
           architecture: formData.architecture,
           description: formData.description,
@@ -154,8 +167,8 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
           downloadSize: formData.downloadSize,
           targetSdk: formData.targetSdk,
           screenshots: [
-            '/src/assets/images/app_screenshots_mockup_1794321883195.jpg',
-            '/src/assets/images/android_app_ecosystem_1794321127603.jpg',
+            ASSETS.appMockupImage,
+            ASSETS.androidImage,
           ],
         };
         await addApp(newApp);
@@ -166,6 +179,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
           tagline: formData.tagline,
           taglineHi: formData.taglineHi,
           category: formData.category,
+          categoryHi: categoryHiMap[formData.category] || formData.category,
           version: formData.version,
           architecture: formData.architecture,
           description: formData.description,
@@ -280,19 +294,46 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
 
                     <div className="flex items-center gap-1.5 shrink-0">
                       <button
-                        onClick={() => handleStartEdit(app)}
+                        type="button"
+                        onClick={() => {
+                          setConfirmDeleteId(null);
+                          handleStartEdit(app);
+                        }}
                         className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors cursor-pointer"
                         title="Edit app"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => deleteApp(app.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
-                        title="Delete app"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {confirmDeleteId === app.id ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await deleteApp(app.id);
+                              setConfirmDeleteId(null);
+                            }}
+                            className="px-2 py-1 text-[11px] font-bold text-white bg-rose-700 hover:bg-rose-800 rounded cursor-pointer"
+                          >
+                            {t('Confirm', 'पुष्टि करें')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="px-2 py-1 text-[11px] font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded cursor-pointer"
+                          >
+                            {t('Cancel', 'रद्द')}
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(app.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors cursor-pointer"
+                          title="Delete app"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -21,12 +21,20 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function hasAdminRole() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Backward-compatible bootstrap fallback for existing verified root admin
+    // until their /user_roles/{uid} record is provisioned in Firestore.
+    function isLegacyBootstrapAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'ssbhanu41@gmail.com';
+    }
+
     function isAdmin() {
-      return isSignedIn() && (
-        (request.auth.token.email == 'ssbhanu41@gmail.com' && request.auth.token.email_verified == true) ||
-        (exists(/databases/$(database)/documents/user_roles/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/user_roles/$(request.auth.uid)).data.role == 'admin')
-      );
+      return hasAdminRole() || isLegacyBootstrapAdmin();
     }
 
     function isValidId(id) {
@@ -250,13 +258,7 @@ service cloud.firestore {
           get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.clientId == request.auth.uid
         )
       );
-      allow list: if isAdmin() || (
-        isSignedIn() &&
-        'projectId' in resource.data &&
-        isValidId(resource.data.projectId) &&
-        exists(/databases/$(database)/documents/projects/$(resource.data.projectId)) &&
-        get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.clientId == request.auth.uid
-      );
+      allow list: if isAdmin() || (isSignedIn() && resource.data.clientId == request.auth.uid);
       allow create, update, delete: if isValidId(taskId) && isAdmin();
     }
 

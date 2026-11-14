@@ -3,6 +3,7 @@ import { Language, TranslationSchema } from '../i18n/types';
 import { hiTranslations } from '../i18n/hi';
 import { enTranslations } from '../i18n/en';
 import { formatDate, formatCurrency, formatNumber, formatRelativeTime } from '../i18n/formatters';
+import { trackLanguageSwitch } from '../firebase/analytics';
 
 export interface ToastMessage {
   id: string;
@@ -84,6 +85,9 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [language, dismissToast]);
 
   const setLanguage = useCallback((lang: Language) => {
+    if (lang !== language) {
+      trackLanguageSwitch(language, lang);
+    }
     setLanguageState(lang);
     try {
       localStorage.setItem(STORAGE_KEY, lang);
@@ -94,42 +98,19 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       ? hiTranslations.notifications.langSwitchedToHi
       : enTranslations.notifications.langSwitchedToEn;
     showToast(toastMsg, 'info');
-  }, [showToast]);
+  }, [language, showToast]);
 
   const toggleLanguage = useCallback(() => {
     const nextLang: Language = language === 'hi' ? 'en' : 'hi';
     setLanguage(nextLang);
   }, [language, setLanguage]);
 
-  // SEO & Head Metadata synchronization
+  // Document language & locale synchronization (route/page SEO is handled by <RouteSEO /> & <SEO />)
   useEffect(() => {
     document.documentElement.lang = language;
-
-    const setMeta = (selector: string, content: string) => {
-      const el = document.querySelector(selector);
-      if (el) el.setAttribute('content', content);
-    };
-
-    if (language === 'hi') {
-      const title = 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज | एंटरप्राइज सॉफ्टवेयर एवं एआई';
-      const desc = 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज: एंटरप्राइज डिस्ट्रीब्यूटेड बैकएंड, नेटिव एंड्रॉइड ऐप्स और ऑटोनॉमस एआई सिस्टम।';
-      document.title = title;
-      setMeta('meta[name="description"]', desc);
-      setMeta('meta[property="og:title"]', 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज');
-      setMeta('meta[property="og:description"]', desc);
-      setMeta('meta[property="og:locale"]', 'hi_IN');
-      setMeta('meta[name="twitter:title"]', title);
-      setMeta('meta[name="twitter:description"]', desc);
-    } else {
-      const title = 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies | Enterprise Software & AI';
-      const desc = 'Bhanu Ram Bariha Digital Technologies: Mission-critical distributed systems, enterprise Android apps, and sovereign AI engines.';
-      document.title = title;
-      setMeta('meta[name="description"]', desc);
-      setMeta('meta[property="og:title"]', 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies');
-      setMeta('meta[property="og:description"]', desc);
-      setMeta('meta[property="og:locale"]', 'en_US');
-      setMeta('meta[name="twitter:title"]', title);
-      setMeta('meta[name="twitter:description"]', desc);
+    const localeEl = document.querySelector('meta[property="og:locale"]');
+    if (localeEl) {
+      localeEl.setAttribute('content', language === 'hi' ? 'hi_IN' : 'en_US');
     }
   }, [language]);
 

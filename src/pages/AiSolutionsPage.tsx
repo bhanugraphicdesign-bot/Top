@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { AI_SOLUTIONS, ASSETS } from '../data/content';
+import { AI_SOLUTIONS } from '../data/content';
 import { Bot, Search, FileText, TrendingUp, Check, ArrowRight, ShieldCheck, Cpu, Calculator } from 'lucide-react';
+import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AiSolutionsPageProps {
   onOpenConsultation: () => void;
@@ -142,13 +143,15 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
         <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
           <div className="grid grid-cols-1 lg:grid-cols-12">
             <div className="lg:col-span-5 relative bg-slate-900 p-6 sm:p-8 flex flex-col justify-between overflow-hidden">
-              <img
-                src={ASSETS.aiImage}
-                alt="AI Neural Architecture Studio"
+              <OptimizedImage
+                assetKey="aiImage"
+                alt="Enterprise AI Neural Architecture and Sovereign Model Engineering Studio"
+                altHi="एंटरप्राइज एआई न्यूरल आर्किटेक्चर और सॉवरेन मॉडल इंजीनियरिंग स्टूडियो"
+                width={1200}
+                height={896}
                 loading="lazy"
-                decoding="async"
+                sizes="(max-width: 1024px) 100vw, 42vw"
                 className="absolute inset-0 w-full h-full object-cover opacity-35"
-                referrerPolicy="no-referrer"
               />
               <div className="relative z-10">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase mb-2">

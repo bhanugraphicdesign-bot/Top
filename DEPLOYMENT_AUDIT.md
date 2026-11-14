@@ -30,8 +30,12 @@
 |---|---|---|---|---|
 | `PORT` | Container Runtime | Injected by Cloud Run (8080) | Public Runtime Var | HTTP port for incoming web traffic |
 | `NODE_ENV` | Container Runtime | `production` in Cloud Run | Public Runtime Var | Switches from Vite dev middleware to `/dist` static serving |
-| `APP_URL` | Container Runtime | Injected by AI Studio Cloud Run URL | Safe URI | Base URL for self-referential links & callbacks |
+| `APP_URL` | Container Runtime | Injected by AI Studio Cloud Run URL | Safe URI | Base URL for self-referential links, sitemap, and CORS allowlist |
 | `GEMINI_API_KEY` | Server-Side Only | AI Studio Secret Panel | **Confidential Secret** | Proxy route AI calls (never exposed to client UI) |
+| `PAYMENT_SECRET` | Server-Side Only | Cloud Run Secret / Env (Optional in dev) | **Confidential Secret** | HMAC-SHA256 signing secret for `/api/payments/*` (returns HTTP 503 `PAYMENT_GATEWAY_OPTIONAL_MODE` when unset) |
+| `GCS_BUCKET` | Server-Side Only | Cloud Storage Bucket Name (Optional in dev) | Runtime Configuration | Private GCS bucket for `/api/files/*` (returns HTTP 503 `STORAGE_NOT_CONFIGURED` when unset) |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Server-Side Only | Optional Service Account JSON | **Confidential Secret** | Explicit Admin SDK credentials outside GCP ADC environments |
+| `CORS_ALLOWED_ORIGINS` | Server-Side Only | Comma-separated origin allowlist | Runtime Configuration | Additional trusted browser origins beyond default allowlist |
 | `K_SERVICE` | Cloud Run Runtime | Injected by Google Cloud Run | System Metadata | Service name identifier |
 | `K_REVISION` | Cloud Run Runtime | Injected by Google Cloud Run | System Metadata | Active container deployment revision |
 
@@ -64,13 +68,13 @@ service cloud.firestore {
 
 1. **Default Deny:** Catch-all block at the root of Firestore blocks all unauthenticated and arbitrary reads/writes.
 2. **Root Administrator Guarantee:**
-   `ssbhanu41@gmail.com` is verified in `firestore.rules` helper `isAdmin()`, granting administrative triage rights while preventing non-admin modification.
+   `ssbhanu41@gmail.com` (verified email required) is checked in `firestore.rules` helper `isAdmin()`, granting administrative triage rights while preventing non-admin modification.
 3. **User Roles Protection (`/user_roles/{userId}`):**
    Clients can only read their own role (`allow get: if isOwner(userId) || isAdmin()`). Mutation (`create, update, delete`) is restricted strictly to verified admins.
 4. **Tenant Isolation:**
    Projects, Orders, Invoices, Payments, and Support Tickets evaluate `resource.data.clientId == request.auth.uid || isAdmin()`. Unauthorized tenants cannot scrape or query competitor data.
 5. **Audit Log Immutability (`/audit_logs/{logId}`):**
-   `allow create: if true;` (logged by server and clients), but `allow update, delete: if false;` guarantees cryptographic and legal immutability.
+   `allow create: if isValidId(logId) && isSignedIn() && isValidAuditLogCreate(request.resource.data, logId);` enforces authenticated actor attribution, while `allow update, delete: if false;` guarantees log immutability.
 
 ---
 
@@ -78,7 +82,7 @@ service cloud.firestore {
 
 When running behind Google Cloud Load Balancer on Cloud Run, TLS/HTTPS is terminated at the edge with managed SSL certificates.
 
-`server.ts` injects the following enterprise security headers on every response:
+`server.ts` injects the following security headers on every response:
 - `X-Content-Type-Options: nosniff` (Mitigates MIME confusion attacks)
 - `X-XSS-Protection: 1; mode=block` (Reflective XSS protection for legacy browsers)
 - `Referrer-Policy: strict-origin-when-cross-origin` (Protects query strings on outbound links)
@@ -91,7 +95,7 @@ When running behind Google Cloud Load Balancer on Cloud Run, TLS/HTTPS is termin
 1. **Node.js Process Telemetry (`/api/telemetry`):**
    Returns real-time memory usage (RSS, heapTotal, heapUsed), process ID, uptime, platform, and active connections.
 2. **Cloud Run Structured Logs:**
-   Standard `console.log` and `console.error` stream directly to Google Cloud Logging (Cloud Logging / Stackdriver) with JSON severity parsing.
+   Standard `console.log` and `console.error` stream directly to Google Cloud Logging (Cloud Logging / Stackdriver).
 3. **Enterprise Audit Trail (`/audit_logs`):**
    Key events are recorded with actor email, action type, resource path, and ISO-8601 timestamps:
    - `AUTH_LOGIN_GOOGLE`, `AUTH_LOGIN_EMAIL`, `AUTH_REGISTER`, `AUTH_LOGOUT`
@@ -105,14 +109,11 @@ When running behind Google Cloud Load Balancer on Cloud Run, TLS/HTTPS is termin
 ## 7. Backup & Disaster Recovery (DR) Strategy
 
 1. **Cloud Firestore Automated Backups:**
-   Google Cloud Firestore Enterprise Edition provides continuous replication across zones with automatic daily backups and Point-In-Time Recovery (PITR).
-2. **SLA Availability Guarantee:**
-   Contractual 99.98% availability backed by financial penalty clauses.
-   - P99 API Latency: 38ms
-   - Recovery Point Objective (RPO): 0 seconds (multi-zone synchronous commits)
-   - Recovery Time Objective (RTO): < 28 seconds (Cloud Run instant container cold start)
+   Google Cloud Firestore Enterprise Edition provides cross-zone replication and backup capabilities configured at the GCP project tier.
+2. **SLA Scope:**
+   Service Availability, RPO, and RTO targets are governed individually per executed Client Statement of Work (SOW).
 3. **Validated Uploads Manifest:**
-   Every file uploaded through `/api/files/upload` generates an immutable SHA-256 digest and is recorded in `/uploads/manifest.json`.
+   When `GCS_BUCKET` is configured, files uploaded through `/api/files/upload` generate a SHA-256 digest and store metadata in private GCS / manifest storage with authenticated download gating. When `GCS_BUCKET` is unset, uploads are safely disabled (`HTTP 503 STORAGE_NOT_CONFIGURED`).
 
 ---
 

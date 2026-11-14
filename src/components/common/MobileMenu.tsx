@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
-import { COMPANY_INFO } from '../../data/content';
+import { useSiteContact } from '../../hooks/useSiteContact';
 import { ArrowRight, Phone, Mail, MapPin, X, Languages, Shield, FileText, User, LogOut } from 'lucide-react';
 import { PageRoute } from '../../types';
 
@@ -20,6 +20,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   const { language, setLanguage, toggleLanguage, t } = useLanguage();
   const { currentRoute, navigate } = useNavigation();
   const { currentUser, isAdmin, openAuthModal, logout } = useAuth();
+  const siteContact = useSiteContact();
 
   if (!isOpen) return null;
 
@@ -80,7 +81,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
         </div>
 
         {/* Navigation Links */}
-        <div className="p-6 flex-1 flex flex-col gap-1">
+        <div className="p-6 pb-10 flex-1 flex flex-col gap-1">
           {/* User Account State in Drawer */}
           <div className="mb-3 p-3 bg-slate-900 text-white rounded-lg">
             {currentUser ? (
@@ -197,19 +198,29 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
           </div>
 
           {/* Quick Contact Info */}
-          <div className="mt-6 pt-5 border-t border-slate-100 text-xs text-slate-600 space-y-2.5">
-            <p className="font-bold text-slate-900">{COMPANY_INFO.name}</p>
+          <div className="mt-6 pt-5 pb-4 border-t border-slate-100 text-xs text-slate-700 space-y-2.5">
+            <p className="font-bold text-slate-900">{siteContact.name}</p>
             <div className="flex items-center gap-2">
               <Phone className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-              <span>{COMPANY_INFO.phone}</span>
+              <a
+                href={`tel:${siteContact.phone.replace(/\s+/g, '')}`}
+                className="font-mono hover:text-blue-700 transition-colors"
+              >
+                {siteContact.phone}
+              </a>
             </div>
             <div className="flex items-center gap-2">
               <Mail className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-              <span>{COMPANY_INFO.email}</span>
+              <a
+                href={`mailto:${siteContact.email}`}
+                className="font-mono text-blue-700 hover:underline break-all"
+              >
+                {siteContact.email}
+              </a>
             </div>
             <div className="flex items-start gap-2">
               <MapPin className="w-3.5 h-3.5 text-blue-700 shrink-0 mt-0.5" />
-              <span>{COMPANY_INFO.headquarters}</span>
+              <span>{siteContact.location}</span>
             </div>
           </div>
         </div>

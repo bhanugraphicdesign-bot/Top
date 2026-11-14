@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { SERVICES_DATA } from '../../data/content';
+import { fetchServicesCatalog } from '../../firebase/services';
 import { ServiceItem } from '../../types';
-import { ArrowUpRight, Layers, Globe, Smartphone, Cpu, Cloud, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 
 interface ServicesSectionProps {
   onSelectService: (service: ServiceItem) => void;
@@ -10,7 +11,25 @@ interface ServicesSectionProps {
 
 export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectService }) => {
   const { language, t } = useLanguage();
+  const [services, setServices] = useState<ServiceItem[]>(SERVICES_DATA);
   const [activeCategory, setActiveCategory] = useState<string>('all');
+
+  useEffect(() => {
+    let mounted = true;
+    fetchServicesCatalog()
+      .then((cloudServices) => {
+        if (mounted && Array.isArray(cloudServices) && cloudServices.length > 0) {
+          const sorted = [...cloudServices].sort((a, b) =>
+            String(a.number || '').localeCompare(String(b.number || ''), undefined, { numeric: true })
+          );
+          setServices(sorted);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const categories = [
     { id: 'all', label: 'All Services', labelHi: 'सभी सेवाएं' },
@@ -20,29 +39,10 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
     { id: 'Cloud Engineering', label: 'Cloud & DevOps', labelHi: 'क्लाउड व डेवऑप्स' },
   ];
 
-  const filteredServices = SERVICES_DATA.filter((s) => {
+  const filteredServices = services.filter((s) => {
     if (activeCategory === 'all') return true;
     return s.category === activeCategory;
   });
-
-  const getIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Layers':
-        return <Layers className="w-5 h-5 text-blue-700" />;
-      case 'Globe':
-        return <Globe className="w-5 h-5 text-blue-700" />;
-      case 'Smartphone':
-        return <Smartphone className="w-5 h-5 text-blue-700" />;
-      case 'Cpu':
-        return <Cpu className="w-5 h-5 text-blue-700" />;
-      case 'Cloud':
-        return <Cloud className="w-5 h-5 text-blue-700" />;
-      case 'ShieldCheck':
-        return <ShieldCheck className="w-5 h-5 text-blue-700" />;
-      default:
-        return <Layers className="w-5 h-5 text-blue-700" />;
-    }
-  };
 
   return (
     <section id="services" className="py-20 sm:py-28 bg-slate-50/70 border-b border-slate-200">
@@ -76,7 +76,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
           </div>
 
           {/* Interactive Filter Segmented Control (Buttons with click handlers) */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white border border-slate-200 rounded-lg shadow-2xs self-start md:self-end">
+          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white border border-slate-200 rounded-lg shadow-2xs self-start md:self-end max-w-full">
             {categories.map((cat) => (
               <button
                 key={cat.id}
@@ -105,7 +105,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
                 {/* Header: Editorial Number & Category (Clean unboxed text) */}
                 <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-3 border-b border-slate-100">
                   <span className="font-mono font-bold text-blue-700">
-                    {service.number}. {language === 'hi' ? service.categoryHi : service.category}
+                    {service.number}. {language === 'hi' ? (service.categoryHi || service.category) : service.category}
                   </span>
                   <div className="w-8 h-8 rounded-md bg-blue-50 group-hover:bg-blue-700 group-hover:text-white transition-colors flex items-center justify-center">
                     <ArrowUpRight className="w-4 h-4 text-blue-700 group-hover:text-white transition-colors" />
@@ -114,12 +114,14 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
 
                 {/* Service Title */}
                 <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors mb-2.5">
-                  {language === 'hi' ? service.titleHi : service.title}
+                  {language === 'hi' ? (service.titleHi || service.title) : service.title}
                 </h3>
 
                 {/* Short Description */}
                 <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
-                  {language === 'hi' ? service.shortDescHi : service.shortDesc}
+                  {language === 'hi'
+                    ? (service.shortDescHi || service.shortDesc || service.fullDesc)
+                    : (service.shortDesc || service.fullDesc)}
                 </p>
               </div>
 
@@ -127,7 +129,7 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
                 {/* Metric Strip (Clean Tabular Numbers) */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">
-                    {language === 'hi' ? service.metricLabelHi : service.metricLabel}
+                    {language === 'hi' ? (service.metricLabelHi || service.metricLabel) : service.metricLabel}
                   </span>
                   <span className="font-mono font-extrabold text-blue-700 tabular-nums">
                     {service.metric}

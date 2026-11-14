@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
@@ -35,7 +35,47 @@ export const AuthModal: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [resetSent, setResetSent] = useState(false);
 
+  useEffect(() => {
+    setErrorMsg('');
+    setResetSent(false);
+  }, [isAuthModalOpen, authModalTab]);
+
   if (!isAuthModalOpen) return null;
+
+  const mapAuthError = (err: any): string => {
+    const code = err?.code || '';
+    if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+      return language === 'hi' ? 'अमान्य ईमेल या पासवर्ड।' : 'Invalid email or password.';
+    }
+    if (code === 'auth/email-already-in-use') {
+      return language === 'hi' ? 'यह ईमेल पहले से पंजीकृत है।' : 'Email is already registered.';
+    }
+    if (code === 'auth/weak-password') {
+      return language === 'hi' ? 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए।' : 'Password must be at least 6 characters.';
+    }
+    if (code === 'auth/invalid-email') {
+      return language === 'hi' ? 'कृपया मान्य ईमेल पता दर्ज करें।' : 'Please enter a valid email address.';
+    }
+    if (code === 'auth/too-many-requests') {
+      return language === 'hi'
+        ? 'बहुत अधिक प्रयास। कृपया कुछ मिनट बाद पुनः प्रयास करें।'
+        : 'Too many attempts. Please wait a few minutes and try again.';
+    }
+    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+      return language === 'hi' ? 'Google साइन-इन विंडो बंद कर दी गई।' : 'Google sign-in popup was closed before completing.';
+    }
+    if (code === 'auth/popup-blocked') {
+      return language === 'hi'
+        ? 'ब्राउज़र ने साइन-इन पॉपअप ब्लॉक किया है। कृपया पॉपअप अनुमति दें।'
+        : 'Sign-in popup was blocked by your browser. Please allow popups for this site.';
+    }
+    if (code === 'auth/network-request-failed') {
+      return language === 'hi'
+        ? 'नेटवर्क त्रुटि। कृपया अपना इंटरनेट कनेक्शन जांचें।'
+        : 'Network error. Please check your internet connection and retry.';
+    }
+    return err?.message || (language === 'hi' ? 'प्रमाणीकरण त्रुटि।' : 'Authentication error.');
+  };
 
   const handleGoogleSignIn = async () => {
     try {
@@ -48,7 +88,7 @@ export const AuthModal: React.FC = () => {
       );
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err.message || 'Google authentication failed.');
+      setErrorMsg(mapAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -57,28 +97,42 @@ export const AuthModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+
+    const trimmedEmail = email.trim();
+    const trimmedName = displayName.trim();
+
+    if (!trimmedEmail) {
+      setErrorMsg(t('Please enter your work email.', 'कृपया अपना कार्य ईमेल दर्ज करें।'));
+      return;
+    }
+
     setLoading(true);
 
     try {
       if (authModalTab === 'login') {
-        await loginWithEmail(email, password);
+        await loginWithEmail(trimmedEmail, password);
         showToast(
           language === 'hi' ? 'सफलतापूर्वक लॉगिन हो गया।' : 'Signed in successfully.',
           'success'
         );
       } else if (authModalTab === 'register') {
+        if (!trimmedName) {
+          setErrorMsg(t('Please enter your full name.', 'कृपया अपना पूरा नाम दर्ज करें।'));
+          setLoading(false);
+          return;
+        }
         if (password.length < 6) {
           setErrorMsg(t('Password must be at least 6 characters.', 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए।'));
           setLoading(false);
           return;
         }
-        await registerWithEmail(email, password, displayName);
+        await registerWithEmail(trimmedEmail, password, trimmedName);
         showToast(
           language === 'hi' ? 'खाता सफलतापूर्वक बनाया गया।' : 'Account created successfully.',
           'success'
         );
       } else if (authModalTab === 'forgot') {
-        await resetPassword(email);
+        await resetPassword(trimmedEmail);
         setResetSent(true);
         showToast(
           language === 'hi' ? 'पासवर्ड रीसेट लिंक ईमेल पर भेजा गया।' : 'Password reset link sent to your email.',
@@ -87,13 +141,7 @@ export const AuthModal: React.FC = () => {
       }
     } catch (err: any) {
       console.error(err);
-      let msg = err.message || 'Authentication error.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-        msg = language === 'hi' ? 'अमान्य ईमेल या पासवर्ड।' : 'Invalid email or password.';
-      } else if (err.code === 'auth/email-already-in-use') {
-        msg = language === 'hi' ? 'यह ईमेल पहले से पंजीकृत है।' : 'Email is already registered.';
-      }
-      setErrorMsg(msg);
+      setErrorMsg(mapAuthError(err));
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,12 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { COMPANY_INFO } from '../data/content';
+import { useSiteContact } from '../hooks/useSiteContact';
 import { ContactCtaSection } from '../components/home/ContactCtaSection';
 import { Phone, Mail, MapPin, Clock, ShieldCheck, Building2 } from 'lucide-react';
 
 export const ContactPage: React.FC = () => {
   const { language, t } = useLanguage();
+  const siteContact = useSiteContact();
 
   return (
     <div className="bg-white">
@@ -49,11 +50,11 @@ export const ContactPage: React.FC = () => {
               {t('Headquarters & Innovation Hub', 'मुख्यालय एवं इनोवेशन हब')}
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              {COMPANY_INFO.name}<br />
-              {COMPANY_INFO.headquarters}
+              {siteContact.name}<br />
+              {siteContact.location}
             </p>
             <p className="text-[11px] font-mono text-slate-400 pt-1">
-              {COMPANY_INFO.registration}
+              {siteContact.registration}
             </p>
           </div>
 
@@ -64,12 +65,12 @@ export const ContactPage: React.FC = () => {
             </h3>
             <div className="text-xs text-slate-600 font-mono space-y-1">
               <div>
-                Mobile:{' '}
+                {t('Mobile:', 'मोबाइल:')}{' '}
                 <a
-                  href={`tel:${COMPANY_INFO.phone.replace(/\s+/g, '')}`}
+                  href={`tel:${siteContact.phone.replace(/\s+/g, '')}`}
                   className="text-blue-700 hover:underline font-semibold"
                 >
-                  {COMPANY_INFO.phone}
+                  {siteContact.phone}
                 </a>
               </div>
             </div>
@@ -85,12 +86,12 @@ export const ContactPage: React.FC = () => {
             </h3>
             <div className="text-xs text-slate-600 font-mono space-y-1 break-all">
               <div>
-                Email:{' '}
+                {t('Email:', 'ईमेल:')}{' '}
                 <a
-                  href={`mailto:${COMPANY_INFO.email}`}
+                  href={`mailto:${siteContact.email}`}
                   className="text-blue-700 hover:underline font-semibold"
                 >
-                  {COMPANY_INFO.email}
+                  {siteContact.email}
                 </a>
               </div>
             </div>

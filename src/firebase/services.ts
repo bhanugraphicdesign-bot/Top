@@ -18,7 +18,18 @@ import { AndroidApp, BlogPost, ServiceItem, AppNotification } from '../types';
 import { INITIAL_ANDROID_APPS, SERVICES_DATA } from '../data/content';
 import { BLOG_POSTS } from '../data/blogData';
 
-const ROOT_ADMIN_EMAIL = 'ssbhanu41@gmail.com';
+const LEGACY_ROOT_ADMIN_FALLBACK = 'ssbhanu41@gmail.com';
+const CLIENT_ROOT_ADMIN_EMAILS = new Set<string>(
+  ((import.meta.env.VITE_ROOT_ADMIN_EMAIL as string | undefined)?.trim() || LEGACY_ROOT_ADMIN_FALLBACK)
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+export function isLegacyOrEnvRootAdminEmail(email?: string | null, emailVerified?: boolean): boolean {
+  if (emailVerified !== true || !email) return false;
+  return CLIENT_ROOT_ADMIN_EMAILS.has(email.trim().toLowerCase());
+}
 
 export const COLLECTIONS = {
   USERS: 'users',
@@ -45,14 +56,36 @@ function clampStr(val: string | undefined | null, maxLen: number): string {
 async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
   const currentUser = auth.currentUser;
   if (!currentUser) return false;
-  if (
-    currentUser.emailVerified === true &&
-    currentUser.email?.toLowerCase() === ROOT_ADMIN_EMAIL
-  ) {
+
+  // 1. Primary RBAC source: Firestore `user_roles/{uid}`
+  const role = await fetchUserRole(currentUser.uid);
+  if (role === 'admin') {
     return true;
   }
-  const role = await fetchUserRole(currentUser.uid);
-  return role === 'admin';
+
+  // 2. Server-verified RBAC (checks `user_roles` + `process.env.ROOT_ADMIN_EMAIL`)
+  if (typeof fetch !== 'undefined' && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+    try {
+      const idToken = await currentUser.getIdToken();
+      const statusRes = await fetch('/api/auth/status', {
+        headers: { Authorization: `Bearer ${idToken}` },
+      });
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData?.isAdmin === true) {
+          return true;
+        }
+      }
+    } catch {
+      // Offline/network fallback handled below
+    }
+  }
+
+  // 3. Verified bootstrap fallback for backward compatibility
+  return (
+    currentUser.emailVerified === true &&
+    isLegacyOrEnvRootAdminEmail(currentUser.email, currentUser.emailVerified)
+  );
 }
 
 /* =========================================================================
@@ -159,18 +192,49 @@ export async function fetchUserRole(uid: string): Promise<string> {
   }
 }
 
+export async function ensureBootstrapAdminRoleDoc(user: {
+  uid: string;
+  email: string | null;
+}): Promise<void> {
+  if (!auth.currentUser || auth.currentUser.uid !== user.uid) return;
+  try {
+    const roleRef = doc(db, COLLECTIONS.USER_ROLES, user.uid);
+    const snap = await getDoc(roleRef);
+    if (!snap.exists() || snap.data()?.role !== 'admin') {
+      await setDoc(
+        roleRef,
+        {
+          uid: user.uid,
+          role: 'admin',
+          assignedBy: clampStr(user.email || 'root-admin-bootstrap', 160),
+          assignedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    }
+  } catch {
+    // Non-fatal: Firestore rules reject non-admins; fallback remains guarded by rules
+  }
+}
+
 /* =========================================================================
    3. APPS & APP CATEGORIES
    ========================================================================= */
 export async function fetchFirestoreApps(): Promise<AndroidApp[]> {
   const path = COLLECTIONS.APPS;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return [];
+  }
   try {
     const snap = await getDocs(collection(db, path));
     if (snap.empty) {
       return [];
     }
     return snap.docs.map((d) => d.data() as AndroidApp);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'unavailable') {
+      return [];
+    }
     handleFirestoreError(error, OperationType.LIST, path);
   }
 }
@@ -469,8 +533,9 @@ export async function seedInitialDatabaseIfEmpty() {
       brandName: 'POWER WEB STUDIO AI',
       cin: 'U72900OR2024PTC045812',
       maintenanceMode: false,
-      contactEmail: 'contact@bhanurambariha.tech',
-      contactPhone: '+91 674 291 8000',
+      contactEmail: 'powerusertopuser@gmail.com',
+      contactPhone: '+91 8305457717',
+      headquarters: 'Fingeshwar Borid Mod, Rajim Subdistrict, Gariaband District, Chhattisgarh - 493992',
       updatedAt: new Date().toISOString(),
     });
 
@@ -527,6 +592,7 @@ export async function saveClientRecord(userData: {
   companyName?: string;
   phone?: string;
   role?: 'admin' | 'client';
+  createdAt?: string;
 }) {
   const path = COLLECTIONS.USERS;
   if (!(await isCurrentUserVerifiedAdmin())) {
@@ -539,7 +605,7 @@ export async function saveClientRecord(userData: {
       displayName: clampStr(userData.displayName, 160),
       companyName: clampStr(userData.companyName, 160),
       phone: clampStr(userData.phone, 40),
-      createdAt: new Date().toISOString(),
+      ...(userData.createdAt ? { createdAt: userData.createdAt } : {}),
       lastLoginAt: new Date().toISOString(),
     }, { merge: true });
 
@@ -589,6 +655,9 @@ export async function deleteProject(projectId: string) {
    ========================================================================= */
 export async function fetchServicesCatalog(): Promise<ServiceItem[]> {
   const path = 'services';
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return SERVICES_DATA;
+  }
   try {
     const snap = await getDocs(collection(db, path));
     if (snap.empty) {
@@ -667,6 +736,9 @@ export async function deleteQuotation(quoteId: string) {
    ========================================================================= */
 export async function fetchBlogPosts(): Promise<BlogPost[]> {
   const path = 'blog_posts';
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return BLOG_POSTS;
+  }
   try {
     const snap = await getDocs(collection(db, path));
     if (snap.empty) {
@@ -710,6 +782,9 @@ export async function deleteBlogPost(postId: string) {
 
 export async function fetchSiteSettings(): Promise<any> {
   const path = COLLECTIONS.SITE_SETTINGS;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return null;
+  }
   try {
     const snap = await getDoc(doc(db, path, 'global_config'));
     if (snap.exists()) {
@@ -732,6 +807,9 @@ export async function saveSiteSettings(settings: any) {
       ...settings,
       updatedAt: serverTimestamp(),
     }, { merge: true });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pws-site-settings-updated', { detail: settings }));
+    }
     await logAuditEvent('SETTINGS_SAVED', 'site_settings/global_config', 'Updated platform configuration');
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${path}/global_config`);

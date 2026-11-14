@@ -8,6 +8,8 @@ interface CustomerModalProps {
   onClose: () => void;
   onSuccess: () => void;
   customer?: any | null;
+  isDemoSandbox?: boolean;
+  onSaveDemo?: (savedCustomer: any) => void;
 }
 
 export const CustomerManagerModal: React.FC<CustomerModalProps> = ({
@@ -15,6 +17,8 @@ export const CustomerManagerModal: React.FC<CustomerModalProps> = ({
   onClose,
   onSuccess,
   customer,
+  isDemoSandbox = false,
+  onSaveDemo,
 }) => {
   const { language, t, showToast } = useLanguage();
 
@@ -61,7 +65,30 @@ export const CustomerManagerModal: React.FC<CustomerModalProps> = ({
 
     setSaving(true);
     try {
-      await saveClientRecord(formData);
+      const createdAt = customer?.createdAt || new Date().toISOString();
+      if (isDemoSandbox) {
+        onSaveDemo?.({
+          ...customer,
+          ...formData,
+          createdAt,
+          lastLoginAt: new Date().toISOString(),
+        });
+        showToast(
+          t(
+            '[Demo Sandbox] Customer record updated locally for preview.',
+            '[डेमो सैंडबॉक्स] ग्राहक रिकॉर्ड केवल स्थानीय पूर्वावलोकन में सहेजा गया।'
+          ),
+          'info'
+        );
+        onSuccess();
+        onClose();
+        return;
+      }
+
+      await saveClientRecord({
+        ...formData,
+        createdAt: customer?.createdAt ? undefined : createdAt,
+      });
       showToast(
         language === 'hi'
           ? 'ग्राहक रिकॉर्ड सफलतापूर्वक सहेज लिया गया।'

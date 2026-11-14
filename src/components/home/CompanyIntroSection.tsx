@@ -1,7 +1,9 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { COMPANY_INFO, ASSETS } from '../../data/content';
+import { COMPANY_INFO } from '../../data/content';
+import { useSiteContact } from '../../hooks/useSiteContact';
 import { Shield, Award, MapPin, Building2, Check, ArrowRight } from 'lucide-react';
+import { OptimizedImage } from '../common/OptimizedImage';
 
 interface CompanyIntroSectionProps {
   onOpenConsultation: () => void;
@@ -11,6 +13,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
   onOpenConsultation,
 }) => {
   const { language, t } = useLanguage();
+  const siteContact = useSiteContact();
 
   return (
     <section id="company" className="py-20 sm:py-28 bg-white border-b border-slate-200">
@@ -46,13 +49,15 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
           {/* Left: Campus Image & Facility Credentials */}
           <div className="lg:col-span-6 space-y-4">
             <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-md group">
-              <img
-                src={ASSETS.campusImage}
-                alt="Bhanu Ram Bariha Digital Technologies Innovation Campus"
+              <OptimizedImage
+                assetKey="campusImage"
+                alt="Bhanu Ram Bariha Digital Technologies Innovation Campus and Engineering Delivery Center"
+                altHi="भानु राम बरीहा डिजिटल टेक्नोलॉजीज इनोवेशन कैंपस और इंजीनियरिंग डिलीवरी सेंटर"
+                width={1376}
+                height={768}
                 loading="lazy"
-                decoding="async"
+                sizes="(max-width: 1024px) 100vw, 50vw"
                 className="w-full h-80 sm:h-96 object-cover transition-transform duration-500 group-hover:scale-102"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
               <div className="absolute bottom-4 left-4 right-4 text-white">
@@ -60,7 +65,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
                   {t('Innovation Campus & Delivery Center', 'इनोवेशन कैंपस और डिलीवरी सेंटर')}
                 </p>
                 <p className="text-sm font-bold mt-0.5">
-                  {COMPANY_INFO.headquarters}
+                  {siteContact.location}
                 </p>
               </div>
             </div>
@@ -69,7 +74,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
               <div className="flex items-center gap-2 min-w-0">
                 <Building2 className="w-4 h-4 text-blue-700 shrink-0" />
-                <span className="font-semibold text-slate-900 break-words">{COMPANY_INFO.registration}</span>
+                <span className="font-semibold text-slate-900 break-words">{siteContact.registration}</span>
               </div>
               <div className="flex items-center gap-2">
                 <Award className="w-4 h-4 text-blue-700 shrink-0" />

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { COMPANY_INFO, ASSETS } from '../../data/content';
+import { COMPANY_INFO } from '../../data/content';
 import { ArrowRight, ShieldCheck, ChevronRight, Activity } from 'lucide-react';
+import { OptimizedImage } from '../common/OptimizedImage';
 
 interface HeroSectionProps {
   onOpenConsultation: () => void;
@@ -95,13 +96,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
           {/* Right Column: Hero Visual Container (5 Cols) */}
           <div className="lg:col-span-5">
             <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-lg bg-slate-900 group">
-              <img
-                src={ASSETS.heroImage}
-                alt="Power Web Studio AI Enterprise Command Studio"
-                decoding="async"
-                fetchPriority="high"
+              <OptimizedImage
+                assetKey="heroImage"
+                alt="Power Web Studio AI Enterprise Software Engineering and Command Studio"
+                altHi="पावर वेब स्टूडियो एआई एंटरप्राइज सॉफ्टवेयर इंजीनियरिंग एवं कमांड स्टूडियो"
+                width={1376}
+                height={768}
+                loading="eager"
+                sizes="(max-width: 1024px) 100vw, 42vw"
+                priority
                 className="w-full h-80 sm:h-96 lg:h-[420px] object-cover transition-transform duration-500 group-hover:scale-102"
-                referrerPolicy="no-referrer"
               />
               {/* Subtle gradient overlay at bottom for legible contrast */}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent pointer-events-none" />

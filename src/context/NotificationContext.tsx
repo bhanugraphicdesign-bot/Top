@@ -67,27 +67,51 @@ const SEED_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
+const BROADCAST_READ_STORAGE_PREFIX = 'pws_read_broadcasts_';
+
+function loadReadBroadcastIds(uid: string | undefined): Set<string> {
+  if (!uid) return new Set();
+  try {
+    const raw = localStorage.getItem(`${BROADCAST_READ_STORAGE_PREFIX}${uid}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReadBroadcastIds(uid: string | undefined, ids: Set<string>) {
+  if (!uid) return;
+  try {
+    localStorage.setItem(`${BROADCAST_READ_STORAGE_PREFIX}${uid}`, JSON.stringify(Array.from(ids).slice(-100)));
+  } catch {
+    // ignore storage quota failures
+  }
+}
+
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
   const { language, showToast } = useLanguage();
   const [notifications, setNotifications] = useState<AppNotification[]>(SEED_NOTIFICATIONS);
 
   const refreshNotifications = useCallback(async () => {
+    if (!currentUser?.uid) {
+      setNotifications((prev) => {
+        const hasOnlySeed = prev.every((item) => item.id.startsWith('notif-'));
+        return hasOnlySeed && prev.length > 0 ? prev : SEED_NOTIFICATIONS;
+      });
+      return;
+    }
+
     try {
-      const live = await fetchNotifications(currentUser?.uid);
-      if (live && live.length > 0) {
-        setNotifications((prev) => {
-          const combined = [...live];
-          for (const s of prev) {
-            if (!combined.some((c) => c.id === s.id)) {
-              combined.push(s);
-            }
-          }
-          return combined;
-        });
-      }
+      const live = await fetchNotifications(currentUser.uid);
+      const readBroadcasts = loadReadBroadcastIds(currentUser.uid);
+      const hydrated = (live || []).map((n) =>
+        n.userId === 'broadcast_all' && readBroadcasts.has(n.id) ? { ...n, read: true } : n
+      );
+      setNotifications(hydrated);
     } catch {
-      // Keep seed state
+      setNotifications([]);
     }
   }, [currentUser?.uid]);
 
@@ -110,6 +134,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     setNotifications((prev) => [newRecord, ...prev]);
 
+    if (!currentUser) return;
     // Async write to Firestore
     try {
       await firestoreCreateNotification(notif);
@@ -119,27 +144,48 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const markAsRead = async (id: string) => {
+    const target = notifications.find((n) => n.id === id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, read: true } : n))
     );
-    try {
-      await firestoreMarkAsRead(id);
-    } catch {
-      // local updated
+    if (!currentUser?.uid || !target) return;
+
+    if (target.userId === 'broadcast_all') {
+      const readSet = loadReadBroadcastIds(currentUser.uid);
+      readSet.add(id);
+      saveReadBroadcastIds(currentUser.uid, readSet);
+      return;
+    }
+
+    if (target.userId === currentUser.uid) {
+      try {
+        await firestoreMarkAsRead(id);
+      } catch {
+        // local updated
+      }
     }
   };
 
   const markAllAsRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    try {
-      await firestoreMarkAllAsRead(currentUser?.uid);
-      showToast(
-        language === 'hi' ? 'सभी सूचनाएं पढ़ी हुई चिह्नित की गईं।' : 'All notifications marked as read.',
-        'info'
-      );
-    } catch {
-      // local updated
+    if (currentUser?.uid) {
+      const readSet = loadReadBroadcastIds(currentUser.uid);
+      for (const n of notifications) {
+        if (n.userId === 'broadcast_all') {
+          readSet.add(n.id);
+        }
+      }
+      saveReadBroadcastIds(currentUser.uid, readSet);
+      try {
+        await firestoreMarkAllAsRead(currentUser.uid);
+      } catch {
+        // local updated
+      }
     }
+    showToast(
+      language === 'hi' ? 'सभी सूचनाएं पढ़ी हुई चिह्नित की गईं।' : 'All notifications marked as read.',
+      'info'
+    );
   };
 
   return (

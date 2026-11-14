@@ -1,10 +1,48 @@
 @import "tailwindcss";
 
+/* Metric-adjusted local fallbacks to minimize Cumulative Layout Shift (CLS) during font swap */
+@font-face {
+  font-family: "Plus Jakarta Sans Fallback";
+  src: local("Arial"), local("Helvetica Neue"), local("Roboto"), local("Segoe UI");
+  font-display: swap;
+  size-adjust: 102%;
+  ascent-override: 98%;
+  descent-override: 25%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "Noto Sans Devanagari Fallback";
+  src: local("Noto Sans Devanagari"), local("Nirmala UI"), local("Kohinoor Devanagari"), local("Devanagari Sangam MN"), local("Mangal");
+  font-display: swap;
+  size-adjust: 100%;
+  ascent-override: 106%;
+  descent-override: 32%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: "JetBrains Mono Fallback";
+  src: local("SFMono-Regular"), local("Menlo"), local("Monaco"), local("Consolas"), local("Liberation Mono");
+  font-display: swap;
+  size-adjust: 100%;
+  ascent-override: 96%;
+  descent-override: 25%;
+  line-gap-override: 0%;
+}
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", "Plus Jakarta Sans Fallback", "Noto Sans Devanagari", "Noto Sans Devanagari Fallback", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "JetBrains Mono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 @layer base {
   html {
     scroll-behavior: smooth;
     overflow-x: clip;
-    font-family: 'Plus Jakarta Sans', 'Noto Sans Devanagari', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans);
+    font-optical-sizing: auto;
+    font-synthesis-weight: none;
   }
 
   body {

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
 import { Smartphone, Check, ArrowLeft, ShieldCheck, Download, ExternalLink, Activity, Layers, Cpu, Play } from 'lucide-react';
-import { ASSETS } from '../data/content';
+import { OptimizedImage } from '../components/common/OptimizedImage';
+import { SEO, ROUTE_SEO_CONFIG } from '../components/common/SEO';
+import { OPTIMIZED_ASSETS } from '../data/content';
 
 interface AppDetailPageProps {
   onOpenConsultation: (service: string) => void;
@@ -20,10 +22,25 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
   const [activeTab, setActiveTab] = useState<'architecture' | 'features' | 'changelog'>('architecture');
   const [demoSimActive, setDemoSimActive] = useState(false);
   const [simStep, setSimStep] = useState(1);
+  const simTimersRef = useRef<number[]>([]);
+
+  const clearSimTimers = () => {
+    simTimersRef.current.forEach((timerId) => window.clearTimeout(timerId));
+    simTimersRef.current = [];
+  };
+
+  useEffect(() => {
+    clearSimTimers();
+    setActiveTab('architecture');
+    setDemoSimActive(false);
+    setSimStep(1);
+    return () => clearSimTimers();
+  }, [app?.id]);
 
   if (!app) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+        <SEO {...ROUTE_SEO_CONFIG['app-detail']} noIndex />
         <h2 className="text-xl font-bold text-slate-900">App not found</h2>
         <button
           onClick={() => navigate('android-portfolio')}
@@ -35,15 +52,38 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
     );
   }
 
+  const firstScreenshot = app.screenshots?.[0];
+  const appOgImage =
+    firstScreenshot && /^https?:\/\//i.test(firstScreenshot) && !/\.webp($|\?)/i.test(firstScreenshot)
+      ? firstScreenshot
+      : OPTIMIZED_ASSETS.androidImage.jpg;
+
   const runSimulation = () => {
+    clearSimTimers();
     setDemoSimActive(true);
     setSimStep(1);
-    setTimeout(() => setSimStep(2), 800);
-    setTimeout(() => setSimStep(3), 1600);
+    const t1 = window.setTimeout(() => setSimStep(2), 800);
+    const t2 = window.setTimeout(() => setSimStep(3), 1600);
+    simTimersRef.current = [t1, t2];
   };
 
   return (
     <div className="bg-white">
+      <SEO
+        titleEn={`${app.name} — ${app.tagline} | POWER WEB STUDIO AI`}
+        titleHi={`${app.nameHi || app.name} — ${app.taglineHi || app.tagline} | POWER WEB STUDIO AI`}
+        descriptionEn={app.description}
+        descriptionHi={app.descriptionHi || app.description}
+        ogTitleEn={`${app.name} (${app.category})`}
+        ogTitleHi={`${app.nameHi || app.name} (${app.categoryHi || app.category})`}
+        ogDescriptionEn={`${app.tagline} — ${app.description}`}
+        ogDescriptionHi={`${app.taglineHi || app.tagline} — ${app.descriptionHi || app.description}`}
+        ogImage={appOgImage}
+        ogImageAltEn={`${app.name} enterprise Android application preview`}
+        ogImageAltHi={`${app.nameHi || app.name} एंटरप्राइज एंड्रॉइड एप्लिकेशन पूर्वावलोकन`}
+        canonicalPath={`/app-detail?id=${encodeURIComponent(app.id)}`}
+      />
+
       {/* Top Breadcrumb & Back Action */}
       <div className="bg-slate-50 border-b border-slate-200 py-4">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
@@ -159,17 +199,16 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                 {t('Device Surface & Screen Architecture', 'डिवाइस स्क्रीन पूर्वावलोकन')}
               </span>
               <div className="rounded-xl overflow-hidden border border-slate-300 shadow-lg bg-slate-900">
-                <img
-                  src={
-                    app.screenshots[0] && !app.screenshots[0].startsWith('/src/assets/')
-                      ? app.screenshots[0]
-                      : ASSETS.appMockupImage
-                  }
-                  alt={`${app.name} interface`}
+                <OptimizedImage
+                  assetKey="appMockupImage"
+                  customSrc={app.screenshots[0]}
+                  alt={`${app.name} enterprise mobile screen architecture preview`}
+                  altHi={`${app.nameHi || app.name} एंटरप्राइज मोबाइल स्क्रीन आर्किटेक्चर पूर्वावलोकन`}
+                  width={1200}
+                  height={896}
                   loading="lazy"
-                  decoding="async"
+                  sizes="(max-width: 1024px) 100vw, 58vw"
                   className="w-full h-80 sm:h-96 object-cover"
-                  referrerPolicy="no-referrer"
                 />
               </div>
             </div>
@@ -222,10 +261,10 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
       {/* Tabs: Architecture vs Features vs Changelog */}
       <section className="py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="flex items-center gap-2 border-b border-slate-200 pb-1">
+          <div className="flex items-center gap-2 border-b border-slate-200 pb-1 overflow-x-auto scrollbar-thin">
             <button
               onClick={() => setActiveTab('architecture')}
-              className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer border-b-2 ${
+              className={`px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-colors cursor-pointer border-b-2 ${
                 activeTab === 'architecture'
                   ? 'border-blue-700 text-blue-700'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -235,7 +274,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
             </button>
             <button
               onClick={() => setActiveTab('features')}
-              className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer border-b-2 ${
+              className={`px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-colors cursor-pointer border-b-2 ${
                 activeTab === 'features'
                   ? 'border-blue-700 text-blue-700'
                   : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -246,7 +285,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
             {app.changelog && app.changelog.length > 0 && (
               <button
                 onClick={() => setActiveTab('changelog')}
-                className={`px-4 py-2 text-xs font-bold transition-colors cursor-pointer border-b-2 ${
+                className={`px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-colors cursor-pointer border-b-2 ${
                   activeTab === 'changelog'
                     ? 'border-blue-700 text-blue-700'
                     : 'border-transparent text-slate-600 hover:text-slate-900'

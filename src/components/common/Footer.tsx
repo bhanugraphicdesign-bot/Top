@@ -1,20 +1,33 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
-import { COMPANY_INFO } from '../../data/content';
-import { Send, CheckCircle, ShieldCheck, Award, ArrowUp } from 'lucide-react';
+import { useSiteContact } from '../../hooks/useSiteContact';
+import { Phone, Mail, MapPin, Send, CheckCircle, ShieldCheck, Award, ArrowUp } from 'lucide-react';
 import { PageRoute } from '../../types';
+import { PWAInstallButton } from './PWAInstallButton';
+import { extractBilingualApiError } from '../../utils/formProtection';
 
 export const Footer: React.FC = () => {
   const { language, t, showToast } = useLanguage();
   const { navigate } = useNavigation();
+  const siteContact = useSiteContact();
   const [newsletterEmail, setNewsletterEmail] = useState('');
+  const [honeypot, setHoneypot] = useState('');
   const [subscribed, setSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [subscribeError, setSubscribeError] = useState('');
 
   const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (honeypot.trim().length > 0) {
+      const msg =
+        language === 'hi'
+          ? 'स्वचालित बॉट अनुरोध अवरुद्ध कर दिया गया है। कृपया पृष्ठ रीफ़्रेश करें और पुनः प्रयास करें।'
+          : 'Automated submission blocked. Please refresh the page and try again.';
+      setSubscribeError(msg);
+      showToast(msg, 'alert');
+      return;
+    }
     const trimmed = newsletterEmail.trim();
     if (!trimmed) return;
     setSubscribeError('');
@@ -23,15 +36,25 @@ export const Footer: React.FC = () => {
       const res = await fetch('/api/newsletter/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmed, language }),
+        body: JSON.stringify({ email: trimmed, language, _hp: honeypot }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(data.error || `HTTP ${res.status}`);
+        throw new Error(
+          extractBilingualApiError(
+            res.status,
+            data,
+            language,
+            `Subscription failed (HTTP ${res.status})`,
+            `सदस्यता विफल रही (HTTP ${res.status})`
+          )
+        );
       }
       setSubscribed(true);
       showToast(
-        language === 'hi' ? 'तकनीकी डिस्पैच में सदस्यता सफल।' : 'Subscribed to Technical Dispatch.',
+        language === 'hi'
+          ? data?.messageHi || 'तकनीकी डिस्पैच में सदस्यता सफल।'
+          : data?.messageEn || 'Subscribed to Technical Dispatch.',
         'success'
       );
     } catch (err: any) {
@@ -66,8 +89,8 @@ export const Footer: React.FC = () => {
               <span className="text-blue-400">AI</span>
             </button>
 
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              {COMPANY_INFO.name}
+            <p className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+              {siteContact.name}
             </p>
 
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm">
@@ -76,9 +99,30 @@ export const Footer: React.FC = () => {
                 : 'Engineering high-concurrency enterprise architectures, native Android mobility ecosystems, and sovereign AI engines for global organizations.'}
             </p>
 
-            <div className="text-xs text-slate-500 space-y-1 pt-1 font-mono break-words">
-              <div>{COMPANY_INFO.registration}</div>
-              <div>{COMPANY_INFO.headquarters}</div>
+            <div className="text-xs text-slate-300 space-y-2 pt-2 break-words">
+              <div className="font-mono text-slate-400">{siteContact.registration}</div>
+              <div className="flex items-start gap-2">
+                <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                <span>{siteContact.location}</span>
+              </div>
+              <div className="flex items-center gap-2 font-mono">
+                <Phone className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <a
+                  href={`tel:${siteContact.phone.replace(/\s+/g, '')}`}
+                  className="hover:text-blue-400 transition-colors"
+                >
+                  {siteContact.phone}
+                </a>
+              </div>
+              <div className="flex items-center gap-2 font-mono">
+                <Mail className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                <a
+                  href={`mailto:${siteContact.email}`}
+                  className="hover:text-blue-400 transition-colors break-all"
+                >
+                  {siteContact.email}
+                </a>
+              </div>
             </div>
           </div>
 
@@ -206,14 +250,32 @@ export const Footer: React.FC = () => {
                 <span>{t('Subscribed to Technical Dispatch.', 'तकनीकी डिस्पैच में सदस्यता सफल।')}</span>
               </div>
             ) : (
-              <form onSubmit={handleSubscribe} className="space-y-2">
+              <form onSubmit={handleSubscribe} className="space-y-2 relative">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none fixed -left-[9999px] top-auto h-px w-px overflow-hidden opacity-0"
+                >
+                  <label htmlFor="newsletter-hp-code">Leave this field blank</label>
+                  <input
+                    id="newsletter-hp-code"
+                    name="newsletter_hp_code"
+                    type="text"
+                    tabIndex={-1}
+                    autoComplete="new-password"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                  />
+                </div>
                 <div className="flex gap-2">
                   <input
                     type="email"
                     required
                     disabled={subscribing}
                     value={newsletterEmail}
-                    onChange={(e) => setNewsletterEmail(e.target.value)}
+                    onChange={(e) => {
+                      setNewsletterEmail(e.target.value);
+                      if (subscribeError) setSubscribeError('');
+                    }}
                     placeholder="architect@enterprise.com"
                     className="flex-1 min-w-0 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 disabled:opacity-60"
                   />
@@ -227,7 +289,9 @@ export const Footer: React.FC = () => {
                   </button>
                 </div>
                 {subscribeError && (
-                  <div className="text-[11px] text-rose-400">{subscribeError}</div>
+                  <div role="alert" className="text-[11px] text-rose-400">
+                    {subscribeError}
+                  </div>
                 )}
                 <div className="text-[11px] text-slate-500">
                   {t('Strictly confidential. Unsubscribe at any time.', 'सख्ती से गोपनीय। किसी भी समय रद्द करें।')}
@@ -240,7 +304,7 @@ export const Footer: React.FC = () => {
         {/* Bottom Bar: Copyright & Compliance Signatures */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div>
-            © {new Date().getFullYear()} {COMPANY_INFO.name}. {t('All Rights Reserved.', 'सर्वाधिकार सुरक्षित।')}
+            © {new Date().getFullYear()} {siteContact.name}. {t('All Rights Reserved.', 'सर्वाधिकार सुरक्षित।')}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
@@ -253,6 +317,7 @@ export const Footer: React.FC = () => {
               <Award className="w-3.5 h-3.5 text-blue-500 shrink-0" />
               <span>{t('DPDP Aligned Architecture (Uncertified)', 'DPDP अनुरूप डिज़ाइन (अप्रमाणित)')}</span>
             </span>
+            <PWAInstallButton />
             <span aria-hidden="true" className="text-slate-700">·</span>
             <button
               onClick={scrollToTop}

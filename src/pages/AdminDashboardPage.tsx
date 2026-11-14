@@ -157,6 +157,266 @@ const DEMO_ADMIN_INVOICES: EnterpriseInvoice[] = [
   },
 ];
 
+const DEMO_ADMIN_USERS: any[] = [
+  {
+    uid: 'user-root',
+    displayName: 'Er. Bhanu Ram Bariha',
+    email: 'admin@barihadigital.com',
+    companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
+    role: 'admin',
+    lastLoginAt: '2026-11-10T11:45:00Z',
+  },
+  {
+    uid: 'user-002',
+    displayName: 'Rajiv Sengupta',
+    email: 'r.sengupta@kalingalogistics.in',
+    companyName: 'Kalinga Logistics Infrastructure Ltd.',
+    role: 'client',
+    lastLoginAt: '2026-11-09T08:20:00Z',
+  },
+  {
+    uid: 'user-003',
+    displayName: 'Dr. Anita Mohanty',
+    email: 'anita.m@utkalhealth.org',
+    companyName: 'Utkal Health Sciences Foundation',
+    role: 'client',
+    lastLoginAt: '2026-11-08T16:10:00Z',
+  },
+  {
+    uid: 'user-004',
+    displayName: 'Er. Somnath Patel',
+    email: 's.patel@barihadigital.com',
+    companyName: 'Bariha Digital Technologies',
+    role: 'architect',
+    lastLoginAt: '2026-11-10T09:30:00Z',
+  },
+];
+
+const DEMO_ADMIN_LEADS: InboundLead[] = [
+  {
+    id: 'lead-101',
+    name: 'Rajiv Sengupta',
+    company: 'Kalinga Logistics Infrastructure Ltd.',
+    email: 'r.sengupta@kalingalogistics.in',
+    phone: '+91 94370 12890',
+    service: 'Enterprise Android Engineering',
+    serviceHi: 'एंटरप्राइज एंड्रॉइड इंजीनियरिंग',
+    budget: '₹25,00,000 - ₹50,00,000',
+    receivedDate: '2026-11-09',
+    status: 'New',
+    statusHi: 'नई पूछताछ',
+    notes: 'Requires 4,000-device fleet rollout with offline geofencing.',
+  },
+  {
+    id: 'lead-102',
+    name: 'Dr. Anita Mohanty',
+    company: 'Utkal Health Sciences Foundation',
+    email: 'anita.m@utkalhealth.org',
+    phone: '+91 98610 44521',
+    service: 'Autonomous AI Workflows',
+    serviceHi: 'ऑटोनॉमस एआई वर्कफ़्लो',
+    budget: '₹15,00,000 - ₹25,00,000',
+    receivedDate: '2026-11-08',
+    status: 'Contacted',
+    statusHi: 'संपर्क स्थापित',
+    notes: 'Diagnostic document OCR pipeline in Hindi and Odia.',
+  },
+  {
+    id: 'lead-103',
+    name: 'Sunil Kumar Pradhan',
+    company: 'Barbil Minerals & Power Corp',
+    email: 'spradhan@barbilpower.com',
+    phone: '+91 97771 90812',
+    service: 'Mission-Critical Backend Architectures',
+    serviceHi: 'वितरित बैकएंड आर्किटेक्चर',
+    budget: '₹50,00,000+',
+    receivedDate: '2026-11-06',
+    status: 'In Discussion',
+    statusHi: 'चर्चा जारी',
+    notes: 'SCADA telemetry ingestion microservice with Go and Kafka.',
+  },
+];
+
+const DEMO_ADMIN_PROJECTS: any[] = [
+  {
+    id: 'proj-1',
+    code: 'PRJ-FLT-2026',
+    name: 'Bharat Fleet ERP & Distributed Telematics',
+    nameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स सिस्टम',
+    clientName: 'Kalinga Logistics Infrastructure Ltd.',
+    clientEmail: 'r.sengupta@kalingalogistics.in',
+    sprint: 'Sprint 14 of 16',
+    sprintHi: 'स्प्रिंट 14 / 16',
+    completion: 88,
+    status: 'In Sprints',
+    statusHi: 'सक्रिय स्प्रिंट',
+    health: 'Nominal (P99: 38ms)',
+    leadArchitect: 'Bhanu Ram Bariha',
+    techStack: ['Kotlin Multiplatform', 'Go 1.23', 'PostgreSQL', 'Kafka'],
+  },
+  {
+    id: 'proj-2',
+    code: 'PRJ-COLD-2026',
+    name: 'Odisha Cold-Chain Offline-First Android Core',
+    nameHi: 'ओडिशा कोल्ड-चेन ऑफलाइन-फर्स्ट एंड्रॉइड कोर',
+    clientName: 'Utkal Health Sciences Foundation',
+    clientEmail: 'anita.m@utkalhealth.org',
+    sprint: 'Sprint 9 of 10',
+    sprintHi: 'स्प्रिंट 9 / 10',
+    completion: 94,
+    status: 'Testing',
+    statusHi: 'अंतिम परीक्षण',
+    health: 'Optimal (Zero Sync Drop)',
+    leadArchitect: 'Senior Mobility Squad Alpha',
+    techStack: ['Jetpack Compose', 'Room DB', 'gRPC-Web', 'TLS 1.3'],
+  },
+  {
+    id: 'proj-3',
+    code: 'PRJ-MIN-2026',
+    name: 'Industrial SCADA Telemetry Stream Gateway',
+    nameHi: 'औद्योगिक स्काडा टेलीमेट्री गेटवे',
+    clientName: 'Barbil Minerals & Power Corp',
+    clientEmail: 'spradhan@barbilpower.com',
+    sprint: 'Sprint 3 of 12',
+    sprintHi: 'स्प्रिंट 3 / 12',
+    completion: 25,
+    status: 'In Sprints',
+    statusHi: 'सक्रिय स्प्रिंट',
+    health: 'Nominal',
+    leadArchitect: 'Bhanu Ram Bariha',
+    techStack: ['Rust', 'Apache Kafka', 'ClickHouse', 'Docker'],
+  },
+];
+
+const DEMO_ADMIN_QUOTATIONS: any[] = [
+  {
+    id: 'quote-2026-081',
+    clientName: 'Rajiv Sengupta',
+    clientEmail: 'r.sengupta@kalingalogistics.in',
+    company: 'Kalinga Logistics Infrastructure Ltd.',
+    serviceType: 'Enterprise Android Engineering',
+    estimatedBudget: '₹38,50,000',
+    timeline: '4 Months',
+    status: 'approved',
+    createdAt: '2026-11-09T14:30:00Z',
+  },
+  {
+    id: 'quote-2026-082',
+    clientName: 'Dr. Anita Mohanty',
+    clientEmail: 'anita.m@utkalhealth.org',
+    company: 'Utkal Health Sciences Foundation',
+    serviceType: 'Autonomous AI Workflows',
+    estimatedBudget: '₹22,00,000',
+    timeline: '3 Months',
+    status: 'pending',
+    createdAt: '2026-11-08T10:15:00Z',
+  },
+  {
+    id: 'quote-2026-083',
+    clientName: 'Sunil Kumar Pradhan',
+    clientEmail: 'spradhan@barbilpower.com',
+    company: 'Barbil Minerals & Power Corp',
+    serviceType: 'Mission-Critical Backend Architectures',
+    estimatedBudget: '₹65,00,000',
+    timeline: '6 Months',
+    status: 'under_review',
+    createdAt: '2026-11-06T18:40:00Z',
+  },
+];
+
+const DEMO_ADMIN_AUDIT_LOGS: any[] = [
+  {
+    id: 'log-001',
+    actorEmail: 'admin@barihadigital.com',
+    action: 'SYSTEM_BOOTSTRAP',
+    resource: 'firestore/all_collections',
+    details: 'RBAC security rules verified & 15 collections synchronized (Sample)',
+    timestamp: '2026-11-10T12:00:00Z',
+  },
+  {
+    id: 'log-002',
+    actorEmail: 'admin@barihadigital.com',
+    action: 'APP_CATALOG_SYNC',
+    resource: 'apps/bariha-pay',
+    details: 'Updated BarihaPay release v3.4.2 signature',
+    timestamp: '2026-11-10T11:50:00Z',
+  },
+  {
+    id: 'log-003',
+    actorEmail: 'system_anonymous',
+    action: 'QUOTATION_SUBMITTED',
+    resource: 'quotations/quote-2026-081',
+    details: 'Inbound quotation submitted from enterprise portal',
+    timestamp: '2026-11-09T14:30:00Z',
+  },
+];
+
+const DEMO_ADMIN_TICKETS: any[] = [
+  {
+    id: 'TKT-2026-904',
+    subject: 'BLE Soundbox latency validation report request for Odisha deployment',
+    priority: 'P2_High',
+    category: 'Hardware Telemetry',
+    projectCode: 'PRJ-FLT-2026',
+    environment: 'Android 14 / Teltonika FMB920',
+    clientEmail: 'r.sengupta@kalingalogistics.in',
+    clientId: 'user-002',
+    status: 'in_progress',
+    createdAt: '2026-11-08T10:15:00Z',
+    details: 'Requesting certified latency logs across 500 field terminals prior to district rollout.',
+    attachment: {
+      fileName: 'telemetry_sampling_odisha_v2.json',
+      fileSizeFormatted: '1.4 MB',
+      sha256: '9f83c12a4b821703e456efc829107412ab34cd56ef781290ab1234567890cdef',
+      downloadUrl: '/api/files/telemetry_sampling_odisha_v2.json',
+    },
+    responses: [
+      {
+        id: 'resp-001',
+        author: 'Er. Bhanu Ram Bariha',
+        authorRole: 'Lead Platform Architect',
+        message: 'Telemetry simulation successfully completed on Sambalpur cluster. BLE P99 latency measured at 24ms across 500 nodes. Cryptographic verification report attached.',
+        timestamp: '2026-11-08T13:45:00Z',
+      },
+    ],
+  },
+  {
+    id: 'TKT-2026-882',
+    subject: 'Add 2 new authorized client tester emails to Google Play Internal Track',
+    priority: 'P3_Normal',
+    category: 'Release & Distribution',
+    projectCode: 'PRJ-FLT-2026',
+    environment: 'Google Play Console / Production Track',
+    clientEmail: 'r.sengupta@kalingalogistics.in',
+    clientId: 'user-002',
+    status: 'resolved',
+    createdAt: '2026-11-04T14:20:00Z',
+    details: 'Added r.sengupta@kalingalogistics.in and devops@kalingalogistics.in to staging track.',
+    responses: [
+      {
+        id: 'resp-002',
+        author: 'DevOps & Release Team',
+        authorRole: 'Platform Architect',
+        message: 'Both tester accounts provisioned and invites dispatched with internal app-sharing certificate.',
+        timestamp: '2026-11-04T15:10:00Z',
+      },
+    ],
+  },
+  {
+    id: 'TKT-2026-871',
+    subject: 'Emergency Architect escalation: Scrutinize NPCI UPI 2.0 dual-webhook payload',
+    priority: 'P1_Critical',
+    category: 'Payment Core',
+    projectCode: 'PRJ-MED-2026',
+    environment: 'PCI-DSS Bare-metal Cluster',
+    clientEmail: 'anita.m@utkalhealth.org',
+    clientId: 'user-003',
+    status: 'resolved',
+    createdAt: '2026-10-29T08:00:00Z',
+    details: 'Lead Architect resolved within 18 minutes. Verified idempotent ledger keys.',
+  },
+];
+
 interface InboundLead {
   id: string;
   name: string;
@@ -183,9 +443,7 @@ export const AdminDashboardPage: React.FC = () => {
     return sessionStorage.getItem('pws_demo_admin') === 'true';
   });
 
-  const isRealAdmin =
-    Boolean(currentUser) &&
-    (isAdmin || (currentUser?.emailVerified === true && currentUser?.email?.toLowerCase() === 'ssbhanu41@gmail.com'));
+  const isRealAdmin = Boolean(currentUser) && isAdmin;
   const isDemoSandbox = !isRealAdmin && demoAdminMode;
   const isAuthorizedAdmin = isRealAdmin || isDemoSandbox;
 
@@ -231,175 +489,19 @@ export const AdminDashboardPage: React.FC = () => {
   const [blogModalOpen, setBlogModalOpen] = useState(false);
   const [editingBlog, setEditingBlog] = useState<BlogPost | null>(null);
 
-  // Data collections state
-  const [usersList, setUsersList] = useState<any[]>([
-    {
-      uid: 'user-root',
-      displayName: 'Er. Bhanu Ram Bariha',
-      email: 'ssbhanu41@gmail.com',
-      companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
-      role: 'admin',
-      lastLoginAt: '2026-11-10T11:45:00Z',
-    },
-    {
-      uid: 'user-002',
-      displayName: 'Rajiv Sengupta',
-      email: 'r.sengupta@kalingalogistics.in',
-      companyName: 'Kalinga Logistics Infrastructure Ltd.',
-      role: 'client',
-      lastLoginAt: '2026-11-09T08:20:00Z',
-    },
-    {
-      uid: 'user-003',
-      displayName: 'Dr. Anita Mohanty',
-      email: 'anita.m@utkalhealth.org',
-      companyName: 'Utkal Health Sciences Foundation',
-      role: 'client',
-      lastLoginAt: '2026-11-08T16:10:00Z',
-    },
-    {
-      uid: 'user-004',
-      displayName: 'Er. Somnath Patel',
-      email: 's.patel@barihadigital.com',
-      companyName: 'Bariha Digital Technologies',
-      role: 'architect',
-      lastLoginAt: '2026-11-10T09:30:00Z',
-    },
-  ]);
+  const [pendingDelete, setPendingDelete] = useState<{
+    type: 'project' | 'service' | 'quotation' | 'blog' | 'app';
+    id: string;
+    label: string;
+  } | null>(null);
+  const [deletingItem, setDeletingItem] = useState(false);
 
-  const [leads, setLeads] = useState<InboundLead[]>([
-    {
-      id: 'lead-101',
-      name: 'Rajiv Sengupta',
-      company: 'Kalinga Logistics Infrastructure Ltd.',
-      email: 'r.sengupta@kalingalogistics.in',
-      phone: '+91 94370 12890',
-      service: 'Enterprise Android Engineering',
-      serviceHi: 'एंटरप्राइज एंड्रॉइड इंजीनियरिंग',
-      budget: '₹25,00,000 - ₹50,00,000',
-      receivedDate: '2026-11-09',
-      status: 'New',
-      statusHi: 'नई पूछताछ',
-      notes: 'Requires 4,000-device fleet rollout with offline geofencing.',
-    },
-    {
-      id: 'lead-102',
-      name: 'Dr. Anita Mohanty',
-      company: 'Utkal Health Sciences Foundation',
-      email: 'anita.m@utkalhealth.org',
-      phone: '+91 98610 44521',
-      service: 'Autonomous AI Workflows',
-      serviceHi: 'ऑटोनॉमस एआई वर्कफ़्लो',
-      budget: '₹15,00,000 - ₹25,00,000',
-      receivedDate: '2026-11-08',
-      status: 'Contacted',
-      statusHi: 'संपर्क स्थापित',
-      notes: 'Diagnostic document OCR pipeline in Hindi and Odia.',
-    },
-    {
-      id: 'lead-103',
-      name: 'Sunil Kumar Pradhan',
-      company: 'Barbil Minerals & Power Corp',
-      email: 'spradhan@barbilpower.com',
-      phone: '+91 97771 90812',
-      service: 'Mission-Critical Backend Architectures',
-      serviceHi: 'वितरित बैकएंड आर्किटेक्चर',
-      budget: '₹50,00,000+',
-      receivedDate: '2026-11-06',
-      status: 'In Discussion',
-      statusHi: 'चर्चा जारी',
-      notes: 'SCADA telemetry ingestion microservice with Go and Kafka.',
-    },
-  ]);
-
-  const [projectsList, setProjectsList] = useState<any[]>([
-    {
-      id: 'proj-1',
-      code: 'PRJ-FLT-2026',
-      name: 'Bharat Fleet ERP & Distributed Telematics',
-      nameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स सिस्टम',
-      clientName: 'Kalinga Logistics Infrastructure Ltd.',
-      clientEmail: 'r.sengupta@kalingalogistics.in',
-      sprint: 'Sprint 14 of 16',
-      sprintHi: 'स्प्रिंट 14 / 16',
-      completion: 88,
-      status: 'In Sprints',
-      statusHi: 'सक्रिय स्प्रिंट',
-      health: 'Nominal (P99: 38ms)',
-      leadArchitect: 'Bhanu Ram Bariha',
-      techStack: ['Kotlin Multiplatform', 'Go 1.23', 'PostgreSQL', 'Kafka'],
-    },
-    {
-      id: 'proj-2',
-      code: 'PRJ-COLD-2026',
-      name: 'Odisha Cold-Chain Offline-First Android Core',
-      nameHi: 'ओडिशा कोल्ड-चेन ऑफलाइन-फर्स्ट एंड्रॉइड कोर',
-      clientName: 'Utkal Health Sciences Foundation',
-      clientEmail: 'anita.m@utkalhealth.org',
-      sprint: 'Sprint 9 of 10',
-      sprintHi: 'स्प्रिंट 9 / 10',
-      completion: 94,
-      status: 'Testing',
-      statusHi: 'अंतिम परीक्षण',
-      health: 'Optimal (Zero Sync Drop)',
-      leadArchitect: 'Senior Mobility Squad Alpha',
-      techStack: ['Jetpack Compose', 'Room DB', 'gRPC-Web', 'TLS 1.3'],
-    },
-    {
-      id: 'proj-3',
-      code: 'PRJ-MIN-2026',
-      name: 'Industrial SCADA Telemetry Stream Gateway',
-      nameHi: 'औद्योगिक स्काडा टेलीमेट्री गेटवे',
-      clientName: 'Barbil Minerals & Power Corp',
-      clientEmail: 'spradhan@barbilpower.com',
-      sprint: 'Sprint 3 of 12',
-      sprintHi: 'स्प्रिंट 3 / 12',
-      completion: 25,
-      status: 'In Sprints',
-      statusHi: 'सक्रिय स्प्रिंट',
-      health: 'Nominal',
-      leadArchitect: 'Bhanu Ram Bariha',
-      techStack: ['Rust', 'Apache Kafka', 'ClickHouse', 'Docker'],
-    },
-  ]);
-
+  // Data collections state (demo arrays are loaded ONLY when isDemoSandbox is active)
+  const [usersList, setUsersList] = useState<any[]>([]);
+  const [leads, setLeads] = useState<InboundLead[]>([]);
+  const [projectsList, setProjectsList] = useState<any[]>([]);
   const [servicesList, setServicesList] = useState<ServiceItem[]>(SERVICES_DATA);
-  const [quotationsList, setQuotationsList] = useState<any[]>([
-    {
-      id: 'quote-2026-081',
-      clientName: 'Rajiv Sengupta',
-      clientEmail: 'r.sengupta@kalingalogistics.in',
-      company: 'Kalinga Logistics Infrastructure Ltd.',
-      serviceType: 'Enterprise Android Engineering',
-      estimatedBudget: '₹38,50,000',
-      timeline: '4 Months',
-      status: 'approved',
-      createdAt: '2026-11-09T14:30:00Z',
-    },
-    {
-      id: 'quote-2026-082',
-      clientName: 'Dr. Anita Mohanty',
-      clientEmail: 'anita.m@utkalhealth.org',
-      company: 'Utkal Health Sciences Foundation',
-      serviceType: 'Autonomous AI Workflows',
-      estimatedBudget: '₹22,00,000',
-      timeline: '3 Months',
-      status: 'pending',
-      createdAt: '2026-11-08T10:15:00Z',
-    },
-    {
-      id: 'quote-2026-083',
-      clientName: 'Sunil Kumar Pradhan',
-      clientEmail: 'spradhan@barbilpower.com',
-      company: 'Barbil Minerals & Power Corp',
-      serviceType: 'Mission-Critical Backend Architectures',
-      estimatedBudget: '₹65,00,000',
-      timeline: '6 Months',
-      status: 'under_review',
-      createdAt: '2026-11-06T18:40:00Z',
-    },
-  ]);
-
+  const [quotationsList, setQuotationsList] = useState<any[]>([]);
   const [blogList, setBlogList] = useState<BlogPost[]>(BLOG_POSTS);
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'settings'>('articles');
 
@@ -415,104 +517,14 @@ export const AdminDashboardPage: React.FC = () => {
   });
   const [savingSettings, setSavingSettings] = useState(false);
 
-  const [auditLogs, setAuditLogs] = useState<any[]>([
-    {
-      id: 'log-001',
-      actorEmail: 'ssbhanu41@gmail.com',
-      action: 'SYSTEM_BOOTSTRAP',
-      resource: 'firestore/all_collections',
-      details: 'RBAC security rules verified & 15 collections synchronized (Sample)',
-      timestamp: '2026-11-10T12:00:00Z',
-    },
-    {
-      id: 'log-002',
-      actorEmail: 'ssbhanu41@gmail.com',
-      action: 'APP_CATALOG_SYNC',
-      resource: 'apps/bariha-pay',
-      details: 'Updated BarihaPay release v3.4.2 signature',
-      timestamp: '2026-11-10T11:50:00Z',
-    },
-    {
-      id: 'log-003',
-      actorEmail: 'system_anonymous',
-      action: 'QUOTATION_SUBMITTED',
-      resource: 'quotations/quote-2026-081',
-      details: 'Inbound quotation submitted from enterprise portal',
-      timestamp: '2026-11-09T14:30:00Z',
-    },
-  ]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
 
   // Support Tickets & SLA Triage state
-  const [ticketsList, setTicketsList] = useState<any[]>([
-    {
-      id: 'TKT-2026-904',
-      subject: 'BLE Soundbox latency validation report request for Odisha deployment',
-      priority: 'P2_High',
-      category: 'Hardware Telemetry',
-      projectCode: 'PRJ-FLT-2026',
-      environment: 'Android 14 / Teltonika FMB920',
-      clientEmail: 'r.sengupta@kalingalogistics.in',
-      clientId: 'user-002',
-      status: 'in_progress',
-      createdAt: '2026-11-08T10:15:00Z',
-      details: 'Requesting certified latency logs across 500 field terminals prior to district rollout.',
-      attachment: {
-        fileName: 'telemetry_sampling_odisha_v2.json',
-        fileSizeFormatted: '1.4 MB',
-        sha256: '9f83c12a4b821703e456efc829107412ab34cd56ef781290ab1234567890cdef',
-        downloadUrl: '/api/files/telemetry_sampling_odisha_v2.json',
-      },
-      responses: [
-        {
-          id: 'resp-001',
-          author: 'Er. Bhanu Ram Bariha',
-          authorRole: 'Lead Platform Architect',
-          message: 'Telemetry simulation successfully completed on Sambalpur cluster. BLE P99 latency measured at 24ms across 500 nodes. Cryptographic verification report attached.',
-          timestamp: '2026-11-08T13:45:00Z',
-        },
-      ],
-    },
-    {
-      id: 'TKT-2026-882',
-      subject: 'Add 2 new authorized client tester emails to Google Play Internal Track',
-      priority: 'P3_Normal',
-      category: 'Release & Distribution',
-      projectCode: 'PRJ-FLT-2026',
-      environment: 'Google Play Console / Production Track',
-      clientEmail: 'r.sengupta@kalingalogistics.in',
-      clientId: 'user-002',
-      status: 'resolved',
-      createdAt: '2026-11-04T14:20:00Z',
-      details: 'Added r.sengupta@kalingalogistics.in and devops@kalingalogistics.in to staging track.',
-      responses: [
-        {
-          id: 'resp-002',
-          author: 'DevOps & Release Team',
-          authorRole: 'Platform Architect',
-          message: 'Both tester accounts provisioned and invites dispatched with internal app-sharing certificate.',
-          timestamp: '2026-11-04T15:10:00Z',
-        },
-      ],
-    },
-    {
-      id: 'TKT-2026-871',
-      subject: 'Emergency Architect escalation: Scrutinize NPCI UPI 2.0 dual-webhook payload',
-      priority: 'P1_Critical',
-      category: 'Payment Core',
-      projectCode: 'PRJ-MED-2026',
-      environment: 'PCI-DSS Bare-metal Cluster',
-      clientEmail: 'anita.m@utkalhealth.org',
-      clientId: 'user-003',
-      status: 'resolved',
-      createdAt: '2026-10-29T08:00:00Z',
-      details: 'Lead Architect resolved within 18 minutes. Verified idempotent ledger keys.',
-    },
-  ]);
-
+  const [ticketsList, setTicketsList] = useState<any[]>([]);
   const [ticketSearchTerm, setTicketSearchTerm] = useState('');
   const [ticketPriorityFilter, setTicketPriorityFilter] = useState<string>('all');
   const [ticketStatusFilter, setTicketStatusFilter] = useState<string>('all');
-  const [activeTicketIdForReply, setActiveTicketIdForReply] = useState<string | null>('TKT-2026-904');
+  const [activeTicketIdForReply, setActiveTicketIdForReply] = useState<string | null>(null);
   const [adminReplyTexts, setAdminReplyTexts] = useState<Record<string, string>>({});
   const [adminReplyStatuses, setAdminReplyStatuses] = useState<Record<string, 'open' | 'in_progress' | 'resolved'>>({});
   const [submittingAdminReply, setSubmittingAdminReply] = useState<Record<string, boolean>>({});
@@ -553,14 +565,30 @@ export const AdminDashboardPage: React.FC = () => {
 
     if (isDemoSandbox) {
       setInvoicesList(DEMO_ADMIN_INVOICES);
+      setUsersList(DEMO_ADMIN_USERS);
+      setLeads(DEMO_ADMIN_LEADS);
+      setProjectsList(DEMO_ADMIN_PROJECTS);
+      setQuotationsList(DEMO_ADMIN_QUOTATIONS);
+      setAuditLogs(DEMO_ADMIN_AUDIT_LOGS);
+      setTicketsList(DEMO_ADMIN_TICKETS);
+      setActiveTicketIdForReply('TKT-2026-904');
       return;
     }
 
     // Only load protected admin collections if user is a real verified Firebase Admin
     if (!currentUser || !isRealAdmin) {
+      setInvoicesList([]);
+      setUsersList([]);
+      setLeads([]);
+      setProjectsList([]);
+      setQuotationsList([]);
+      setAuditLogs([]);
+      setTicketsList([]);
+      setActiveTicketIdForReply(null);
       return;
     }
 
+    setLeads([]);
     setLoadingInvoices(true);
     currentUser
       .getIdToken()
@@ -571,53 +599,46 @@ export const AdminDashboardPage: React.FC = () => {
       )
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data && Array.isArray(data.invoices)) {
-          setInvoicesList(data.invoices);
-        }
+        setInvoicesList(data && Array.isArray(data.invoices) ? data.invoices : []);
       })
-      .catch(() => {})
+      .catch(() => setInvoicesList([]))
       .finally(() => setLoadingInvoices(false));
 
-    // Attempt to load Firestore data for authorized admin
+    // Load authoritative Firestore data for verified admin (never mix demo rows into real admin session)
     fetchAllUsers()
       .then((users) => {
-        if (users && users.length > 0) setUsersList(users);
+        setUsersList(Array.isArray(users) ? users : []);
       })
-      .catch(() => {});
+      .catch(() => setUsersList([]));
 
     fetchAllProjects()
       .then((projs) => {
-        if (projs && projs.length > 0) setProjectsList(projs);
+        setProjectsList(Array.isArray(projs) ? projs : []);
       })
-      .catch(() => {});
+      .catch(() => setProjectsList([]));
 
     fetchAllQuotations()
       .then((quotes) => {
-        if (quotes && quotes.length > 0) setQuotationsList(quotes);
+        setQuotationsList(Array.isArray(quotes) ? quotes : []);
       })
-      .catch(() => {});
+      .catch(() => setQuotationsList([]));
 
     fetchSupportTickets()
       .then((tickets) => {
-        if (tickets && tickets.length > 0) {
-          setTicketsList((prev) => {
-            const combined = [...tickets];
-            for (const p of prev) {
-              if (!combined.some((c) => c.id === p.id)) {
-                combined.push(p);
-              }
-            }
-            return combined;
-          });
-        }
+        const list = Array.isArray(tickets) ? tickets : [];
+        setTicketsList(list);
+        setActiveTicketIdForReply(list.length > 0 ? list[0]?.id || null : null);
       })
-      .catch(() => {});
+      .catch(() => {
+        setTicketsList([]);
+        setActiveTicketIdForReply(null);
+      });
 
     getAuditLogs(15)
       .then((logs) => {
-        if (logs && logs.length > 0) setAuditLogs(logs);
+        setAuditLogs(Array.isArray(logs) ? logs : []);
       })
-      .catch(() => {});
+      .catch(() => setAuditLogs([]));
   }, [currentUser, isRealAdmin, isDemoSandbox]);
 
   // Enter / Exit Demo Admin Mode
@@ -644,8 +665,8 @@ export const AdminDashboardPage: React.FC = () => {
     if (isDemoSandbox) {
       showToast(
         t(
-          '[Demo Sandbox] Live Cloud Firestore synchronization requires signing in as verified Root Admin (ssbhanu41@gmail.com).',
-          '[डेमो सैंडबॉक्स] लाइव Cloud Firestore सिंक्रनाइज़ेशन के लिए सत्यापित रूट एडमिन (ssbhanu41@gmail.com) के रूप में साइन इन आवश्यक है।'
+          '[Demo Sandbox] Live Cloud Firestore synchronization requires signing in with a verified Administrator (user_roles) account.',
+          '[डेमो सैंडबॉक्स] लाइव Cloud Firestore सिंक्रनाइज़ेशन के लिए सत्यापित एडमिन (user_roles) खाते से साइन इन आवश्यक है।'
         ),
         'info'
       );
@@ -753,72 +774,110 @@ export const AdminDashboardPage: React.FC = () => {
     setQuotationModalOpen(true);
   };
 
-  // Delete Handlers with confirmation
-  const handleDeleteProject = async (id: string, name: string) => {
-    if (window.confirm(language === 'hi' ? `क्या आप प्रोजेक्ट "${name}" को हटाना चाहते हैं?` : `Delete project "${name}"?`)) {
-      if (isDemoSandbox) {
-        setProjectsList((prev) => prev.filter((p) => p.id !== id));
-        showToast(t('[Demo Sandbox] Project removed locally.', '[डेमो सैंडबॉक्स] प्रोजेक्ट स्थानीय रूप से हटाया गया।'), 'info');
-        return;
-      }
-      try {
-        await deleteProject(id);
-        setProjectsList((prev) => prev.filter((p) => p.id !== id));
-        showToast(language === 'hi' ? 'प्रोजेक्ट हटाया गया।' : 'Project removed.', 'info');
-      } catch (err: any) {
-        showToast(err.message || 'Delete failed', 'alert');
-      }
+  // Delete Handlers using accessible in-app confirmation modal
+  const handleDeleteProject = (id: string, name: string) => {
+    setPendingDelete({ type: 'project', id, label: name });
+  };
+
+  const handleDeleteService = (id: string, title: string) => {
+    setPendingDelete({ type: 'service', id, label: title });
+  };
+
+  const handleDeleteQuotation = (id: string) => {
+    setPendingDelete({ type: 'quotation', id, label: id });
+  };
+
+  const handleDeleteBlogPost = (id: string, title: string) => {
+    setPendingDelete({ type: 'blog', id, label: title });
+  };
+
+  const handleQuickQuotationStatus = async (quoteId: string, status: 'approved' | 'rejected') => {
+    if (isDemoSandbox) {
+      setQuotationsList((prev) =>
+        prev.map((q) => (q.id === quoteId ? { ...q, status } : q))
+      );
+      showToast(
+        t(
+          `[Demo Sandbox] Quotation marked as ${status} locally.`,
+          `[डेमो सैंडबॉक्स] कोटेशन स्थानीय रूप से ${status} के रूप में चिह्नित किया गया।`
+        ),
+        'info'
+      );
+      return;
+    }
+    try {
+      await updateQuotationStatus(quoteId, status);
+      setQuotationsList((prev) =>
+        prev.map((q) => (q.id === quoteId ? { ...q, status } : q))
+      );
+      showToast(
+        language === 'hi'
+          ? `कोटेशन स्थिति को "${status}" में अपडेट किया गया।`
+          : `Quotation marked as ${status}.`,
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update quotation status', 'alert');
     }
   };
 
-  const handleDeleteService = async (id: string, title: string) => {
-    if (window.confirm(language === 'hi' ? `क्या आप सेवा "${title}" को कैटलॉग से हटाना चाहते हैं?` : `Delete service "${title}"?`)) {
-      if (isDemoSandbox) {
-        setServicesList((prev) => prev.filter((s) => s.id !== id));
-        showToast(t('[Demo Sandbox] Service removed locally.', '[डेमो सैंडबॉक्स] सेवा स्थानीय रूप से हटाई गई।'), 'info');
-        return;
-      }
-      try {
-        await deleteServiceItem(id);
-        setServicesList((prev) => prev.filter((s) => s.id !== id));
-        showToast(language === 'hi' ? 'सेवा हटाई गई।' : 'Service removed from catalog.', 'info');
-      } catch (err: any) {
-        showToast(err.message || 'Delete failed', 'alert');
-      }
-    }
-  };
+  const executePendingDelete = async () => {
+    if (!pendingDelete) return;
+    const { type, id } = pendingDelete;
+    setDeletingItem(true);
 
-  const handleDeleteQuotation = async (id: string) => {
-    if (window.confirm(language === 'hi' ? `क्या आप कोटेशन "${id}" को हटाना चाहते हैं?` : `Delete quotation "${id}"?`)) {
-      if (isDemoSandbox) {
-        setQuotationsList((prev) => prev.filter((q) => q.id !== id));
-        showToast(t('[Demo Sandbox] Quotation removed locally.', '[डेमो सैंडबॉक्स] कोटेशन स्थानीय रूप से हटाई गई।'), 'info');
-        return;
+    try {
+      if (type === 'app') {
+        if (isDemoSandbox) {
+          showToast(
+            t(
+              '[Demo Sandbox] Live portfolio app deletion requires verified Root Admin login.',
+              '[डेमो सैंडबॉक्स] लाइव पोर्टफोलियो ऐप हटाने के लिए सत्यापित रूट एडमिन लॉगिन आवश्यक है।'
+            ),
+            'info'
+          );
+        } else {
+          await deleteApp(id);
+          showToast(dict.notifications.appDeleted, 'info');
+        }
+      } else if (isDemoSandbox) {
+        if (type === 'project') {
+          setProjectsList((prev) => prev.filter((p) => p.id !== id));
+          showToast(t('[Demo Sandbox] Project removed locally.', '[डेमो सैंडबॉक्स] प्रोजेक्ट स्थानीय रूप से हटाया गया।'), 'info');
+        } else if (type === 'service') {
+          setServicesList((prev) => prev.filter((s) => s.id !== id));
+          showToast(t('[Demo Sandbox] Service removed locally.', '[डेमो सैंडबॉक्स] सेवा स्थानीय रूप से हटाई गई।'), 'info');
+        } else if (type === 'quotation') {
+          setQuotationsList((prev) => prev.filter((q) => q.id !== id));
+          showToast(t('[Demo Sandbox] Quotation removed locally.', '[डेमो सैंडबॉक्स] कोटेशन स्थानीय रूप से हटाई गई।'), 'info');
+        } else if (type === 'blog') {
+          setBlogList((prev) => prev.filter((b) => b.id !== id));
+          showToast(t('[Demo Sandbox] Article removed locally.', '[डेमो सैंडबॉक्स] लेख स्थानीय रूप से हटाया गया।'), 'info');
+        }
+      } else {
+        if (type === 'project') {
+          await deleteProject(id);
+          setProjectsList((prev) => prev.filter((p) => p.id !== id));
+          showToast(language === 'hi' ? 'प्रोजेक्ट हटाया गया।' : 'Project removed.', 'info');
+        } else if (type === 'service') {
+          await deleteServiceItem(id);
+          setServicesList((prev) => prev.filter((s) => s.id !== id));
+          showToast(language === 'hi' ? 'सेवा हटाई गई।' : 'Service removed from catalog.', 'info');
+        } else if (type === 'quotation') {
+          await deleteQuotation(id);
+          setQuotationsList((prev) => prev.filter((q) => q.id !== id));
+          showToast(language === 'hi' ? 'कोटेशन हटाई गई।' : 'Quotation deleted.', 'info');
+        } else if (type === 'blog') {
+          await deleteBlogPost(id);
+          setBlogList((prev) => prev.filter((b) => b.id !== id));
+          showToast(language === 'hi' ? 'लेख हटाया गया।' : 'Article removed.', 'info');
+        }
       }
-      try {
-        await deleteQuotation(id);
-        setQuotationsList((prev) => prev.filter((q) => q.id !== id));
-        showToast(language === 'hi' ? 'कोटेशन हटाई गई।' : 'Quotation deleted.', 'info');
-      } catch (err: any) {
-        showToast(err.message || 'Delete failed', 'alert');
-      }
-    }
-  };
-
-  const handleDeleteBlogPost = async (id: string, title: string) => {
-    if (window.confirm(language === 'hi' ? `क्या आप लेख "${title}" को हटाना चाहते हैं?` : `Delete article "${title}"?`)) {
-      if (isDemoSandbox) {
-        setBlogList((prev) => prev.filter((b) => b.id !== id));
-        showToast(t('[Demo Sandbox] Article removed locally.', '[डेमो सैंडबॉक्स] लेख स्थानीय रूप से हटाया गया।'), 'info');
-        return;
-      }
-      try {
-        await deleteBlogPost(id);
-        setBlogList((prev) => prev.filter((b) => b.id !== id));
-        showToast(language === 'hi' ? 'लेख हटाया गया।' : 'Article removed.', 'info');
-      } catch (err: any) {
-        showToast(err.message || 'Delete failed', 'alert');
-      }
+      setPendingDelete(null);
+    } catch (err: any) {
+      showToast(err?.message || 'Delete failed', 'alert');
+    } finally {
+      setDeletingItem(false);
     }
   };
 
@@ -1186,8 +1245,10 @@ export const AdminDashboardPage: React.FC = () => {
 
           <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-left space-y-2 text-xs font-mono text-slate-300">
             <div className="flex items-center justify-between">
-              <span className="text-slate-500">{t('Authorized Root Admin:', 'अधिकृत रूट एडमिन:')}</span>
-              <span className="text-emerald-400 font-bold">ssbhanu41@gmail.com</span>
+              <span className="text-slate-500">{t('Required Privilege:', 'आवश्यक अधिकार:')}</span>
+              <span className="text-emerald-400 font-bold">
+                {t('Firestore user_roles (admin)', 'Firestore user_roles (एडमिन)')}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-500">{t('Security Policy:', 'सुरक्षा नीति:')}</span>
@@ -1249,8 +1310,8 @@ export const AdminDashboardPage: React.FC = () => {
               <span>
                 <strong>{t('LOCAL DEMO SANDBOX ACTIVE (UNAUTHENTICATED):', 'स्थानीय डेमो सैंडबॉक्स सक्रिय (अप्रमाणीकृत):')}</strong>{' '}
                 {t(
-                  'Modules display seeded sample data locally. Sign in with verified admin credentials (ssbhanu41@gmail.com) for live Cloud Firestore & GST Invoice ledger writes.',
-                  'मॉड्यूल केवल स्थानीय नमूना डेटा दिखाते हैं। लाइव Cloud Firestore और GST चालान लेखन के लिए सत्यापित एडमिन (ssbhanu41@gmail.com) से साइन इन करें।'
+                  'Modules display seeded sample data locally. Sign in with verified Administrator credentials for live Cloud Firestore & GST Invoice ledger writes.',
+                  'मॉड्यूल केवल स्थानीय नमूना डेटा दिखाते हैं। लाइव Cloud Firestore और GST चालान लेखन के लिए सत्यापित एडमिन खाते से साइन इन करें।'
                 )}
               </span>
             </div>
@@ -1833,7 +1894,7 @@ export const AdminDashboardPage: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap gap-1">
-                      {(proj.techStack || []).map((t: string) => (
+                      {(proj.techStack || proj.stack || []).map((t: string) => (
                         <span key={t} className="text-[11px] font-mono px-2 py-0.5 rounded bg-slate-100 text-slate-700">
                           {t}
                         </span>
@@ -2039,12 +2100,7 @@ export const AdminDashboardPage: React.FC = () => {
                             <Edit2 className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => {
-                              if (window.confirm(language === 'hi' ? `क्या आप "${app.name}" को हटाना चाहते हैं?` : `Delete "${app.name}"?`)) {
-                                deleteApp(app.id);
-                                showToast(dict.notifications.appDeleted, 'info');
-                              }
-                            }}
+                            onClick={() => setPendingDelete({ type: 'app', id: app.id, label: app.name })}
                             className="p-1.5 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded transition-colors cursor-pointer"
                             title={dict.adminDashboard.deleteApp}
                           >
@@ -2132,10 +2188,12 @@ export const AdminDashboardPage: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                            q.status === 'approved'
+                            q.status === 'approved' || q.status === 'accepted'
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              : q.status === 'under_review'
+                              : q.status === 'under_review' || q.status === 'reviewed'
                               ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : q.status === 'rejected'
+                              ? 'bg-rose-50 text-rose-800 border-rose-200'
                               : 'bg-amber-50 text-amber-800 border-amber-200'
                           }`}
                         >
@@ -2144,6 +2202,24 @@ export const AdminDashboardPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {q.status !== 'approved' && q.status !== 'accepted' && (
+                            <button
+                              onClick={() => handleQuickQuotationStatus(q.id, 'approved')}
+                              className="p-1.5 text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 rounded transition-colors cursor-pointer"
+                              title={t('Approve Quotation', 'कोटेशन स्वीकृत करें')}
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {q.status !== 'rejected' && (
+                            <button
+                              onClick={() => handleQuickQuotationStatus(q.id, 'rejected')}
+                              className="p-1.5 text-slate-600 hover:text-amber-700 hover:bg-amber-50 rounded transition-colors cursor-pointer"
+                              title={t('Reject Quotation', 'कोटेशन अस्वीकार करें')}
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => {
                               setEditingQuotation(q);
@@ -3126,6 +3202,14 @@ export const AdminDashboardPage: React.FC = () => {
           }
         }}
         customer={editingCustomer}
+        isDemoSandbox={isDemoSandbox}
+        onSaveDemo={(saved) =>
+          setUsersList((prev) =>
+            prev.some((u) => u.uid === saved.uid)
+              ? prev.map((u) => (u.uid === saved.uid ? saved : u))
+              : [saved, ...prev]
+          )
+        }
       />
 
       {/* 3. Project Manager Modal */}
@@ -3138,6 +3222,15 @@ export const AdminDashboardPage: React.FC = () => {
           }
         }}
         project={editingProject}
+        usersList={usersList}
+        isDemoSandbox={isDemoSandbox}
+        onSaveDemo={(saved) =>
+          setProjectsList((prev) =>
+            prev.some((p) => p.id === saved.id)
+              ? prev.map((p) => (p.id === saved.id ? saved : p))
+              : [saved, ...prev]
+          )
+        }
       />
 
       {/* 4. Service Manager Modal */}
@@ -3150,6 +3243,14 @@ export const AdminDashboardPage: React.FC = () => {
           }
         }}
         service={editingService}
+        isDemoSandbox={isDemoSandbox}
+        onSaveDemo={(saved) =>
+          setServicesList((prev) =>
+            prev.some((s) => s.id === saved.id)
+              ? prev.map((s) => (s.id === saved.id ? saved : s))
+              : [...prev, saved]
+          )
+        }
       />
 
       {/* 5. Quotation Manager Modal */}
@@ -3162,6 +3263,14 @@ export const AdminDashboardPage: React.FC = () => {
           }
         }}
         quotation={editingQuotation}
+        isDemoSandbox={isDemoSandbox}
+        onSaveDemo={(saved) =>
+          setQuotationsList((prev) =>
+            prev.some((q) => q.id === saved.id)
+              ? prev.map((q) => (q.id === saved.id ? saved : q))
+              : [saved, ...prev]
+          )
+        }
       />
 
       {/* 6. Blog Manager Modal */}
@@ -3174,7 +3283,62 @@ export const AdminDashboardPage: React.FC = () => {
           }
         }}
         post={editingBlog}
+        isDemoSandbox={isDemoSandbox}
+        onSaveDemo={(saved) =>
+          setBlogList((prev) =>
+            prev.some((b) => b.id === saved.id)
+              ? prev.map((b) => (b.id === saved.id ? saved : b))
+              : [saved, ...prev]
+          )
+        }
       />
+
+      {/* 7. In-App Delete Confirmation Modal (replaces native window.confirm) */}
+      {pendingDelete && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-delete-confirm-title"
+        >
+          <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center shrink-0 text-rose-700">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 id="admin-delete-confirm-title" className="text-sm font-bold text-slate-950">
+                  {t('Confirm Deletion', 'हटाने की पुष्टि करें')}
+                </h3>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {language === 'hi'
+                    ? `क्या आप वाकई "${pendingDelete.label}" को हटाना चाहते हैं? यह क्रिया पूर्ववत नहीं की जा सकती।`
+                    : `Are you sure you want to remove "${pendingDelete.label}"? This action cannot be undone.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={deletingItem}
+                onClick={() => setPendingDelete(null)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
+              >
+                {t('Cancel', 'रद्द करें')}
+              </button>
+              <button
+                type="button"
+                disabled={deletingItem}
+                onClick={executePendingDelete}
+                className="px-3.5 py-1.5 text-xs font-bold text-white bg-rose-700 hover:bg-rose-800 disabled:opacity-50 rounded-md transition-colors cursor-pointer"
+              >
+                {deletingItem ? t('Removing...', 'हटाया जा रहा है...') : t('Confirm Delete', 'हटाएं')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

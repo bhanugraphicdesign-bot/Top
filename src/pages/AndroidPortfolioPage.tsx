@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { AndroidApp, AppCategory } from '../types';
 import { Smartphone, Check, ArrowRight, ExternalLink, ShieldCheck, Download, Search, Filter, Settings, Layers } from 'lucide-react';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
-import { ASSETS } from '../data/content';
+import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AndroidPortfolioPageProps {
   onOpenConsultation: () => void;
@@ -121,7 +121,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
           </div>
 
           {/* Search Box */}
-          <div className="relative min-w-[240px] sm:min-w-[300px]">
+          <div className="relative w-full lg:w-[300px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -197,17 +197,16 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                     {t('Interface Preview', 'इंटरफ़ेस पूर्वावलोकन')}
                   </span>
                   <div className="relative rounded-lg overflow-hidden border border-slate-200 bg-slate-900 h-44 sm:h-52">
-                    <img
-                      src={
-                        app.screenshots[0] && !app.screenshots[0].startsWith('/src/assets/')
-                          ? app.screenshots[0]
-                          : ASSETS.appMockupImage
-                      }
-                      alt={`${app.name} interface preview`}
+                    <OptimizedImage
+                      assetKey="appMockupImage"
+                      customSrc={app.screenshots[0]}
+                      alt={`${app.name} enterprise Android interface preview`}
+                      altHi={`${app.nameHi || app.name} एंटरप्राइज एंड्रॉइड इंटरफ़ेस पूर्वावलोकन`}
+                      width={1200}
+                      height={896}
                       loading="lazy"
-                      decoding="async"
+                      sizes="(max-width: 1024px) 100vw, 50vw"
                       className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
                     <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] text-white">
@@ -241,7 +240,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                   ))}
                 </div>
 
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   {/* Google Play / Distribution Info */}
                   <div className="text-[11px] text-slate-500">
                     {app.playStoreUrl ? (
