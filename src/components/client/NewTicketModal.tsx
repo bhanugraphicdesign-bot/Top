@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { createSupportTicket } from '../../firebase/services';
-import { X, AlertCircle, Check, LifeBuoy, Clock, ShieldAlert } from 'lucide-react';
+import { X, Check, LifeBuoy, Clock } from 'lucide-react';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
 

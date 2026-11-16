@@ -61,10 +61,11 @@ const RECAPTCHA_SITE_KEY = (
   ''
 ).trim();
 const HAS_RECAPTCHA_SITE_KEY = RECAPTCHA_SITE_KEY.length > 0;
+const ENFORCE_APP_CHECK = process.env.ENFORCE_APP_CHECK === 'true';
 
 if (!HAS_RECAPTCHA_SITE_KEY) {
   console.warn(
-    '[AppCheck Notice] VITE_RECAPTCHA_SITE_KEY is not set; form submissions continue without mandatory App Check verification until configured.'
+    '[AppCheck Notice] VITE_RECAPTCHA_SITE_KEY is not set; form submissions continue in advisory mode until App Check is configured.'
   );
 }
 
@@ -194,28 +195,43 @@ async function verifyGcsStorageAvailability(): Promise<void> {
 
 void verifyGcsStorageAvailability();
 
-// High-entropy HMAC secret: use env var in production, ephemeral CSPRNG secret otherwise (never hardcoded)
+// High-entropy HMAC secret: require >= 32 chars and reject template placeholders in production
 const EPHEMERAL_PAYMENT_SECRET = crypto.randomBytes(32).toString('hex');
-const HAS_EXPLICIT_PAYMENT_SECRET = Boolean(
-  process.env.PAYMENT_SECRET && process.env.PAYMENT_SECRET.trim().length >= 16
-);
+const RAW_PAYMENT_SECRET = (process.env.PAYMENT_SECRET || '').trim();
+const PAYMENT_SECRET_PLACEHOLDER_RE = /^(replace_with|your_|example|changeme|placeholder|default|secret)/i;
+const HAS_WEAK_OR_PLACEHOLDER_PAYMENT_SECRET =
+  RAW_PAYMENT_SECRET.length > 0 &&
+  (RAW_PAYMENT_SECRET.length < 32 || PAYMENT_SECRET_PLACEHOLDER_RE.test(RAW_PAYMENT_SECRET));
+const HAS_EXPLICIT_PAYMENT_SECRET =
+  RAW_PAYMENT_SECRET.length >= 32 && !PAYMENT_SECRET_PLACEHOLDER_RE.test(RAW_PAYMENT_SECRET);
 const PAYMENT_SECRET = HAS_EXPLICIT_PAYMENT_SECRET
-  ? process.env.PAYMENT_SECRET!.trim()
+  ? RAW_PAYMENT_SECRET
   : EPHEMERAL_PAYMENT_SECRET;
 
-if (!HAS_EXPLICIT_PAYMENT_SECRET) {
+if (HAS_WEAK_OR_PLACEHOLDER_PAYMENT_SECRET) {
+  console.warn(
+    '[Security Warning] Configured PAYMENT_SECRET rejected (must be >= 32 characters and non-placeholder). Payment endpoints remain disabled in optional mode.'
+  );
+} else if (!HAS_EXPLICIT_PAYMENT_SECRET) {
   console.warn(
     '[Security Notice] PAYMENT_SECRET env var not set; using process-ephemeral 256-bit CSPRNG key.'
   );
 }
 
 // Cloud Run Reverse Proxy & Security Hardening
-app.set('trust proxy', true);
+// Google Cloud Run routes traffic through 1 managed Google Front End proxy hop; trust hop count 1 (not unbounded `true`)
+const parsedProxyHops = parseInt(process.env.TRUST_PROXY_HOPS || '1', 10);
+const TRUST_PROXY_HOPS =
+  Number.isFinite(parsedProxyHops) && parsedProxyHops >= 0 && parsedProxyHops <= 5
+    ? parsedProxyHops
+    : 1;
+app.set('trust proxy', TRUST_PROXY_HOPS);
 app.disable('x-powered-by');
 
 const isDevEnv = process.env.NODE_ENV !== 'production';
 
 // Helmet HTTP Security Headers + Content-Security-Policy (Firebase, Google Sign-In, reCAPTCHA, Google Fonts)
+// Production builds omit 'unsafe-inline' and 'unsafe-eval' from scriptSrc (Vite outputs external module bundles; JSON-LD is non-executable data)
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -223,17 +239,19 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: [
           "'self'",
-          "'unsafe-inline'",
-          ...(isDevEnv ? ["'unsafe-eval'"] : []),
+          ...(isDevEnv ? ["'unsafe-inline'", "'unsafe-eval'"] : []),
           'https://apis.google.com',
           'https://www.google.com',
           'https://www.gstatic.com',
           'https://www.recaptcha.net',
           'https://www.googletagmanager.com',
         ],
+        scriptSrcAttr: ["'none'"],
         styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
         imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        workerSrc: ["'self'", 'blob:'],
+        manifestSrc: ["'self'"],
         connectSrc: [
           "'self'",
           ...(isDevEnv ? ['ws:', 'wss:'] : []),
@@ -270,7 +288,8 @@ app.use(
     },
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
-    xFrameOptions: { action: 'sameorigin' },
+    // Rely on CSP frame-ancestors ('self' + aistudio.google.com) instead of legacy X-Frame-Options: SAMEORIGIN so AI Studio iframe preview renders cleanly
+    xFrameOptions: false,
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   })
 );
@@ -754,8 +773,9 @@ setInterval(() => {
 }, 15 * 60 * 1000).unref();
 
 function getClientIp(req: express.Request): string {
-  const forwarded = req.headers['x-forwarded-for'] as string | undefined;
-  return (forwarded ? forwarded.split(',')[0].trim() : req.socket.remoteAddress) || '127.0.0.1';
+  // Rely on Express's bounded `trust proxy` hop count (`req.ip`) rather than leftmost X-Forwarded-For spoofing
+  const candidate = (req.ip || req.socket?.remoteAddress || '127.0.0.1').trim();
+  return candidate.replace(/^::ffff:/, '') || '127.0.0.1';
 }
 
 function checkRateBucket(
@@ -802,19 +822,24 @@ function resolveRequestedLanguage(req: express.Request): 'hi' | 'en' | 'both' {
   return 'both';
 }
 
-function createFormRateLimiter(scope: 'inquiry' | 'newsletter') {
+function createFormRateLimiter(scope: 'validate' | 'quotation' | 'newsletter') {
+  const scopeLimit =
+    scope === 'validate'
+      ? Math.max(20, MAX_FORM_SUBMISSIONS_PER_WINDOW * 2)
+      : MAX_FORM_SUBMISSIONS_PER_WINDOW;
+
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const clientIp = getClientIp(req);
     const bucketKey = `${scope}:${clientIp}`;
     const check = checkRateBucket(
       formRateMap,
       bucketKey,
-      MAX_FORM_SUBMISSIONS_PER_WINDOW,
+      scopeLimit,
       FORM_RATE_LIMIT_WINDOW_MS
     );
 
     const retryAfterSeconds = Math.ceil(check.retryAfterMs / 1000);
-    res.setHeader('X-RateLimit-Limit', String(MAX_FORM_SUBMISSIONS_PER_WINDOW));
+    res.setHeader('X-RateLimit-Limit', String(scopeLimit));
     res.setHeader('X-RateLimit-Remaining', String(check.remaining));
     res.setHeader('X-RateLimit-Reset', String(Math.ceil(check.resetTime / 1000)));
 
@@ -831,7 +856,7 @@ function createFormRateLimiter(scope: 'inquiry' | 'newsletter') {
         resource: req.originalUrl,
         outcome: 'DENIED',
         ip: clientIp,
-        details: `Blocked ${scope} submission: exceeded ${MAX_FORM_SUBMISSIONS_PER_WINDOW} requests per 15 min window`,
+        details: `Blocked ${scope} submission: exceeded ${scopeLimit} requests per 15 min window`,
       });
 
       res.setHeader('Retry-After', String(retryAfterSeconds));
@@ -852,7 +877,7 @@ function createFormRateLimiter(scope: 'inquiry' | 'newsletter') {
 function validateAntiBotFields(
   req: express.Request,
   res: express.Response,
-  scope: 'inquiry' | 'newsletter'
+  scope: 'validate' | 'quotation' | 'newsletter'
 ): boolean {
   const { website, _hp, hpVerification, formOpenedAt, fillDurationMs } = req.body || {};
   const rawHoneypot = [website, _hp, hpVerification].find(
@@ -948,8 +973,9 @@ async function verifyAppCheckForForm(
 ): Promise<boolean> {
   const token = (req.header('x-firebase-appcheck') || '').trim();
   const lang = resolveRequestedLanguage(req);
+  const mustEnforce = HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK;
 
-  if (!HAS_RECAPTCHA_SITE_KEY) {
+  if (!mustEnforce) {
     if (token && adminApp) {
       try {
         await getAppCheck(adminApp).verifyToken(token);
@@ -958,6 +984,18 @@ async function verifyAppCheckForForm(
       }
     }
     return true;
+  }
+
+  if (ENFORCE_APP_CHECK && (!HAS_RECAPTCHA_SITE_KEY || !adminApp)) {
+    const errorEn = 'App Check enforcement is enabled, but server App Check verification is not configured.';
+    const errorHi = 'App Check सुरक्षा सक्षम है, लेकिन सर्वर पर App Check सत्यापन कॉन्फ़िगर नहीं है।';
+    res.status(503).json({
+      code: 'APP_CHECK_NOT_CONFIGURED',
+      error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+      errorEn,
+      errorHi,
+    });
+    return false;
   }
 
   if (!token) {
@@ -973,8 +1011,11 @@ async function verifyAppCheckForForm(
   }
 
   if (!adminApp) {
-    console.warn('[AppCheck Warning] Firebase Admin App not initialized; allowing request with warning.');
-    return true;
+    console.warn('[AppCheck Warning] Firebase Admin App not initialized; denying strict App Check request.');
+    return res.status(503).json({
+      code: 'APP_CHECK_NOT_CONFIGURED',
+      error: 'App Check verification unavailable without Firebase Admin initialization.',
+    }), false;
   }
 
   try {
@@ -1072,6 +1113,43 @@ app.use('/api', rateLimiter);
    SECURE SERVER-SIDE API ENDPOINTS
    ========================================================================= */
 
+const RAW_GEMINI_KEY = (process.env.GEMINI_API_KEY || '').trim();
+const HAS_GEMINI_API_KEY =
+  RAW_GEMINI_KEY.length > 0 && !/^(my_gemini_api_key|replace_with|your_)/i.test(RAW_GEMINI_KEY);
+const RAW_SITE_URL = (process.env.SITE_URL || '').trim();
+const HAS_PRODUCTION_SITE_URL =
+  /^https?:\/\//i.test(RAW_SITE_URL) && !RAW_SITE_URL.includes('YOUR-DOMAIN.com');
+
+function getProductionEnvironmentSummary() {
+  const warnings: string[] = [];
+  if (!HAS_PRODUCTION_SITE_URL) warnings.push('SITE_URL is missing or set to placeholder domain');
+  if (!EXPLICIT_GCS_BUCKET) warnings.push('GCS_BUCKET is not set (uploads return 503)');
+  if (!HAS_EXPLICIT_PAYMENT_SECRET) {
+    warnings.push(
+      HAS_WEAK_OR_PLACEHOLDER_PAYMENT_SECRET
+        ? 'PAYMENT_SECRET rejected (must be >= 32 chars and non-placeholder)'
+        : 'PAYMENT_SECRET is not set (payments remain in optional mode)'
+    );
+  }
+  if (!HAS_RECAPTCHA_SITE_KEY) warnings.push('VITE_RECAPTCHA_SITE_KEY is not set (App Check advisory)');
+  if (!adminHasCredentials) warnings.push('Firebase Admin credentials unavailable (server writes return 503)');
+
+  return {
+    nodeEnv: process.env.NODE_ENV || 'development',
+    strictMode: process.env.STRICT_PRODUCTION_ENV === 'true',
+    siteUrlConfigured: HAS_PRODUCTION_SITE_URL,
+    gcsBucketConfigured: Boolean(EXPLICIT_GCS_BUCKET),
+    paymentSecretValid: HAS_EXPLICIT_PAYMENT_SECRET,
+    paymentSecretMinLength: 32,
+    appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
+    appCheckEnforced: HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK,
+    firebaseAdminCredentialsPresent: adminHasCredentials,
+    geminiApiConfigured: HAS_GEMINI_API_KEY,
+    trustProxyHops: TRUST_PROXY_HOPS,
+    warnings,
+  };
+}
+
 // 1. Honest Health Check & Cloud Firestore / Storage Status Probe
 app.get('/api/health', async (req, res) => {
   const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
@@ -1105,6 +1183,8 @@ app.get('/api/health', async (req, res) => {
     }
   }
 
+  const envSummary = getProductionEnvironmentSummary();
+
   res.json({
     status: databaseStatus === 'CONNECTED' ? 'ONLINE' : 'DEGRADED',
     service: 'POWER WEB STUDIO AI ENTERPRISE BACKEND',
@@ -1131,8 +1211,12 @@ app.get('/api/health', async (req, res) => {
       firebaseAdminMode: adminInitMode,
       firebaseAdminCredentialsPresent: adminHasCredentials,
       bearerTokenVerification: adminHasCredentials ? 'FIREBASE_ADMIN_SDK' : 'FIREBASE_RS256',
+      trustProxyHops: TRUST_PROXY_HOPS,
       appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
+      appCheckMode:
+        HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK ? 'enforced' : 'advisory_until_configured',
       helmetCspEnabled: true,
+      cspStrictScriptSrcInProd: !isDevEnv,
       corsStrictAllowlist: true,
       unauthenticatedUploadsDisabled: true,
       paymentSecretConfigured: HAS_EXPLICIT_PAYMENT_SECRET,
@@ -1149,6 +1233,7 @@ app.get('/api/health', async (req, res) => {
       ephemeralDiskWarning: null,
       note: gcsStatusNote,
     },
+    environmentValidation: envSummary,
     deployment: {
       platform: process.env.K_SERVICE ? 'Google Cloud Run' : 'Containerized Express + Node.js',
       serviceName: process.env.K_SERVICE || 'powerwebstudioai-service',
@@ -1168,8 +1253,11 @@ app.get('/api/system/capabilities', (_req, res) => {
     gcsBucketVerified,
     firestoreAdminReady: Boolean(adminDb),
     appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
+    appCheckMode:
+      HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK ? 'enforced' : 'advisory_until_configured',
     paymentGatewayEnabled: HAS_EXPLICIT_PAYMENT_SECRET,
     paymentMode: HAS_EXPLICIT_PAYMENT_SECRET ? 'configured' : 'optional_mode',
+    geminiApiConfigured: HAS_GEMINI_API_KEY,
     authProvider: 'Firebase Authentication',
     adminRbacMode: 'user_roles_and_custom_claims',
   });
@@ -1185,6 +1273,98 @@ app.get('/api/auth/status', requireAuth, (req: AuthenticatedRequest, res) => {
     role: user.isAdmin ? 'admin' : 'client',
     roleSource: user.roleSource,
   });
+});
+
+// 1d. Public Read-Only Catalog Endpoint (Strictly public collections only: apps, services, blog_posts, site_settings)
+interface PublicCatalogPayload {
+  configured: boolean;
+  apps: Record<string, unknown>[];
+  services: Record<string, unknown>[];
+  blogPosts: Record<string, unknown>[];
+  siteSettings: Record<string, unknown> | null;
+  fetchedAt: string;
+}
+
+const PUBLIC_CATALOG_CACHE_TTL_MS = 10_000;
+let cachedPublicCatalog: { expiresAt: number; payload: PublicCatalogPayload } | null = null;
+
+function serializeCatalogValue(value: unknown): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof (value as any)?.toDate === 'function') {
+    try {
+      return (value as any).toDate().toISOString();
+    } catch {
+      return null;
+    }
+  }
+  if (Array.isArray(value)) {
+    return value.map(serializeCatalogValue);
+  }
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = serializeCatalogValue(v);
+    }
+    return out;
+  }
+  return value;
+}
+
+app.get('/api/public/catalog', async (req, res) => {
+  if (!adminDb) {
+    return res.json({
+      configured: false,
+      apps: [],
+      services: [],
+      blogPosts: [],
+      siteSettings: null,
+      fetchedAt: new Date().toISOString(),
+    } satisfies PublicCatalogPayload);
+  }
+
+  const bypassCache = req.query.fresh === '1';
+  if (!bypassCache && cachedPublicCatalog && Date.now() < cachedPublicCatalog.expiresAt) {
+    res.setHeader('Cache-Control', 'public, max-age=10');
+    return res.json(cachedPublicCatalog.payload);
+  }
+
+  try {
+    const [appsSnap, servicesSnap, blogsSnap, settingsSnap] = await Promise.all([
+      adminDb.collection('apps').get(),
+      adminDb.collection('services').get(),
+      adminDb.collection('blog_posts').get(),
+      adminDb.collection('site_settings').doc('global_config').get(),
+    ]);
+
+    const payload: PublicCatalogPayload = {
+      configured: true,
+      apps: appsSnap.docs.map((d) => serializeCatalogValue(d.data()) as Record<string, unknown>),
+      services: servicesSnap.docs.map((d) => serializeCatalogValue(d.data()) as Record<string, unknown>),
+      blogPosts: blogsSnap.docs.map((d) => serializeCatalogValue(d.data()) as Record<string, unknown>),
+      siteSettings: settingsSnap.exists
+        ? (serializeCatalogValue(settingsSnap.data()) as Record<string, unknown>)
+        : null,
+      fetchedAt: new Date().toISOString(),
+    };
+
+    cachedPublicCatalog = {
+      expiresAt: Date.now() + PUBLIC_CATALOG_CACHE_TTL_MS,
+      payload,
+    };
+
+    res.setHeader('Cache-Control', 'public, max-age=10');
+    return res.json(payload);
+  } catch (err: any) {
+    console.warn('[Public Catalog Fallback]', err?.message || err);
+    return res.json({
+      configured: false,
+      apps: [],
+      services: [],
+      blogPosts: [],
+      siteSettings: null,
+      fetchedAt: new Date().toISOString(),
+    } satisfies PublicCatalogPayload);
+  }
 });
 
 // 2. Real-time Node.js Telemetry (Strictly Admin-Only)
@@ -1207,8 +1387,8 @@ app.get('/api/telemetry', requireAdmin, (_req: AuthenticatedRequest, res) => {
 });
 
 // 3. Server-side Inbound Scoping Validator (Rate-limited per IP + anti-bot + App Check + Zod)
-app.post('/api/inquiries/validate', createFormRateLimiter('inquiry'), async (req, res) => {
-  if (!validateAntiBotFields(req, res, 'inquiry')) {
+app.post('/api/inquiries/validate', createFormRateLimiter('validate'), async (req, res) => {
+  if (!validateAntiBotFields(req, res, 'validate')) {
     return;
   }
   if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
@@ -1240,8 +1420,8 @@ app.post('/api/inquiries/validate', createFormRateLimiter('inquiry'), async (req
 });
 
 // 3a. Authoritative Server-Side Quotation Submission Endpoint (Rate-limited + Honeypot + App Check + Zod -> firebase-admin)
-app.post('/api/quotations', createFormRateLimiter('inquiry'), async (req, res) => {
-  if (!validateAntiBotFields(req, res, 'inquiry')) {
+app.post('/api/quotations', createFormRateLimiter('quotation'), async (req, res) => {
+  if (!validateAntiBotFields(req, res, 'quotation')) {
     return;
   }
   if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
@@ -2483,13 +2663,35 @@ app.use('/api', (err: any, req: express.Request, res: express.Response, next: ex
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';
 
+  const envSummary = getProductionEnvironmentSummary();
+  if (!isDevEnv) {
+    if (envSummary.warnings.length > 0) {
+      console.warn(
+        `[Production Env Check] ${envSummary.warnings.length} configuration warning(s): ${envSummary.warnings.join('; ')}`
+      );
+      if (envSummary.strictMode) {
+        console.error(
+          '[Production Env Check] STRICT_PRODUCTION_ENV=true requires all missing/invalid production configuration to be resolved before serving traffic.'
+        );
+        process.exit(1);
+      }
+    } else {
+      console.log('[Production Env Check] All critical Cloud Run security & storage environment checks passed.');
+    }
+  }
+
+  let viteMiddlewarePromise: Promise<express.RequestHandler> | null = null;
+
   if (isDev) {
-    const { createServer: createViteServer } = await import('vite');
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+    // Register async Vite middleware pass-through before listening so routes resolve immediately without blocking port bind
+    app.use((req, res, next) => {
+      if (!viteMiddlewarePromise) {
+        return next();
+      }
+      viteMiddlewarePromise
+        .then((mw) => mw(req, res, next))
+        .catch(next);
     });
-    app.use(vite.middlewares);
   } else {
     const distPath = path.resolve(__dirname, 'dist');
     const distIndexPath = path.resolve(distPath, 'index.html');
@@ -2537,9 +2739,27 @@ async function startServer() {
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(
-      `[POWER WEB STUDIO AI] Enterprise Server active on http://0.0.0.0:${PORT} (ENV: ${process.env.NODE_ENV || 'development'})`
+      `[POWER WEB STUDIO AI] Enterprise Server active on http://0.0.0.0:${PORT} (ENV: ${process.env.NODE_ENV || 'development'}, trustProxy=${TRUST_PROXY_HOPS})`
     );
   });
+
+  if (isDev) {
+    const disableHmr = process.env.DISABLE_HMR === 'true';
+    viteMiddlewarePromise = import('vite')
+      .then(({ createServer: createViteServer }) =>
+        createViteServer({
+          server: {
+            middlewareMode: true,
+            hmr: disableHmr ? false : { server },
+          },
+          appType: 'spa',
+        })
+      )
+      .then((vite) => vite.middlewares as unknown as express.RequestHandler);
+    void viteMiddlewarePromise.catch((err) => {
+      console.error('[Vite Middleware Init Failure]', err);
+    });
+  }
 
   const gracefulShutdown = (signal: string) => {
     console.log(`[Lifecycle] Received ${signal}. Draining connections for Google Cloud Run scale-down...`);

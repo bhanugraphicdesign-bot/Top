@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
-import { Phone, Mail, MapPin, Send, CheckCircle, Shield, Clock, ArrowRight } from 'lucide-react';
+import { Phone, Mail, MapPin, Send, CheckCircle, Shield } from 'lucide-react';
 
 import { submitQuotation } from '../../firebase/services';
 import { trackConsultationFormSubmit } from '../../firebase/analytics';

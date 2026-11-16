@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
-import { Smartphone, Check, ArrowLeft, ShieldCheck, Download, ExternalLink, Activity, Layers, Cpu, Play } from 'lucide-react';
+import { Smartphone, Check, ArrowLeft, ShieldCheck, Download, Play } from 'lucide-react';
 import { OptimizedImage } from '../components/common/OptimizedImage';
 import { SEO, ROUTE_SEO_CONFIG } from '../components/common/SEO';
 import { OPTIMIZED_ASSETS } from '../data/content';
@@ -13,7 +13,7 @@ interface AppDetailPageProps {
 
 export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation }) => {
   const { language, t } = useLanguage();
-  const { params, navigate, goBack } = useNavigation();
+  const { params, navigate } = useNavigation();
   const { getAppById, apps } = useApps();
 
   const appId = params.id || apps[0]?.id;

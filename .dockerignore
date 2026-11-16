@@ -1,0 +1,27 @@
+# Build outputs & local dependencies
+node_modules
+dist
+server.js
+
+# Version control & workspace metadata
+.git
+.gitignore
+.aistudio
+
+# Environment secrets & local service keys (never bake secrets into container layers)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+
+# Dev, tests, scripts & audit documentation
+tests
+scripts
+uploads
+logs
+*.log
+*.md
+eslint.config.mjs
+bun.lock

@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { AndroidApp, AppCategory, AppReleaseStatus } from '../../types';
 import { ASSETS } from '../../data/content';
-import { X, Plus, Edit2, Trash2, RotateCcw, Check, Smartphone, ShieldCheck, AlertCircle } from 'lucide-react';
+import { X, Plus, Edit2, Trash2, RotateCcw, Smartphone } from 'lucide-react';
 
 interface AdminAppManagerModalProps {
   isOpen: boolean;

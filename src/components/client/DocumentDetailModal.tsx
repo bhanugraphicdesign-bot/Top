@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
-import { X, ShieldCheck, Download, FileText, CheckCircle2, Lock, ExternalLink } from 'lucide-react';
+import { X, ShieldCheck, Download, CheckCircle2 } from 'lucide-react';
 
 export interface EnterpriseDocument {
   id: string;

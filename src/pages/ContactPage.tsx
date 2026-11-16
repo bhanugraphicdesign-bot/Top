@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useSiteContact } from '../hooks/useSiteContact';
 import { ContactCtaSection } from '../components/home/ContactCtaSection';
-import { Phone, Mail, MapPin, Clock, ShieldCheck, Building2 } from 'lucide-react';
+import { Phone, Mail, Building2 } from 'lucide-react';
 
 export const ContactPage: React.FC = () => {
   const { language, t } = useLanguage();

@@ -2,7 +2,7 @@ import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { COMPANY_INFO } from '../../data/content';
 import { useSiteContact } from '../../hooks/useSiteContact';
-import { Shield, Award, MapPin, Building2, Check, ArrowRight } from 'lucide-react';
+import { Award, Building2, ArrowRight } from 'lucide-react';
 import { OptimizedImage } from '../common/OptimizedImage';
 
 interface CompanyIntroSectionProps {

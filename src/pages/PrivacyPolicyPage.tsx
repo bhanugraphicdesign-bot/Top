@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useSiteContact } from '../hooks/useSiteContact';
-import { ShieldCheck, Lock, FileText, CheckCircle } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 export const PrivacyPolicyPage: React.FC = () => {
   const { language, t } = useLanguage();

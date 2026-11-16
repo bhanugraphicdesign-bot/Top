@@ -12,13 +12,82 @@ import {
   limit,
   serverTimestamp,
 } from 'firebase/firestore';
-import { db, auth } from './config';
+import { db, auth, ensureClientFirestoreOnline } from './config';
 import { getAppCheckTokenHeader } from './appCheck';
 import { handleFirestoreError, OperationType } from './errorHandler';
 import { extractBilingualApiError } from '../utils/formProtection';
 import { AndroidApp, BlogPost, ServiceItem, AppNotification } from '../types';
 import { INITIAL_ANDROID_APPS, SERVICES_DATA } from '../data/content';
 import { BLOG_POSTS } from '../data/blogData';
+
+interface PublicCatalogCacheEntry {
+  expiresAt: number;
+  data: {
+    configured: boolean;
+    apps: AndroidApp[];
+    services: ServiceItem[];
+    blogPosts: BlogPost[];
+    siteSettings: Record<string, any> | null;
+  };
+}
+
+let publicCatalogCache: PublicCatalogCacheEntry | null = null;
+let inFlightPublicCatalog: Promise<PublicCatalogCacheEntry['data'] | null> | null = null;
+
+function invalidatePublicCatalogCache(refreshServer = false) {
+  publicCatalogCache = null;
+  if (refreshServer && typeof fetch !== 'undefined') {
+    void fetch('/api/public/catalog?fresh=1', { cache: 'no-store' }).catch(() => undefined);
+  }
+}
+
+async function fetchPublicCatalogFromServer(): Promise<PublicCatalogCacheEntry['data'] | null> {
+  if (typeof fetch === 'undefined') return null;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+
+  if (publicCatalogCache && Date.now() < publicCatalogCache.expiresAt) {
+    return publicCatalogCache.data;
+  }
+  if (inFlightPublicCatalog) {
+    return inFlightPublicCatalog;
+  }
+
+  inFlightPublicCatalog = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch('/api/public/catalog', {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const json = await res.json();
+      if (!json || typeof json !== 'object' || json.configured !== true) {
+        return null;
+      }
+      const data: PublicCatalogCacheEntry['data'] = {
+        configured: true,
+        apps: Array.isArray(json.apps) ? (json.apps as AndroidApp[]) : [],
+        services: Array.isArray(json.services) ? (json.services as ServiceItem[]) : [],
+        blogPosts: Array.isArray(json.blogPosts) ? (json.blogPosts as BlogPost[]) : [],
+        siteSettings: json.siteSettings && typeof json.siteSettings === 'object' ? json.siteSettings : null,
+      };
+      publicCatalogCache = {
+        expiresAt: Date.now() + 10_000,
+        data,
+      };
+      return data;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  })().finally(() => {
+    inFlightPublicCatalog = null;
+  });
+
+  return inFlightPublicCatalog;
+}
 
 export const COLLECTIONS = {
   USERS: 'users',
@@ -155,6 +224,12 @@ export async function syncUserAccount(user: {
   if (!auth.currentUser || auth.currentUser.uid !== user.uid) {
     return;
   }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return;
+  }
+  if (!(await ensureClientFirestoreOnline())) {
+    return;
+  }
   try {
     const userRef = doc(db, path, user.uid);
     const existing = await getDoc(userRef);
@@ -184,7 +259,12 @@ export async function syncUserAccount(user: {
     }
 
     await logAuditEvent('USER_LOGIN_SYNC', `users/${user.uid}`, `User synced: ${safeEmail}`);
-  } catch (error) {
+  } catch (error: any) {
+    const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    if (error?.code === 'unavailable' || msg.includes('offline')) {
+      console.warn('[syncUserAccount offline fallback]', error);
+      return;
+    }
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
@@ -193,6 +273,7 @@ export async function fetchUserRole(uid: string): Promise<string> {
   const path = COLLECTIONS.USER_ROLES;
   if (!auth.currentUser) return 'client';
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'client';
+  if (!(await ensureClientFirestoreOnline())) return 'client';
   try {
     const roleDoc = await getDoc(doc(db, path, uid));
     if (roleDoc.exists()) {
@@ -211,6 +292,13 @@ export async function fetchUserRole(uid: string): Promise<string> {
 export async function fetchFirestoreApps(): Promise<AndroidApp[]> {
   const path = COLLECTIONS.APPS;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return [];
+  }
+  const catalog = await fetchPublicCatalogFromServer();
+  if (catalog) {
+    return catalog.apps;
+  }
+  if (!(await ensureClientFirestoreOnline())) {
     return [];
   }
   try {
@@ -238,6 +326,7 @@ export async function saveFirestoreApp(app: AndroidApp) {
       ...app,
       updatedAt: serverTimestamp(),
     });
+    invalidatePublicCatalogCache(true);
     await logAuditEvent('APP_SAVED', `apps/${app.id}`, `Saved app ${app.name} (${app.category})`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${path}/${app.id}`);
@@ -251,6 +340,7 @@ export async function deleteFirestoreApp(appId: string) {
   }
   try {
     await deleteDoc(doc(db, path, appId));
+    invalidatePublicCatalogCache(true);
     await logAuditEvent('APP_DELETED', `apps/${appId}`, `Deleted app ${appId}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${path}/${appId}`);
@@ -678,6 +768,13 @@ export async function fetchServicesCatalog(): Promise<ServiceItem[]> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return SERVICES_DATA;
   }
+  const catalog = await fetchPublicCatalogFromServer();
+  if (catalog) {
+    return catalog.services.length > 0 ? catalog.services : SERVICES_DATA;
+  }
+  if (!(await ensureClientFirestoreOnline())) {
+    return SERVICES_DATA;
+  }
   try {
     const snap = await getDocs(collection(db, path));
     if (snap.empty) {
@@ -700,6 +797,7 @@ export async function saveServiceItem(service: ServiceItem) {
       ...service,
       updatedAt: serverTimestamp(),
     }, { merge: true });
+    invalidatePublicCatalogCache(true);
     await logAuditEvent('SERVICE_SAVED', `services/${service.id}`, `Saved service ${service.title}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${path}/${service.id}`);
@@ -713,6 +811,7 @@ export async function deleteServiceItem(serviceId: string) {
   }
   try {
     await deleteDoc(doc(db, path, serviceId));
+    invalidatePublicCatalogCache(true);
     await logAuditEvent('SERVICE_DELETED', `services/${serviceId}`, `Deleted service ${serviceId}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${path}/${serviceId}`);
@@ -759,6 +858,13 @@ export async function fetchBlogPosts(): Promise<BlogPost[]> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     return BLOG_POSTS;
   }
+  const catalog = await fetchPublicCatalogFromServer();
+  if (catalog) {
+    return catalog.blogPosts.length > 0 ? catalog.blogPosts : BLOG_POSTS;
+  }
+  if (!(await ensureClientFirestoreOnline())) {
+    return BLOG_POSTS;
+  }
   try {
     const snap = await getDocs(collection(db, path));
     if (snap.empty) {
@@ -781,6 +887,7 @@ export async function saveBlogPost(post: BlogPost) {
       ...post,
       updatedAt: serverTimestamp(),
     }, { merge: true });
+    invalidatePublicCatalogCache(true);
     await logAuditEvent('BLOG_SAVED', `blog_posts/${post.id}`, `Saved blog post ${post.title}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `${path}/${post.id}`);
@@ -794,6 +901,7 @@ export async function deleteBlogPost(postId: string) {
   }
   try {
     await deleteDoc(doc(db, path, postId));
+    invalidatePublicCatalogCache(true);
     await logAuditEvent('BLOG_DELETED', `blog_posts/${postId}`, `Deleted blog post ${postId}`);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `${path}/${postId}`);
@@ -803,6 +911,13 @@ export async function deleteBlogPost(postId: string) {
 export async function fetchSiteSettings(): Promise<any> {
   const path = COLLECTIONS.SITE_SETTINGS;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return null;
+  }
+  const catalog = await fetchPublicCatalogFromServer();
+  if (catalog) {
+    return catalog.siteSettings;
+  }
+  if (!(await ensureClientFirestoreOnline())) {
     return null;
   }
   try {
@@ -827,6 +942,7 @@ export async function saveSiteSettings(settings: any) {
       ...settings,
       updatedAt: serverTimestamp(),
     }, { merge: true });
+    invalidatePublicCatalogCache(true);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pws-site-settings-updated', { detail: settings }));
     }
@@ -882,6 +998,9 @@ export async function fetchNotifications(userId?: string): Promise<AppNotificati
     return [];
   }
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return [];
+  }
+  if (!(await ensureClientFirestoreOnline())) {
     return [];
   }
   try {

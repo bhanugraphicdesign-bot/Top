@@ -721,23 +721,30 @@ export const ClientDashboardPage: React.FC = () => {
 
   // Load Firestore tickets, projects & authoritative server invoices when authenticated (or demo samples in sandbox)
   useEffect(() => {
+    let isCancelled = false;
+
     if (isDemoSandbox) {
       setInvoicesList(DEMO_SAMPLE_INVOICES);
       setSupportTickets(DEMO_SAMPLE_TICKETS);
       setExpandedTicketId('TKT-2026-904');
       setFirestoreProjects(null);
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
     if (!currentUser) {
       setInvoicesList([]);
       setSupportTickets([]);
       setFirestoreProjects(null);
       setExpandedTicketId(null);
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
     fetchProjectsForClient(currentUser.uid)
       .then((projects) => {
+        if (isCancelled) return;
         setFirestoreProjects(Array.isArray(projects) ? projects : []);
         if (projects && projects.length > 0 && projects[0]?.id) {
           setSelectedProjectId(projects[0].id);
@@ -745,11 +752,12 @@ export const ClientDashboardPage: React.FC = () => {
       })
       .catch((err) => {
         console.warn('[Client Projects Load]', err?.message || err);
-        setFirestoreProjects([]);
+        if (!isCancelled) setFirestoreProjects([]);
       });
 
     fetchSupportTickets(currentUser.uid)
       .then((tickets) => {
+        if (isCancelled) return;
         const list = Array.isArray(tickets) ? tickets : [];
         setSupportTickets(list);
         if (list.length > 0 && list[0]?.id) {
@@ -760,28 +768,38 @@ export const ClientDashboardPage: React.FC = () => {
       })
       .catch((err) => {
         console.warn('[Client Tickets Load]', err?.message || err);
-        setSupportTickets([]);
+        if (!isCancelled) setSupportTickets([]);
       });
 
     setLoadingInvoices(true);
     currentUser
       .getIdToken()
-      .then((idToken) =>
-        fetch('/api/invoices', {
+      .then((idToken) => {
+        if (isCancelled) return null;
+        return fetch('/api/invoices', {
           headers: { Authorization: `Bearer ${idToken}` },
-        })
-      )
+        });
+      })
       .then(async (res) => {
+        if (!res) return null;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data) => {
-        setInvoicesList(Array.isArray(data.invoices) ? data.invoices : []);
+        if (!isCancelled && data) {
+          setInvoicesList(Array.isArray(data.invoices) ? data.invoices : []);
+        }
       })
       .catch((err) => {
         console.warn('[Client Invoices Load]', err?.message || err);
       })
-      .finally(() => setLoadingInvoices(false));
+      .finally(() => {
+        if (!isCancelled) setLoadingInvoices(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser, isDemoSandbox]);
 
   // Filtered support tickets
@@ -1690,7 +1708,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             </div>
 
             <div className="space-y-5">
-              {milestonesList.map((m, idx) => (
+              {milestonesList.map((m) => (
                 <div
                   key={m.id}
                   className={`p-5 rounded-xl border transition-all ${

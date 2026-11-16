@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useApps } from '../../context/AppsContext';
 import { AndroidApp } from '../../types';
-import { Smartphone, Check, ArrowRight, ExternalLink, ShieldCheck, Zap } from 'lucide-react';
+import { Check, ArrowRight, ExternalLink, ShieldCheck, Zap } from 'lucide-react';
 import { OptimizedImage } from '../common/OptimizedImage';
 
 interface AndroidPortfolioSectionProps {

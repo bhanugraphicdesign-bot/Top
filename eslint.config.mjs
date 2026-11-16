@@ -23,7 +23,27 @@ export default tseslint.config(
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
-      'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      'react-refresh/only-export-components': [
+        'warn',
+        {
+          allowConstantExport: true,
+          allowExportNames: [
+            'useApps',
+            'useAuth',
+            'useLanguage',
+            'useTranslation',
+            'useNavigation',
+            'getPathForRoute',
+            'useNotifications',
+            'useNetworkStatus',
+            'useSEO',
+            'ROUTE_SEO_CONFIG',
+            'resolveSiteOrigin',
+            'resolveOgImageUrl',
+            'resolveCanonicalUrl',
+          ],
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       'no-empty': ['warn', { allowEmptyCatch: true }],

@@ -1,7 +1,6 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useSiteContact } from '../hooks/useSiteContact';
-import { FileText, CheckCircle, Shield, Award } from 'lucide-react';
 
 export const TermsPage: React.FC = () => {
   const { language, t } = useLanguage();

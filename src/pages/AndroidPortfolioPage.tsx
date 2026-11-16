@@ -3,16 +3,16 @@ import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
 import { useAuth } from '../context/AuthContext';
-import { AndroidApp, AppCategory } from '../types';
-import { Smartphone, Check, ArrowRight, ExternalLink, ShieldCheck, Download, Search, Filter, Settings, Layers } from 'lucide-react';
+import { AppCategory } from '../types';
+import { Smartphone, Check, ArrowRight, ExternalLink, Search, Settings } from 'lucide-react';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
 import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AndroidPortfolioPageProps {
-  onOpenConsultation: () => void;
+  onOpenConsultation?: () => void;
 }
 
-export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOpenConsultation }) => {
+export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOpenConsultation: _onOpenConsultation }) => {
   const { language, t } = useLanguage();
   const { navigate } = useNavigation();
   const { apps } = useApps();

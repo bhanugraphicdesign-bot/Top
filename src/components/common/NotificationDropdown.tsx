@@ -12,8 +12,6 @@ import {
   UploadCloud,
   ShieldCheck,
   Check,
-  ExternalLink,
-  X,
 } from 'lucide-react';
 
 export const NotificationDropdown: React.FC = () => {

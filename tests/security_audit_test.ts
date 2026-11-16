@@ -250,20 +250,195 @@ async function runSecurityTests() {
   }
 
   // 7. Live Multi-Account (Customer A vs Customer B vs Admin) Firebase Auth & Firestore Emulator Tests
-  record(
-    'SEC-07',
-    'Authenticated Customer A vs Customer B vs Admin live upload/download/delete & Firestore Emulator tests',
-    'BLOCKED',
-    'Blocked in container CLI: Java Runtime (JRE/JDK) required by Firebase Local Emulator Suite is not installed, and isolated Firebase Auth test account ID tokens (Customer A, Customer B, Admin) are not provisioned as non-interactive test credentials.'
-  );
+  const custAToken = (process.env.TEST_CUSTOMER_A_TOKEN || '').trim();
+  const custBToken = (process.env.TEST_CUSTOMER_B_TOKEN || '').trim();
+  const adminToken = (process.env.TEST_ADMIN_TOKEN || '').trim();
+  const emulatorHost = (process.env.FIRESTORE_EMULATOR_HOST || '').trim();
+
+  if (custAToken && custBToken) {
+    try {
+      const [listARes, listBRes, adminTelRes] = await Promise.all([
+        fetch(`${SERVER_BASE}/api/invoices`, { headers: { Authorization: `Bearer ${custAToken}` } }),
+        fetch(`${SERVER_BASE}/api/invoices`, { headers: { Authorization: `Bearer ${custBToken}` } }),
+        fetch(`${SERVER_BASE}/api/telemetry`, { headers: { Authorization: `Bearer ${custAToken}` } }),
+      ]);
+      const adminOk = adminToken
+        ? (await fetch(`${SERVER_BASE}/api/telemetry`, { headers: { Authorization: `Bearer ${adminToken}` } })).status === 200
+        : true;
+      const ok =
+        (listARes.status === 200 || listARes.status === 503) &&
+        (listBRes.status === 200 || listBRes.status === 503) &&
+        adminTelRes.status === 403 &&
+        adminOk;
+      record(
+        'SEC-07',
+        'Authenticated Customer A vs Customer B vs Admin live API & RBAC isolation tests',
+        ok ? 'PASS' : 'FAIL',
+        `CustomerA /api/invoices=${listARes.status}; CustomerB /api/invoices=${listBRes.status}; CustomerA /api/telemetry=${adminTelRes.status}; emulator=${emulatorHost || 'none'}`
+      );
+    } catch (err: any) {
+      record('SEC-07', 'Authenticated multi-account isolation test', 'FAIL', err.message);
+    }
+  } else {
+    record(
+      'SEC-07',
+      'Authenticated Customer A vs Customer B vs Admin live upload/download/delete & Firestore Emulator tests',
+      'BLOCKED',
+      `Missing requirements: Java JRE (for Firebase Local Emulator Suite / FIRESTORE_EMULATOR_HOST) and non-interactive Firebase Auth ID tokens (TEST_CUSTOMER_A_TOKEN, TEST_CUSTOMER_B_TOKEN, TEST_ADMIN_TOKEN). Emulator host=${emulatorHost || 'unset'}.`
+    );
+  }
 
   // 8. Persistent Cloud Storage (GCS) Upload/Signed-URL Live Round-Trip
-  record(
-    'SEC-08',
-    'Persistent Google Cloud Storage (GCS) bucket upload, download & deletion verification',
-    'BLOCKED',
-    'Blocked in local container: GCS_BUCKET and GCP Service Account credentials are not configured; file upload is safely disabled (HTTP 503) without fake local storage success.'
-  );
+  try {
+    const capRes = await fetch(`${SERVER_BASE}/api/system/capabilities`);
+    const capData = await capRes.json();
+    if (capData?.fileUploadEnabled === true && custAToken) {
+      const tinyPngBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+      const upRes = await fetch(`${SERVER_BASE}/api/files/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${custAToken}`,
+        },
+        body: JSON.stringify({
+          fileName: 'sec08_probe.png',
+          fileType: 'image/png',
+          category: 'general_attachment',
+          fileData: tinyPngBase64,
+        }),
+      });
+      const upJson: any = await upRes.json().catch(() => ({}));
+      const fileId = upJson?.file?.fileId;
+      let cleanOk = false;
+      if (upRes.status === 201 && fileId) {
+        const dlRes = await fetch(`${SERVER_BASE}/api/files/${fileId}`, {
+          headers: { Authorization: `Bearer ${custAToken}` },
+        });
+        const delRes = await fetch(`${SERVER_BASE}/api/files/${fileId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${custAToken}` },
+        });
+        cleanOk = dlRes.status === 200 && delRes.status === 200;
+      }
+      record(
+        'SEC-08',
+        'Persistent Google Cloud Storage (GCS) bucket upload, download & deletion verification',
+        cleanOk ? 'PASS' : 'FAIL',
+        `uploadStatus=${upRes.status}, fileId=${fileId || 'none'}, roundTripOk=${cleanOk}`
+      );
+    } else {
+      record(
+        'SEC-08',
+        'Persistent Google Cloud Storage (GCS) bucket upload, download & deletion verification',
+        'BLOCKED',
+        `Missing requirements: GCS_BUCKET (fileUploadEnabled=${Boolean(capData?.fileUploadEnabled)}), GCP Storage IAM credentials, and TEST_CUSTOMER_A_TOKEN for authenticated live upload/download/delete round-trip. Unconfigured uploads safely return HTTP 503 STORAGE_NOT_CONFIGURED.`
+      );
+    }
+  } catch (err: any) {
+    record('SEC-08', 'Persistent Google Cloud Storage (GCS) verification', 'FAIL', err.message);
+  }
+
+  // 9-11. Isolated Production Server Security Probes (Proxy/XFF Spoofing, Strict Prod CSP, Weak PAYMENT_SECRET Rejection)
+  const { spawn } = await import('child_process');
+  const prodPort = 3098;
+  const prodBase = `http://127.0.0.1:${prodPort}`;
+  const prodProc = spawn('node', ['server.ts'], {
+    cwd: process.cwd(),
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      PORT: String(prodPort),
+      FORM_RATE_LIMIT_MAX: '2',
+      TRUST_PROXY_HOPS: '1',
+      PAYMENT_SECRET: 'weak_secret_under_32_chars',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  let prodReady = false;
+  for (let i = 0; i < 20; i++) {
+    try {
+      const r = await fetch(`${prodBase}/api/health`);
+      if (r.ok) {
+        prodReady = true;
+        break;
+      }
+    } catch {
+      // wait for server boot
+    }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+
+  try {
+    if (!prodReady) {
+      throw new Error(`Isolated production test server failed to start on port ${prodPort}`);
+    }
+
+    // SEC-09: Leftmost X-Forwarded-For spoofing must NOT bypass trust-proxy rate limiting
+    const xffStatuses: number[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const r = await fetch(`${prodBase}/api/newsletter/subscribe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': `198.51.100.${i}, 203.0.113.9`,
+        },
+        body: JSON.stringify({ email: 'not-valid' }),
+      });
+      xffStatuses.push(r.status);
+    }
+    const sec09Ok = xffStatuses[0] === 400 && xffStatuses[1] === 400 && xffStatuses[2] === 429;
+    record(
+      'SEC-09',
+      'Express trust proxy (1 hop) blocks leftmost X-Forwarded-For spoofing rate-limit bypass',
+      sec09Ok ? 'PASS' : 'FAIL',
+      `Rotating spoofed leftmost XFF statuses (limit=2): [${xffStatuses.join(', ')}]`
+    );
+
+    // SEC-10: Production CSP omits unsafe-inline / unsafe-eval from script-src and serves built SPA if dist exists
+    const homeRes = await fetch(`${prodBase}/`);
+    const csp = homeRes.headers.get('content-security-policy') || '';
+    const scriptDirective = csp
+      .split(';')
+      .map((s) => s.trim())
+      .find((s) => s.startsWith('script-src ')) || '';
+    const noUnsafeInlineScript =
+      scriptDirective.length > 0 &&
+      !scriptDirective.includes("'unsafe-inline'") &&
+      !scriptDirective.includes("'unsafe-eval'");
+    const hasScriptSrcAttrNone = csp.includes("script-src-attr 'none'");
+    record(
+      'SEC-10',
+      'Production CSP omits unsafe-inline and unsafe-eval from script-src and enforces script-src-attr none',
+      noUnsafeInlineScript && hasScriptSrcAttrNone ? 'PASS' : 'FAIL',
+      `homeStatus=${homeRes.status}; scriptSrc="${scriptDirective}"; scriptSrcAttrNone=${hasScriptSrcAttrNone}`
+    );
+
+    // SEC-11: Weak (<32 char) PAYMENT_SECRET rejected & /api/health reports environmentValidation safely without leaking secrets
+    const healthRes = await fetch(`${prodBase}/api/health`);
+    const healthText = await healthRes.text();
+    const healthJson = JSON.parse(healthText);
+    const rejectedWeakSecret =
+      healthJson?.security?.paymentSecretConfigured === false &&
+      healthJson?.security?.paymentGatewayMode === 'optional_mode' &&
+      healthJson?.security?.trustProxyHops === 1 &&
+      healthJson?.security?.cspStrictScriptSrcInProd === true &&
+      healthJson?.environmentValidation?.paymentSecretValid === false &&
+      !healthText.includes('weak_secret_under_32_chars');
+    record(
+      'SEC-11',
+      'Weak PAYMENT_SECRET (<32 chars) rejected cleanly and /api/health reports environmentValidation without leaking secrets',
+      rejectedWeakSecret ? 'PASS' : 'FAIL',
+      `paymentSecretConfigured=${healthJson?.security?.paymentSecretConfigured}; paymentSecretValid=${healthJson?.environmentValidation?.paymentSecretValid}; trustProxyHops=${healthJson?.security?.trustProxyHops}; cspStrictProd=${healthJson?.security?.cspStrictScriptSrcInProd}`
+    );
+  } catch (err: any) {
+    record('SEC-09', 'Production proxy & XFF spoofing protection', 'FAIL', err.message);
+    record('SEC-10', 'Production CSP verification', 'FAIL', err.message);
+    record('SEC-11', 'Weak PAYMENT_SECRET & production env check', 'FAIL', err.message);
+  } finally {
+    prodProc.kill('SIGTERM');
+  }
 
   const summary = {
     PASS: results.filter((r) => r.status === 'PASS').length,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { PROCESS_STEPS } from '../data/content';
-import { Clock, Check, ArrowRight, ShieldCheck, Activity, Award } from 'lucide-react';
+import { Clock, Check, ShieldCheck, Activity, Award } from 'lucide-react';
 
 interface ProcessPageProps {
   onOpenConsultation: () => void;

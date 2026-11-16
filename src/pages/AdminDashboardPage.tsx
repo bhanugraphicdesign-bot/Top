@@ -42,31 +42,20 @@ import {
   Cpu,
   Activity,
   CheckCircle,
-  Clock,
   Terminal,
   Shield,
   Search,
   ExternalLink,
   RotateCcw,
-  AlertCircle,
-  Database,
-  Server,
   RefreshCw,
   Lock,
   FileText,
   Layers,
   BookOpen,
-  Settings,
   Check,
   X,
-  UserCheck,
   ShieldAlert,
   ArrowRight,
-  TrendingUp,
-  Building2,
-  Mail,
-  Phone,
-  Code2,
   LifeBuoy,
   MessageSquare,
   Send,
@@ -532,28 +521,30 @@ export const AdminDashboardPage: React.FC = () => {
 
   // Load telemetry and live Firestore records on mount
   useEffect(() => {
+    let isCancelled = false;
+
     fetch('/api/health')
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
-        if (data) setServerHealth(data);
+        if (!isCancelled && data) setServerHealth(data);
       })
       .catch(() => {});
 
     fetchServicesCatalog()
       .then((services) => {
-        if (services && services.length > 0) setServicesList(services);
+        if (!isCancelled && services && services.length > 0) setServicesList(services);
       })
       .catch(() => {});
 
     fetchBlogPosts()
       .then((posts) => {
-        if (posts && posts.length > 0) setBlogList(posts);
+        if (!isCancelled && posts && posts.length > 0) setBlogList(posts);
       })
       .catch(() => {});
 
     fetchSiteSettings()
       .then((settings) => {
-        if (settings) {
+        if (!isCancelled && settings) {
           setSiteSettings((prev) => ({
             ...prev,
             companyName: settings.companyName ?? prev.companyName,
@@ -578,7 +569,9 @@ export const AdminDashboardPage: React.FC = () => {
       setAuditLogs(DEMO_ADMIN_AUDIT_LOGS);
       setTicketsList(DEMO_ADMIN_TICKETS);
       setActiveTicketIdForReply('TKT-2026-904');
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
     // Only load protected admin collections if user is a real verified Firebase Admin
@@ -592,7 +585,9 @@ export const AdminDashboardPage: React.FC = () => {
       setAuditLogs([]);
       setTicketsList([]);
       setActiveTicketIdForReply(null);
-      return;
+      return () => {
+        isCancelled = true;
+      };
     }
 
     setLeads([]);
@@ -600,12 +595,13 @@ export const AdminDashboardPage: React.FC = () => {
     currentUser
       .getIdToken()
       .then((idToken) => {
+        if (isCancelled) return null;
         fetch('/api/telemetry', {
           headers: { Authorization: `Bearer ${idToken}` },
         })
           .then((res) => (res.ok ? res.json() : null))
           .then((data) => {
-            if (data) setTelemetryData(data);
+            if (!isCancelled && data) setTelemetryData(data);
           })
           .catch(() => {});
 
@@ -613,48 +609,69 @@ export const AdminDashboardPage: React.FC = () => {
           headers: { Authorization: `Bearer ${idToken}` },
         });
       })
-      .then((res) => (res.ok ? res.json() : null))
+      .then((res) => (res && res.ok ? res.json() : null))
       .then((data) => {
-        setInvoicesList(data && Array.isArray(data.invoices) ? data.invoices : []);
+        if (!isCancelled) {
+          setInvoicesList(data && Array.isArray(data.invoices) ? data.invoices : []);
+        }
       })
-      .catch(() => setInvoicesList([]))
-      .finally(() => setLoadingInvoices(false));
+      .catch(() => {
+        if (!isCancelled) setInvoicesList([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingInvoices(false);
+      });
 
     // Load authoritative Firestore data for verified admin (never mix demo rows into real admin session)
     fetchAllUsers()
       .then((users) => {
-        setUsersList(Array.isArray(users) ? users : []);
+        if (!isCancelled) setUsersList(Array.isArray(users) ? users : []);
       })
-      .catch(() => setUsersList([]));
+      .catch(() => {
+        if (!isCancelled) setUsersList([]);
+      });
 
     fetchAllProjects()
       .then((projs) => {
-        setProjectsList(Array.isArray(projs) ? projs : []);
+        if (!isCancelled) setProjectsList(Array.isArray(projs) ? projs : []);
       })
-      .catch(() => setProjectsList([]));
+      .catch(() => {
+        if (!isCancelled) setProjectsList([]);
+      });
 
     fetchAllQuotations()
       .then((quotes) => {
-        setQuotationsList(Array.isArray(quotes) ? quotes : []);
+        if (!isCancelled) setQuotationsList(Array.isArray(quotes) ? quotes : []);
       })
-      .catch(() => setQuotationsList([]));
+      .catch(() => {
+        if (!isCancelled) setQuotationsList([]);
+      });
 
     fetchSupportTickets()
       .then((tickets) => {
+        if (isCancelled) return;
         const list = Array.isArray(tickets) ? tickets : [];
         setTicketsList(list);
         setActiveTicketIdForReply(list.length > 0 ? list[0]?.id || null : null);
       })
       .catch(() => {
-        setTicketsList([]);
-        setActiveTicketIdForReply(null);
+        if (!isCancelled) {
+          setTicketsList([]);
+          setActiveTicketIdForReply(null);
+        }
       });
 
     getAuditLogs(15)
       .then((logs) => {
-        setAuditLogs(Array.isArray(logs) ? logs : []);
+        if (!isCancelled) setAuditLogs(Array.isArray(logs) ? logs : []);
       })
-      .catch(() => setAuditLogs([]));
+      .catch(() => {
+        if (!isCancelled) setAuditLogs([]);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [currentUser, isRealAdmin, isDemoSandbox]);
 
   // Enter / Exit Demo Admin Mode

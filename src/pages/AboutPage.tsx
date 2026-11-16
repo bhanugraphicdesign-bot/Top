@@ -1,9 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../context/LanguageContext';
-import { useNavigation } from '../context/NavigationContext';
 import { COMPANY_INFO } from '../data/content';
 import { useSiteContact } from '../hooks/useSiteContact';
-import { Building2, Award, ShieldCheck, MapPin, Compass, ArrowRight, Code2, Users, CheckCircle } from 'lucide-react';
 import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AboutPageProps {
@@ -12,7 +10,6 @@ interface AboutPageProps {
 
 export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   const { language, t } = useLanguage();
-  const { navigate } = useNavigation();
   const siteContact = useSiteContact();
 
   return (

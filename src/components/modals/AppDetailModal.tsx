@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { AndroidApp } from '../../types';
-import { X, Check, Smartphone, ArrowRight, Layers, Cpu, ShieldCheck } from 'lucide-react';
+import { X, Check, Smartphone, ArrowRight, Layers } from 'lucide-react';
 
 interface AppDetailModalProps {
   app: AndroidApp | null;

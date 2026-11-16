@@ -5,7 +5,7 @@ import { BLOG_POSTS } from '../data/blogData';
 import { OPTIMIZED_ASSETS } from '../data/content';
 import { fetchBlogPosts } from '../firebase/services';
 import { BlogPost } from '../types';
-import { BookOpen, Clock, ArrowRight, User, X, Share2, Check } from 'lucide-react';
+import { Clock, ArrowRight, User, X, Share2, Check } from 'lucide-react';
 import { OptimizedImage } from '../components/common/OptimizedImage';
 import { SEO, ROUTE_SEO_CONFIG } from '../components/common/SEO';
 

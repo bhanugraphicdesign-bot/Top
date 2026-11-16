@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { AI_SOLUTIONS } from '../data/content';
-import { Bot, Search, FileText, TrendingUp, Check, ArrowRight, ShieldCheck, Cpu, Calculator } from 'lucide-react';
+import { Check, ArrowRight, Calculator } from 'lucide-react';
 import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AiSolutionsPageProps {

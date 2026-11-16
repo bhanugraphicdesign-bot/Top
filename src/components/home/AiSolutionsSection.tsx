@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { AI_SOLUTIONS } from '../../data/content';
-import { AiSolution } from '../../types';
-import { Bot, Search, FileText, TrendingUp, Check, ArrowRight, Sparkles, Cpu, Calculator } from 'lucide-react';
+import { Bot, Search, FileText, TrendingUp, Check, ArrowRight, Cpu, Calculator } from 'lucide-react';
 import { OptimizedImage } from '../common/OptimizedImage';
 
 interface AiSolutionsSectionProps {

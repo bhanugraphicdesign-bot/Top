@@ -3,7 +3,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
-import { ArrowRight, Phone, Mail, MapPin, X, Languages, Shield, FileText, User, LogOut } from 'lucide-react';
+import { ArrowRight, Phone, Mail, MapPin, X, Languages, LogOut } from 'lucide-react';
 import { PageRoute } from '../../types';
 
 interface MobileMenuProps {
@@ -17,7 +17,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   onClose,
   onOpenConsultation,
 }) => {
-  const { language, setLanguage, toggleLanguage, t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const { currentRoute, navigate } = useNavigation();
   const { currentUser, isAdmin, openAuthModal, logout } = useAuth();
   const siteContact = useSiteContact();

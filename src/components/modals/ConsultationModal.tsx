@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
-import { X, CheckCircle, Clock, Shield, Calendar, Send } from 'lucide-react';
+import { X, CheckCircle, Shield, Send } from 'lucide-react';
 import { submitQuotation } from '../../firebase/services';
 import { trackConsultationFormOpen, trackConsultationFormSubmit } from '../../firebase/analytics';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';

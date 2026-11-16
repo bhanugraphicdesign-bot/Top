@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
-import { Menu, X, ArrowRight, Languages, User, LogOut, ShieldCheck } from 'lucide-react';
+import { Menu, X, ArrowRight, User, LogOut } from 'lucide-react';
 import { PageRoute } from '../../types';
 import { NotificationDropdown } from './NotificationDropdown';
 
@@ -17,9 +17,9 @@ export const Header: React.FC<HeaderProps> = ({
   mobileMenuOpen,
   setMobileMenuOpen,
 }) => {
-  const { language, setLanguage, toggleLanguage, t } = useLanguage();
+  const { language, setLanguage, t } = useLanguage();
   const { currentRoute, navigate } = useNavigation();
-  const { currentUser, userRole, isAdmin, openAuthModal, logout } = useAuth();
+  const { currentUser, isAdmin, openAuthModal, logout } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {

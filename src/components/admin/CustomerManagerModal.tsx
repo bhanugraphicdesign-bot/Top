@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { saveClientRecord } from '../../firebase/services';
-import { X, User, Building2, Phone, Mail, Shield, Check } from 'lucide-react';
+import { X, User, Check } from 'lucide-react';
 
 interface CustomerModalProps {
   isOpen: boolean;
