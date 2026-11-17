@@ -3097,7 +3097,7 @@ export const AdminDashboardPage: React.FC = () => {
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {t('Global Enterprise Settings & CIN', 'ग्लोबल एंटरप्राइज सेटिंग्स एवं CIN')}
+                Company Settings / कंपनी सेटिंग्स
               </button>
             </div>
 

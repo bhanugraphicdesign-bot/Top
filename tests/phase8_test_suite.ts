@@ -40,27 +40,38 @@ async function runTestSuite() {
   try {
     const res = await fetch(`${SERVER_BASE}/api/health`);
     const data = await res.json();
+    const readyRes = await fetch(`${SERVER_BASE}/api/health/ready`);
+    const readyData = await readyRes.json();
     const capRes = await fetch(`${SERVER_BASE}/api/system/capabilities`);
     const capData = await capRes.json();
+
+    const honestDbStatus =
+      data.database?.probeHttpStatus === 403
+        ? data.database?.status !== 'CONNECTED'
+        : data.database?.status === 'CONNECTED';
+    const readyContractOk =
+      (readyRes.status === 200 && readyData.ready === true) ||
+      (readyRes.status === 503 && readyData.ready === false && typeof readyData.reason === 'string' && readyData.reason.length > 0);
+
     const passed =
       res.status === 200 &&
       capRes.status === 200 &&
-      data.status === 'ONLINE' &&
+      honestDbStatus &&
+      readyContractOk &&
       data.company === 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES' &&
       data.database?.provider === 'Google Cloud Firestore' &&
-      data.database?.status === 'CONNECTED' &&
       (data.security?.bearerTokenVerification === 'FIREBASE_ADMIN_SDK' ||
         data.security?.bearerTokenVerification === 'FIREBASE_RS256') &&
       capData.fileUploadEnabled === Boolean(data.storage?.gcsBucketVerified) &&
       capData.paymentGatewayEnabled === Boolean(data.security?.paymentSecretConfigured);
     record(
       'API Functional',
-      'GET /api/health & /api/system/capabilities return 200 ONLINE with honest storage & optional payment flags',
+      'GET /api/health (never CONNECTED on 403), /api/health/ready & /api/system/capabilities pass contract',
       passed,
-      `status=${data.status}, db=${data.database?.status}, storageMode=${data.storage?.mode}, paymentMode=${capData.paymentMode}`
+      `health=${data.status}, db=${data.database?.status} (probe=${data.database?.probeHttpStatus}), ready=${readyRes.status}:${JSON.stringify(readyData)}, storageMode=${data.storage?.mode}`
     );
   } catch (err: any) {
-    record('API Functional', 'GET /api/health returns 200 ONLINE', false, err.message);
+    record('API Functional', 'GET /api/health & /api/health/ready checks', false, err.message);
   }
 
   try {
@@ -428,26 +439,42 @@ async function runTestSuite() {
     const sitemapRes = await fetch(`${SERVER_BASE}/sitemap.xml`);
     const robotsTxt = await robotsRes.text();
     const sitemapXml = await sitemapRes.text();
-    const [aboutHtmlRes, appDetailHtmlRes] = await Promise.all([
+    const [aboutHtmlRes, appDetailHtmlRes, notFoundHtmlRes] = await Promise.all([
       fetch(`${SERVER_BASE}/about`, { headers: { Accept: 'text/html' } }),
       fetch(`${SERVER_BASE}/apps/bariha-pay`, { headers: { Accept: 'text/html' } }),
+      fetch(`${SERVER_BASE}/unknown-page-404-probe`, { headers: { Accept: 'text/html' } }),
     ]);
     const aboutHtml = await aboutHtmlRes.text();
     const appDetailHtml = await appDetailHtmlRes.text();
+    const notFoundHtml = await notFoundHtmlRes.text();
+
+    const aboutSsrOk =
+      aboutHtmlRes.status === 200 &&
+      aboutHtml.includes('<!doctype html>') &&
+      aboutHtml.includes('About Bhanu Ram Bariha Digital') &&
+      aboutHtml.includes('/about"');
+    const appDetailSsrOk =
+      appDetailHtmlRes.status === 200 &&
+      appDetailHtml.includes('<!doctype html>') &&
+      appDetailHtml.includes('BarihaPay') &&
+      appDetailHtml.includes('/apps/bariha-pay"');
+    const real404Ok =
+      notFoundHtmlRes.status === 404 &&
+      notFoundHtml.includes('id="root"');
 
     record(
       'SEO Endpoints',
-      '/robots.txt, /sitemap.xml, and SPA clean paths (/about, /apps/:id) serve valid directives without ai.studio',
+      '/robots.txt, /sitemap.xml, per-route SSR HTML (/about, /apps/:id) & HTTP 404 unknown route check pass',
       robotsRes.status === 200 &&
         robotsTxt.includes('Disallow: /admin-dashboard') &&
         !robotsTxt.includes('ai.studio') &&
         sitemapRes.status === 200 &&
         sitemapXml.includes('<urlset') &&
         !sitemapXml.includes('ai.studio') &&
-        aboutHtmlRes.status === 200 &&
-        aboutHtml.includes('<!doctype html>') &&
-        appDetailHtmlRes.status === 200 &&
-        appDetailHtml.includes('<!doctype html>')
+        aboutSsrOk &&
+        appDetailSsrOk &&
+        real404Ok,
+      `about200=${aboutSsrOk}, appDetail200=${appDetailSsrOk}, unknownStatus=${notFoundHtmlRes.status}`
     );
   } catch (err: any) {
     record('SEO Endpoints', '/robots.txt and /sitemap.xml check', false, err.message);

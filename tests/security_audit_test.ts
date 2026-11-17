@@ -433,23 +433,9 @@ async function runSecurityTests() {
       `paymentSecretConfigured=${healthJson?.security?.paymentSecretConfigured}; paymentSecretValid=${healthJson?.environmentValidation?.paymentSecretValid}; trustProxyHops=${healthJson?.security?.trustProxyHops}; cspStrictProd=${healthJson?.security?.cspStrictScriptSrcInProd}`
     );
     // SEC-05 additions checked below in SEC-13 as well
-    // SEC-12: App Check Invalid Token Rejection (403) + Missing Token Enforced Rejection When Enabled
+    // SEC-12: App Check enforces ONLY when ENFORCE_APP_CHECK=true and runs in monitor mode (logs & allows) when only site key is set
     try {
-      const invalidAppCheckRes = await fetch(`${SERVER_BASE}/api/quotations`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Firebase-AppCheck': 'forged.invalid.appcheck.token',
-        },
-        body: JSON.stringify({
-          fullName: 'PenTest User',
-          email: 'pentest@example.com',
-          serviceType: 'Enterprise Web',
-        }),
-      });
-      const invalidAppCheckJson: any = await invalidAppCheckRes.json().catch(() => ({}));
-
-      // Also spawn an isolated server with ENFORCE_APP_CHECK=true to verify missing tokens are never silently bypassed
+      // Spawn an isolated server with ENFORCE_APP_CHECK=true to verify invalid and missing tokens are rejected
       const appCheckPort = 3099;
       const appCheckBase = `http://127.0.0.1:${appCheckPort}`;
       const appCheckProc = spawn('node', ['server.ts'], {
@@ -459,6 +445,7 @@ async function runSecurityTests() {
           NODE_ENV: 'production',
           PORT: String(appCheckPort),
           ENFORCE_APP_CHECK: 'true',
+          FORM_RATE_LIMIT_MAX: '50',
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -477,35 +464,111 @@ async function runSecurityTests() {
       }
       let missingRejected = false;
       let missingStatus = 0;
+      let invalidStatus = 0;
+      let invalidCode = 'rejected';
       try {
         if (acReady) {
-          const missingAcRes = await fetch(`${appCheckBase}/api/quotations`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fullName: 'PenTest Missing AC',
-              email: 'pentest@example.com',
-              serviceType: 'Enterprise Web',
+          const [missingAcRes, invalidAppCheckRes] = await Promise.all([
+            fetch(`${appCheckBase}/api/quotations`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fullName: 'PenTest Missing AC',
+                email: 'pentest@example.com',
+                serviceType: 'Enterprise Web',
+              }),
             }),
-          });
+            fetch(`${appCheckBase}/api/quotations`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Firebase-AppCheck': 'forged.invalid.appcheck.token',
+              },
+              body: JSON.stringify({
+                fullName: 'PenTest User',
+                email: 'pentest@example.com',
+                serviceType: 'Enterprise Web',
+              }),
+            }),
+          ]);
           missingStatus = missingAcRes.status;
           missingRejected = missingAcRes.status === 403 || missingAcRes.status === 503;
+          invalidStatus = invalidAppCheckRes.status;
+          const invalidAppCheckJson: any = await invalidAppCheckRes.json().catch(() => ({}));
+          invalidCode = invalidAppCheckJson?.code || 'rejected';
         }
       } finally {
         appCheckProc.kill('SIGTERM');
       }
 
+      // Spawn isolated server with ONLY VITE_RECAPTCHA_SITE_KEY (monitor mode, ENFORCE_APP_CHECK=false)
+      const monitorPort = 3097;
+      const monitorBase = `http://127.0.0.1:${monitorPort}`;
+      const monitorProc = spawn('node', ['server.ts'], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          PORT: String(monitorPort),
+          VITE_RECAPTCHA_SITE_KEY: '6LeMonitorTestSiteKey000000000000000000',
+          ENFORCE_APP_CHECK: 'false',
+          FORM_RATE_LIMIT_MAX: '50',
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let monReady = false;
+      for (let i = 0; i < 20; i++) {
+        try {
+          const r = await fetch(`${monitorBase}/api/health`);
+          if (r.ok) {
+            monReady = true;
+            break;
+          }
+        } catch {
+          // Wait for boot
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      let monitorModeAllows = false;
+      let monitorMissingStatus = 0;
+      let monitorInvalidStatus = 0;
+      try {
+        if (monReady) {
+          const [monMissing, monInvalid] = await Promise.all([
+            fetch(`${monitorBase}/api/quotations`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fullName: '', email: 'bad', serviceType: '' }),
+            }),
+            fetch(`${monitorBase}/api/quotations`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Firebase-AppCheck': 'forged.invalid.appcheck.token',
+              },
+              body: JSON.stringify({ fullName: '', email: 'bad', serviceType: '' }),
+            }),
+          ]);
+          monitorMissingStatus = monMissing.status;
+          monitorInvalidStatus = monInvalid.status;
+          monitorModeAllows = monMissing.status === 400 && monInvalid.status === 400;
+        }
+      } finally {
+        monitorProc.kill('SIGTERM');
+      }
+
       const sec12Ok =
-        (invalidAppCheckRes.status === 403 || invalidAppCheckRes.status === 503) &&
-        missingRejected;
+        (invalidStatus === 403 || invalidStatus === 503) &&
+        missingRejected &&
+        monitorModeAllows;
       record(
         'SEC-12',
-        'App Check rejects invalid X-Firebase-AppCheck headers and never silently bypasses missing tokens when enforced',
+        'App Check enforces ONLY when ENFORCE_APP_CHECK=true and runs in monitor mode (logs & allows) when only site key is set',
         sec12Ok ? 'PASS' : 'FAIL',
-        `Invalid header HTTP ${invalidAppCheckRes.status} (${invalidAppCheckJson?.code || 'rejected'}); Enforced missing token HTTP ${missingStatus}`
+        `Invalid header (enforced) HTTP ${invalidStatus} (${invalidCode}); Enforced missing token HTTP ${missingStatus}; Monitor mode (missing=${monitorMissingStatus}, invalid=${monitorInvalidStatus})`
       );
     } catch (err: any) {
-      record('SEC-12', 'App Check enforcement & invalid token rejection', 'FAIL', err.message);
+      record('SEC-12', 'App Check enforcement & monitor mode verification', 'FAIL', err.message);
     }
 
     // SEC-13: CSRF Non-JSON Form Blocking (415), CORS credentials:false, File CSP Sandbox & Firestore Rules Poisoning Guards

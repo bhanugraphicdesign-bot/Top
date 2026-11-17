@@ -24,6 +24,8 @@ export const AuthModal: React.FC = () => {
     loginWithEmail,
     registerWithEmail,
     resetPassword,
+    authRedirectError,
+    clearAuthRedirectError,
   } = useAuth();
   const { language, t, showToast } = useLanguage();
 
@@ -51,10 +53,13 @@ export const AuthModal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isAuthModalOpen, closeAuthModal]);
 
-  if (!isAuthModalOpen) return null;
-
   const mapAuthError = (err: any): string => {
     const code = err?.code || '';
+    if (code === 'auth/unauthorized-domain') {
+      return language === 'hi'
+        ? 'यह डोमेन अभी Firebase में अधिकृत नहीं है। This domain is not yet authorized in Firebase.'
+        : 'This domain is not yet authorized in Firebase. / यह डोमेन अभी Firebase में अधिकृत नहीं है।';
+    }
     if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
       return language === 'hi' ? 'अमान्य ईमेल या पासवर्ड।' : 'Invalid email or password.';
     }
@@ -88,15 +93,27 @@ export const AuthModal: React.FC = () => {
     return err?.message || (language === 'hi' ? 'प्रमाणीकरण त्रुटि।' : 'Authentication error.');
   };
 
+  useEffect(() => {
+    if (isAuthModalOpen && authRedirectError) {
+      setErrorMsg(mapAuthError(authRedirectError));
+      clearAuthRedirectError();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthModalOpen, authRedirectError]);
+
+  if (!isAuthModalOpen) return null;
+
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       setErrorMsg('');
-      await loginWithGoogle();
-      showToast(
-        language === 'hi' ? 'Google द्वारा सफलतापूर्वक लॉगिन संपन्न हुआ।' : 'Signed in with Google successfully.',
-        'success'
-      );
+      const method = await loginWithGoogle();
+      if (method === 'popup') {
+        showToast(
+          language === 'hi' ? 'Google द्वारा सफलतापूर्वक लॉगिन संपन्न हुआ।' : 'Signed in with Google successfully.',
+          'success'
+        );
+      }
     } catch (err: any) {
       console.error(err);
       setErrorMsg(mapAuthError(err));

@@ -993,7 +993,8 @@ async function verifyAppCheckForForm(
 ): Promise<boolean> {
   const token = (req.header('x-firebase-appcheck') || '').trim();
   const lang = resolveRequestedLanguage(req);
-  const mustEnforce = HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK;
+  const mustEnforce = ENFORCE_APP_CHECK;
+  const isMonitorMode = HAS_RECAPTCHA_SITE_KEY && !ENFORCE_APP_CHECK;
 
   if (mustEnforce && !adminApp) {
     const errorEn = 'App Check enforcement is enabled, but server App Check verification is not configured.';
@@ -1007,9 +1008,14 @@ async function verifyAppCheckForForm(
     return false;
   }
 
-  // Missing token is rejected when enforced; allowed only in pre-config advisory mode
+  // Enforce missing token ONLY when ENFORCE_APP_CHECK=true; monitor mode logs and allows
   if (!token) {
     if (!mustEnforce) {
+      if (isMonitorMode) {
+        console.warn(
+          `[AppCheck Monitor] Missing X-Firebase-AppCheck token for ${scope}; allowing request in monitor mode.`
+        );
+      }
       return true;
     }
     const errorEn = 'App Check verification token is missing. Please reload the page and try again.';
@@ -1023,8 +1029,13 @@ async function verifyAppCheckForForm(
     return false;
   }
 
-  // If a token header was supplied, ALWAYS verify it strictly (never silently bypass invalid tokens)
   if (!adminApp) {
+    if (isMonitorMode) {
+      console.warn(
+        `[AppCheck Monitor] Firebase Admin SDK unavailable to verify ${scope} App Check token; allowing request in monitor mode.`
+      );
+      return true;
+    }
     console.warn('[AppCheck Warning] Firebase Admin App not initialized; denying App Check verification request.');
     res.status(503).json({
       code: 'APP_CHECK_NOT_CONFIGURED',
@@ -1037,6 +1048,13 @@ async function verifyAppCheckForForm(
     await getAppCheck(adminApp).verifyToken(token);
     return true;
   } catch (err) {
+    if (isMonitorMode) {
+      console.warn(
+        `[AppCheck Monitor] App Check token verification failed for ${scope}; allowing request in monitor mode:`,
+        err
+      );
+      return true;
+    }
     console.warn(`[AppCheck Rejected] Invalid ${scope} App Check token:`, err);
     const errorEn = 'App Check security verification failed. Please refresh the page and retry.';
     const errorHi = 'App Check सुरक्षा सत्यापन विफल रहा। कृपया पृष्ठ रीफ़्रेश करें और पुनः प्रयास करें।';
@@ -1146,8 +1164,18 @@ function getProductionEnvironmentSummary() {
         : 'PAYMENT_SECRET is not set (payments remain in optional mode)'
     );
   }
-  if (!HAS_RECAPTCHA_SITE_KEY) warnings.push('VITE_RECAPTCHA_SITE_KEY is not set (App Check advisory)');
+  if (!HAS_RECAPTCHA_SITE_KEY) {
+    warnings.push('VITE_RECAPTCHA_SITE_KEY is not set (App Check unconfigured)');
+  } else if (!ENFORCE_APP_CHECK) {
+    warnings.push('ENFORCE_APP_CHECK is false (App Check running in monitor mode)');
+  }
   if (!adminHasCredentials) warnings.push('Firebase Admin credentials unavailable (server writes return 503)');
+
+  const appCheckMode = ENFORCE_APP_CHECK
+    ? 'enforced'
+    : HAS_RECAPTCHA_SITE_KEY
+    ? 'monitor'
+    : 'advisory_until_configured';
 
   return {
     nodeEnv: process.env.NODE_ENV || 'development',
@@ -1157,7 +1185,8 @@ function getProductionEnvironmentSummary() {
     paymentSecretValid: HAS_EXPLICIT_PAYMENT_SECRET,
     paymentSecretMinLength: 32,
     appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
-    appCheckEnforced: HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK,
+    appCheckEnforced: ENFORCE_APP_CHECK,
+    appCheckMode,
     firebaseAdminCredentialsPresent: adminHasCredentials,
     geminiApiConfigured: HAS_GEMINI_API_KEY,
     trustProxyHops: TRUST_PROXY_HOPS,
@@ -1187,9 +1216,11 @@ app.get('/api/health', async (req, res) => {
       const probeRes = await fetch(probeUrl, { signal: controller.signal });
       probeHttpStatus = probeRes.status;
       probeLatencyMs = Date.now() - start;
-      // 403 Permission Denied proves live Firestore endpoint + Default-Deny rules are actively enforcing RBAC
-      if (probeRes.status === 200 || probeRes.status === 404 || probeRes.status === 403) {
+      // Only 200 or 404 confirms authenticated/open read; 403 must never report CONNECTED
+      if (probeRes.status === 200 || probeRes.status === 404) {
         databaseStatus = 'CONNECTED';
+      } else {
+        databaseStatus = 'DEGRADED';
       }
     } catch {
       databaseStatus = 'DEGRADED';
@@ -1228,8 +1259,8 @@ app.get('/api/health', async (req, res) => {
       bearerTokenVerification: adminHasCredentials ? 'FIREBASE_ADMIN_SDK' : 'FIREBASE_RS256',
       trustProxyHops: TRUST_PROXY_HOPS,
       appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
-      appCheckMode:
-        HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK ? 'enforced' : 'advisory_until_configured',
+      appCheckEnforced: ENFORCE_APP_CHECK,
+      appCheckMode: envSummary.appCheckMode,
       helmetCspEnabled: true,
       cspStrictScriptSrcInProd: !isDevEnv,
       corsStrictAllowlist: true,
@@ -1266,6 +1297,34 @@ app.get('/api/health', async (req, res) => {
   });
 });
 
+// 1a. Honest Readiness Probe (real Firestore Admin SDK read check)
+app.get('/api/health/ready', async (_req, res) => {
+  if (!adminDb) {
+    return res.status(503).json({
+      ready: false,
+      reason: 'FIREBASE_ADMIN_NOT_INITIALIZED',
+    });
+  }
+  try {
+    await adminDb.collection('site_settings').doc('global').get();
+    return res.status(200).json({ ready: true });
+  } catch (err: any) {
+    const errMsg = String(err?.message || 'FIRESTORE_READ_FAILED');
+    const safeReason =
+      err?.code === 7 || /PERMISSION_DENIED/i.test(errMsg)
+        ? 'FIRESTORE_PERMISSION_DENIED'
+        : err?.code === 16 || /UNAUTHENTICATED|Could not load the default credentials/i.test(errMsg)
+        ? 'FIRESTORE_UNAUTHENTICATED'
+        : err?.code === 14 || /UNAVAILABLE/i.test(errMsg)
+        ? 'FIRESTORE_UNAVAILABLE'
+        : 'FIRESTORE_READ_FAILED';
+    return res.status(503).json({
+      ready: false,
+      reason: safeReason,
+    });
+  }
+});
+
 // 1b. Public Safe System Capabilities Endpoint (Exposes non-sensitive feature flags only)
 app.get('/api/system/capabilities', (_req, res) => {
   res.json({
@@ -1274,8 +1333,12 @@ app.get('/api/system/capabilities', (_req, res) => {
     gcsBucketVerified,
     firestoreAdminReady: Boolean(adminDb),
     appCheckConfigured: HAS_RECAPTCHA_SITE_KEY,
-    appCheckMode:
-      HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK ? 'enforced' : 'advisory_until_configured',
+    appCheckEnforced: ENFORCE_APP_CHECK,
+    appCheckMode: ENFORCE_APP_CHECK
+      ? 'enforced'
+      : HAS_RECAPTCHA_SITE_KEY
+      ? 'monitor'
+      : 'advisory_until_configured',
     paymentGatewayEnabled: HAS_EXPLICIT_PAYMENT_SECRET,
     paymentWebhookConfigured: HAS_PAYMENT_WEBHOOK_SECRET,
     paymentMode: HAS_EXPLICIT_PAYMENT_SECRET ? 'configured' : 'optional_mode',
@@ -2850,6 +2913,275 @@ app.use('/api', (err: any, req: express.Request, res: express.Response, next: ex
 /* =========================================================================
    VITE DEV MIDDLEWARE / STATIC ASSETS HOSTING
    ========================================================================= */
+const STATIC_ROUTE_HTML_META: Record<
+  string,
+  { title: string; description: string; robots?: string }
+> = {
+  '/': {
+    title: 'POWER WEB STUDIO AI — Enterprise Software & AI Suite',
+    description:
+      'Bhanu Ram Bariha Digital Technologies (POWER WEB STUDIO AI): Mission-critical distributed backends, native Android apps, and sovereign AI systems.',
+  },
+  '/about': {
+    title: 'About Bhanu Ram Bariha Digital | POWER WEB STUDIO AI',
+    description:
+      'Registered Indian digital engineering firm founded by Bhanu Ram Bariha delivering enterprise software, native Android ecosystems, and sovereign AI.',
+  },
+  '/services': {
+    title: 'Enterprise Engineering Services | POWER WEB STUDIO AI',
+    description:
+      'Explore distributed backend systems, native Kotlin Android development, cloud architecture, and custom enterprise AI engineering services.',
+  },
+  '/ai-solutions': {
+    title: 'Sovereign Enterprise AI & RAG | POWER WEB STUDIO AI',
+    description:
+      'Privacy-first private LLMs, verified RAG pipelines, workflow automation, and sovereign AI orchestration by Bhanu Ram Bariha Digital Technologies.',
+  },
+  '/android-portfolio': {
+    title: 'Native Android Apps Portfolio | POWER WEB STUDIO AI',
+    description:
+      'Production-hardened Kotlin, Jetpack Compose, and offline-first SQLiteCipher Android applications engineered for FinTech, GovTech, EdTech, and Commerce.',
+  },
+  '/process': {
+    title: '6-Phase Engineering Methodology | POWER WEB STUDIO AI',
+    description:
+      'Zero-surprise delivery from architectural blueprint and SOW scoping to automated testing, security hardening, and production SLA governance.',
+  },
+  '/contact': {
+    title: 'Consultation & Contact | POWER WEB STUDIO AI',
+    description:
+      'Schedule an engineering consultation or submit an RFP/RFQ with Bhanu Ram Bariha Digital Technologies in Chhattisgarh, India.',
+  },
+  '/blog': {
+    title: 'Engineering Blog & Research | POWER WEB STUDIO AI',
+    description:
+      'Technical insights written by Principal Architects on distributed systems, offline Kotlin Android engineering, and sovereign enterprise AI.',
+  },
+  '/privacy': {
+    title: 'Privacy Policy & Data Governance | POWER WEB STUDIO AI',
+    description:
+      'Data processing, DPDP Act compliance, telemetry, and client confidentiality commitments at Bhanu Ram Bariha Digital Technologies.',
+  },
+  '/terms': {
+    title: 'Terms & Conditions of Service | POWER WEB STUDIO AI',
+    description:
+      'Master service terms, intellectual property rights, and SOW engagement guidelines for POWER WEB STUDIO AI clients.',
+  },
+  '/client-dashboard': {
+    title: 'Client Engineering Portal | POWER WEB STUDIO AI',
+    description:
+      'Authenticated client workspace for project milestones, invoices, and support tickets.',
+    robots: 'noindex, nofollow',
+  },
+  '/admin': {
+    title: 'Executive Admin Console | POWER WEB STUDIO AI',
+    description:
+      'Authorized administrator portal for operations, RBAC governance, and lead management.',
+    robots: 'noindex, nofollow',
+  },
+  '/admin-dashboard': {
+    title: 'Executive Admin Console | POWER WEB STUDIO AI',
+    description:
+      'Authorized administrator portal for operations, RBAC governance, and lead management.',
+    robots: 'noindex, nofollow',
+  },
+};
+
+const APP_DETAIL_SEO_META: Record<string, { title: string; description: string }> = {
+  'bariha-pay': {
+    title: 'BarihaPay — FinTech Payments & Ledger | POWER WEB STUDIO AI',
+    description:
+      'Offline-resilient UPI, Soundbox BLE telemetry, and multi-ledger settlement Android platform built with Kotlin and SQLiteCipher.',
+  },
+  'vidyasetu-lms': {
+    title: 'VidyaSetu LMS — Sovereign EdTech Android App | POWER WEB STUDIO AI',
+    description:
+      'Low-bandwidth offline LMS with regional Hindi/English video sync, encrypted assessments, and district-scale analytics.',
+  },
+  'taskmatrix-pro': {
+    title: 'TaskMatrix Pro — Field Workforce Orchestration | POWER WEB STUDIO AI',
+    description:
+      'Enterprise Kotlin dispatch & geotagged offline checklist suite for infrastructure and distributed engineering teams.',
+  },
+  'networkpulse-diagnostic': {
+    title: 'NetworkPulse — Telecom Edge Diagnostics | POWER WEB STUDIO AI',
+    description:
+      'Native Android RF/latency telemetry, packet diagnostics, and offline field audit reporting.',
+  },
+  'bharatbazaar-omnichannel': {
+    title: 'BharatBazaar — Omnichannel Commerce Engine | POWER WEB STUDIO AI',
+    description:
+      'Multi-vendor retail inventory, GST invoicing, and offline POS synchronization built for high-volume merchants.',
+  },
+  'trackcore-logistics': {
+    title: 'TrackCore — Fleet & Supply Chain Telemetry | POWER WEB STUDIO AI',
+    description:
+      'Real-time logistics dispatching, proof-of-delivery capture, and dead-zone offline buffering for fleet operations.',
+  },
+  'docusense-vision-ai': {
+    title: 'DocuSense Vision AI — On-Device OCR & KYC | POWER WEB STUDIO AI',
+    description:
+      'Privacy-preserving on-device document extraction, Devanagari/English OCR, and enterprise verification.',
+  },
+  'retailflow-pos': {
+    title: 'RetailFlow POS — High-Throughput Billing App | POWER WEB STUDIO AI',
+    description:
+      'Offline-first Android POS terminal software with thermal printing, GST compliance, and cloud ledger sync.',
+  },
+};
+
+function escapeHtmlText(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function escapeHtmlAttr(str: string): string {
+  return escapeHtmlText(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function resolveRouteHtmlInfo(rawPath: string, origin: string): {
+  statusCode: 200 | 404;
+  title: string;
+  description: string;
+  canonicalUrl: string;
+  ogUrl: string;
+  robots: string;
+  origin: string;
+} {
+  const cleanPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : '/';
+  const safeBase = origin || DEFAULT_SITE_URL;
+
+  const staticMeta = STATIC_ROUTE_HTML_META[cleanPath];
+  if (staticMeta) {
+    const canonicalPath = cleanPath === '/admin' ? '/admin-dashboard' : cleanPath;
+    const pageUrl = `${safeBase}${canonicalPath}`;
+    return {
+      statusCode: 200,
+      title: staticMeta.title,
+      description: staticMeta.description,
+      canonicalUrl: pageUrl,
+      ogUrl: pageUrl,
+      robots: staticMeta.robots || 'index, follow',
+      origin: safeBase,
+    };
+  }
+
+  if (/^\/apps\/[^/]+$/.test(cleanPath)) {
+    const rawAppId = cleanPath.slice('/apps/'.length);
+    let decodedAppId: string;
+    try {
+      decodedAppId = decodeURIComponent(rawAppId);
+    } catch {
+      decodedAppId = rawAppId;
+    }
+    const appMeta = APP_DETAIL_SEO_META[decodedAppId];
+    const formattedName = decodedAppId
+      .split(/[-_]+/)
+      .filter(Boolean)
+      .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+      .join(' ');
+    const pageUrl = `${safeBase}/apps/${encodeURIComponent(decodedAppId)}`;
+    return {
+      statusCode: 200,
+      title: appMeta?.title || `${formattedName} — Android App Architecture | POWER WEB STUDIO AI`,
+      description:
+        appMeta?.description ||
+        'Detailed mobile architecture, offline SQLite synchronization, performance benchmarks, and changelog for our enterprise Android platforms.',
+      canonicalUrl: pageUrl,
+      ogUrl: pageUrl,
+      robots: 'index, follow',
+      origin: safeBase,
+    };
+  }
+
+  return {
+    statusCode: 404,
+    title: 'Page Not Found (404) | POWER WEB STUDIO AI',
+    description: 'The requested enterprise page or resource could not be found.',
+    canonicalUrl: `${safeBase}/`,
+    ogUrl: `${safeBase}${cleanPath}`,
+    robots: 'noindex, nofollow',
+    origin: safeBase,
+  };
+}
+
+function injectRouteHtmlMeta(rawHtml: string, req: express.Request): {
+  statusCode: 200 | 404;
+  html: string;
+} {
+  const origin = resolveSeoBaseUrl(req);
+  const info = resolveRouteHtmlInfo(req.path || '/', origin);
+  const safeTitle = escapeHtmlText(info.title);
+  const safeTitleAttr = escapeHtmlAttr(info.title);
+  const safeDescAttr = escapeHtmlAttr(info.description);
+  const safeCanonical = escapeHtmlAttr(info.canonicalUrl);
+  const safeOgUrl = escapeHtmlAttr(info.ogUrl);
+  const safeRobots = escapeHtmlAttr(info.robots);
+  const safeOrigin = escapeHtmlAttr(info.origin);
+
+  const html = rawHtml
+    .replaceAll(DEFAULT_SITE_URL, info.origin)
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`)
+    .replace(
+      /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="description" content="${safeDescAttr}" />`
+    )
+    .replace(
+      /<meta\s+name="robots"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="robots" content="${safeRobots}" />`
+    )
+    .replace(
+      /<meta\s+name="site-url"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="site-url" content="${safeOrigin}" />`
+    )
+    .replace(
+      /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
+      `<link rel="canonical" href="${safeCanonical}" />`
+    )
+    .replace(
+      /<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:title" content="${safeTitleAttr}" />`
+    )
+    .replace(
+      /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:description" content="${safeDescAttr}" />`
+    )
+    .replace(
+      /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i,
+      `<meta property="og:url" content="${safeOgUrl}" />`
+    )
+    .replace(
+      /<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="twitter:title" content="${safeTitleAttr}" />`
+    )
+    .replace(
+      /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/i,
+      `<meta name="twitter:description" content="${safeDescAttr}" />`
+    )
+    .replace(/content="\/og-image\.jpg"/g, `content="${safeOrigin}/og-image.jpg"`);
+
+  return { statusCode: info.statusCode, html };
+}
+
+function isSpaDocumentRequest(req: express.Request): boolean {
+  if (req.method !== 'GET') return false;
+  const p = req.path || '/';
+  if (
+    p.startsWith('/api') ||
+    p.startsWith('/@') ||
+    p.startsWith('/src/') ||
+    p.startsWith('/node_modules/')
+  ) {
+    return false;
+  }
+  const hasFileExtension = /\.[a-zA-Z0-9]{1,8}$/.test(p);
+  if (hasFileExtension) return false;
+  const accept = (req.headers.accept || '').toLowerCase();
+  return accept.includes('text/html') || accept.includes('*/*') || accept === '';
+}
+
 async function startServer() {
   const isDev = process.env.NODE_ENV !== 'production';
 
@@ -2870,9 +3202,29 @@ async function startServer() {
     }
   }
 
+  let viteServerInstance: {
+    middlewares: express.RequestHandler;
+    transformIndexHtml: (url: string, html: string) => Promise<string>;
+  } | null = null;
   let viteMiddlewarePromise: Promise<express.RequestHandler> | null = null;
 
   if (isDev) {
+    const devIndexPath = path.resolve(__dirname, 'index.html');
+    app.get('*', async (req, res, next) => {
+      if (!viteServerInstance || !isSpaDocumentRequest(req)) {
+        return next();
+      }
+      try {
+        const rawTemplate = fs.readFileSync(devIndexPath, 'utf8');
+        const transformed = await viteServerInstance.transformIndexHtml(req.originalUrl, rawTemplate);
+        const { statusCode, html } = injectRouteHtmlMeta(transformed, req);
+        res.status(statusCode).setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+      } catch (err) {
+        return next(err);
+      }
+    });
+
     // Register async Vite middleware pass-through before listening so routes resolve immediately without blocking port bind
     app.use((req, res, next) => {
       if (!viteMiddlewarePromise) {
@@ -2904,25 +3256,11 @@ async function startServer() {
     );
     app.get('*', (req, res) => {
       if (!cachedIndexHtml) {
-        return res.sendFile(distIndexPath);
+        const routeInfo = resolveRouteHtmlInfo(req.path || '/', resolveSeoBaseUrl(req));
+        return res.status(routeInfo.statusCode).sendFile(distIndexPath);
       }
-      const configuredSiteUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
-      const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : req.protocol;
-      const reqHost = req.get('host');
-      const liveOrigin = /^https?:\/\//i.test(configuredSiteUrl)
-        ? configuredSiteUrl
-        : reqHost
-        ? `${proto}://${reqHost}`
-        : '';
-
-      const html = liveOrigin
-        ? cachedIndexHtml
-            .replaceAll(DEFAULT_SITE_URL, liveOrigin)
-            .replace(/content="\/og-image\.jpg"/g, `content="${liveOrigin}/og-image.jpg"`)
-            .replace(/property="og:url" content="\/"/g, `property="og:url" content="${liveOrigin}/"`)
-        : cachedIndexHtml;
-
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      const { statusCode, html } = injectRouteHtmlMeta(cachedIndexHtml, req);
+      res.status(statusCode).setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(html);
     });
   }
@@ -2945,7 +3283,10 @@ async function startServer() {
           appType: 'spa',
         })
       )
-      .then((vite) => vite.middlewares as unknown as express.RequestHandler);
+      .then((vite) => {
+        viteServerInstance = vite as unknown as typeof viteServerInstance;
+        return vite.middlewares as unknown as express.RequestHandler;
+      });
     void viteMiddlewarePromise.catch((err) => {
       console.error('[Vite Middleware Init Failure]', err);
     });
