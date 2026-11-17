@@ -32,11 +32,13 @@ export const ContactCtaSection: React.FC = () => {
   const [attachment, setAttachment] = useState<UploadedFileRecord | null>(null);
   const [uploaderKey, setUploaderKey] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [submittedQuoteId, setSubmittedQuoteId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const handleResetInquiry = () => {
     setSubmitted(false);
+    setSubmittedQuoteId('');
     setHoneypot('');
     formOpenedAtRef.current = Date.now();
     setAttachment(null);
@@ -79,7 +81,7 @@ export const ContactCtaSection: React.FC = () => {
     setSubmitting(true);
 
     try {
-      await submitQuotation({
+      const quoteId = await submitQuotation({
         fullName: formData.fullName,
         email: formData.workEmail,
         phone: formData.phone,
@@ -108,6 +110,7 @@ export const ContactCtaSection: React.FC = () => {
         timeline: formData.timeline,
         hasAttachment: Boolean(attachment),
       });
+      setSubmittedQuoteId(quoteId || '');
       setSubmitted(true);
       showToast(dict.notifications.consultationBooked, 'success');
     } catch (err: any) {
@@ -264,6 +267,11 @@ export const ContactCtaSection: React.FC = () => {
                       `धन्यवाद, ${formData.fullName}। हमारे मुख्य सॉफ्टवेयर आर्किटेक्ट आपके विवरण की समीक्षा करेंगे और 4 व्यावसायिक घंटों के भीतर संपर्क करेंगे।`
                     )}
                   </p>
+                  {submittedQuoteId && (
+                    <div className="inline-block px-3 py-1.5 rounded bg-slate-50 border border-slate-200 text-xs text-slate-700 font-mono">
+                      {t('Reference ID:', 'संदर्भ आईडी:')} <span className="font-bold text-slate-900">{submittedQuoteId}</span>
+                    </div>
+                  )}
                   <div className="pt-4">
                     <button
                       type="button"
@@ -381,7 +389,7 @@ export const ContactCtaSection: React.FC = () => {
                         <option value="ai-solutions">{t('Enterprise AI & Autonomous Agents', 'एंटरप्राइज एआई व एजेंट्स')}</option>
                         <option value="web-platforms">{t('High-Performance Web Platform', 'उच्च प्रदर्शन वेब प्लेटफॉर्म')}</option>
                         <option value="cloud-devops">{t('Cloud DevOps & Kubernetes', 'क्लाउड डेवऑप्स व कुबेरनेट्स')}</option>
-                        <option value="api-gateway">{t('Secure API Gateway & Integration', 'सुरक्षित एपीआई गेटवे')}</option>
+                        <option value="api-integration">{t('Secure API Gateway & Integration', 'सुरक्षित एपीआई गेटवे')}</option>
                       </select>
                     </div>
 
@@ -394,7 +402,7 @@ export const ContactCtaSection: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, timeline: e.target.value })}
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
                       >
-                        <option value="urgent">{t('Urgent (< 30 Days)', 'अत्यावश्यक (< 30 दिन)')}</option>
+                        <option value="immediate">{t('Immediate (< 30 Days)', 'तत्काल (< 30 दिन)')}</option>
                         <option value="3-6-months">{t('Quarterly Sprint (2–4 Months)', '2-4 महीने')}</option>
                         <option value="strategic">{t('Enterprise Program (6+ Months)', '6+ महीने')}</option>
                       </select>

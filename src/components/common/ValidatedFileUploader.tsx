@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { UploadedFileRecord } from '../../types';
+import { getAppCheckTokenHeader } from '../../firebase/appCheck';
 import {
   UploadCloud,
   FileCheck,
@@ -154,12 +155,16 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
       setUploadProgress(70);
 
       const postUpload = async (forceRefresh: boolean) => {
-        const idToken = await currentUser.getIdToken(forceRefresh);
+        const [idToken, appCheckHeader] = await Promise.all([
+          currentUser.getIdToken(forceRefresh),
+          getAppCheckTokenHeader(),
+        ]);
         return fetch('/api/files/upload', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${idToken}`,
+            ...appCheckHeader,
           },
           body: JSON.stringify({
             fileName: file.name,
@@ -255,7 +260,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
           <label className="block text-xs font-semibold text-slate-700">
             {language === 'hi' && labelHi ? labelHi : label}
           </label>
-          <span className="text-[11px] font-mono text-slate-400">
+          <span className="text-[11px] font-mono text-slate-600">
             Max: {maxSizeMb} MB
           </span>
         </div>
@@ -331,7 +336,8 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
           <button
             type="button"
             onClick={handleRemove}
-            className="p-1.5 text-slate-400 hover:text-rose-600 rounded hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+            aria-label={t('Remove File', 'फ़ाइल हटाएं')}
+            className="p-2 text-slate-500 hover:text-rose-700 rounded hover:bg-slate-100 transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-blue-600"
             title={t('Remove File', 'फ़ाइल हटाएं')}
           >
             <X className="w-4 h-4" />
@@ -395,7 +401,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
                   `PDF, PNG, JPG, DOCX (up to ${maxSizeMb} MB)`
                 )}
               </p>
-              <div className="text-[10px] font-mono text-slate-400">
+              <div className="text-[10px] font-mono text-slate-600">
                 {storageMode === 'google_cloud_storage'
                   ? t('Encrypted Google Cloud Storage Vault · SHA-256', 'एन्क्रिप्टेड Cloud Storage वॉल्ट · SHA-256')
                   : t('Cloud Storage Vault · Magic-Byte & SHA-256 Checked', 'Cloud Storage वॉल्ट · Magic-Byte व SHA-256 सत्यापित')}

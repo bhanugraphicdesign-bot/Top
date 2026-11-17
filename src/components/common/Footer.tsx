@@ -278,19 +278,20 @@ export const Footer: React.FC = () => {
                     type="email"
                     required
                     disabled={subscribing}
+                    aria-label={t('Work email address', 'कार्य ईमेल पता')}
                     value={newsletterEmail}
                     onChange={(e) => {
                       setNewsletterEmail(e.target.value);
                       if (subscribeError) setSubscribeError('');
                     }}
                     placeholder="architect@enterprise.com"
-                    className="flex-1 min-w-0 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 disabled:opacity-60"
+                    className="flex-1 min-w-0 px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-md text-white placeholder-slate-400 focus:outline-hidden focus:border-blue-500 disabled:opacity-60"
                   />
                   <button
                     type="submit"
                     disabled={subscribing}
                     aria-label={t('Subscribe to dispatch', 'सदस्यता लें')}
-                    className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 disabled:opacity-60 rounded-md transition-colors cursor-pointer shrink-0"
+                    className="min-w-[40px] min-h-[38px] flex items-center justify-center px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 disabled:opacity-60 rounded-md transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-blue-400"
                   >
                     <Send className="w-3.5 h-3.5" />
                   </button>
@@ -300,7 +301,7 @@ export const Footer: React.FC = () => {
                     {subscribeError}
                   </div>
                 )}
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-slate-400">
                   {t('Strictly confidential. Unsubscribe at any time.', 'सख्ती से गोपनीय। किसी भी समय रद्द करें।')}
                 </div>
               </form>
@@ -309,7 +310,7 @@ export const Footer: React.FC = () => {
         </div>
 
         {/* Bottom Bar: Copyright & Compliance Signatures */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
           <div>
             © {new Date().getFullYear()} {siteContact.name}. {t('All Rights Reserved.', 'सर्वाधिकार सुरक्षित।')}
           </div>

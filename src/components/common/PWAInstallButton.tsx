@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download, Share, X } from 'lucide-react';
 import { usePWAInstall } from '../../hooks/usePWAInstall';
 import { useLanguage } from '../../context/LanguageContext';
@@ -7,6 +7,17 @@ export const PWAInstallButton: React.FC = () => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const { t } = useLanguage();
   const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+  useEffect(() => {
+    if (!showIOSGuide) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowIOSGuide(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showIOSGuide]);
 
   if (isInstalled) {
     return null;
@@ -42,6 +53,9 @@ export const PWAInstallButton: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="ios-pwa-title"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowIOSGuide(false);
+            }}
             className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 p-4"
           >
             <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 p-6 shadow-xl text-slate-900">
@@ -53,7 +67,7 @@ export const PWAInstallButton: React.FC = () => {
                   type="button"
                   onClick={() => setShowIOSGuide(false)}
                   aria-label={t('Close', 'बंद करें')}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                  className="p-2 text-slate-600 hover:text-slate-900 rounded-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                 >
                   <X className="w-4 h-4" aria-hidden="true" />
                 </button>

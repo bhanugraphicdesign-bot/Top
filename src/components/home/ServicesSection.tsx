@@ -96,48 +96,49 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
         {/* Bento Grid with Asymmetric Hierarchy */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredServices.map((service) => (
-            <div
+            <button
+              type="button"
               key={service.id}
               onClick={() => onSelectService(service)}
-              className="group bg-white rounded-xl border border-slate-200 p-6 hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between"
+              className="group bg-white rounded-xl border border-slate-200 p-6 hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between w-full text-left focus-visible:outline-2 focus-visible:outline-blue-600"
             >
-              <div>
+              <span className="block w-full">
                 {/* Header: Editorial Number & Category (Clean unboxed text) */}
-                <div className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-3 border-b border-slate-100">
+                <span className="flex items-center justify-between text-xs text-slate-500 mb-4 pb-3 border-b border-slate-100">
                   <span className="font-mono font-bold text-blue-700">
                     {service.number}. {language === 'hi' ? (service.categoryHi || service.category) : service.category}
                   </span>
-                  <div className="w-8 h-8 rounded-md bg-blue-50 group-hover:bg-blue-700 group-hover:text-white transition-colors flex items-center justify-center">
+                  <span className="w-8 h-8 rounded-md bg-blue-50 group-hover:bg-blue-700 group-hover:text-white transition-colors flex items-center justify-center shrink-0">
                     <ArrowUpRight className="w-4 h-4 text-blue-700 group-hover:text-white transition-colors" />
-                  </div>
-                </div>
+                  </span>
+                </span>
 
                 {/* Service Title */}
-                <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors mb-2.5">
+                <span className="block text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors mb-2.5">
                   {language === 'hi' ? (service.titleHi || service.title) : service.title}
-                </h3>
+                </span>
 
                 {/* Short Description */}
-                <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
+                <span className="block text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
                   {language === 'hi'
                     ? (service.shortDescHi || service.shortDesc || service.fullDesc)
                     : (service.shortDesc || service.fullDesc)}
-                </p>
-              </div>
+                </span>
+              </span>
 
-              <div>
+              <span className="block w-full">
                 {/* Metric Strip (Clean Tabular Numbers) */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                <span className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                   <span className="text-slate-500 font-medium">
                     {language === 'hi' ? (service.metricLabelHi || service.metricLabel) : service.metricLabel}
                   </span>
                   <span className="font-mono font-extrabold text-blue-700 tabular-nums">
                     {service.metric}
                   </span>
-                </div>
+                </span>
 
                 {/* Tech Pills / Tags as quiet font-mono badges */}
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="mt-3 flex flex-wrap gap-1.5">
                   {service.techStack.slice(0, 4).map((tech) => (
                     <span
                       key={tech}
@@ -147,13 +148,13 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
                     </span>
                   ))}
                   {service.techStack.length > 4 && (
-                    <span className="text-[11px] font-mono px-1.5 py-0.5 text-slate-400">
+                    <span className="text-[11px] font-mono px-1.5 py-0.5 text-slate-600">
                       +{service.techStack.length - 4}
                     </span>
                   )}
-                </div>
-              </div>
-            </div>
+                </span>
+              </span>
+            </button>
           ))}
         </div>
       </div>

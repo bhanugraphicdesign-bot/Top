@@ -3,6 +3,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { AI_SOLUTIONS } from '../../data/content';
 import { Bot, Search, FileText, TrendingUp, Check, ArrowRight, Cpu, Calculator } from 'lucide-react';
 import { OptimizedImage } from '../common/OptimizedImage';
+import { getAiArchitectureEstimate } from '../../utils/aiEstimator';
 
 interface AiSolutionsSectionProps {
   onOpenConsultation: () => void;
@@ -33,34 +34,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
     }
   };
 
-  // Derive honest architectural blueprint based on workload & volume tier
-  const getEstimation = () => {
-    let workflowApproach = t('Grounded Citation Pipeline', 'संदर्भ-सत्यापित पाइपलाइन');
-    let tierProfile = t('Standard Cloud Pod', 'मानक क्लाउड पॉड');
-    const validationMethod = t('Scoped in Discovery Pilot', 'पायलट में सत्यापित');
-    let blueprint = 'Hybrid Qdrant + Gemini 2.5 Flash + Private Cloud VPC';
-
-    if (calcWorkload === 'agents') {
-      workflowApproach = t('Stateful Tool Orchestration', 'स्टेटफुल टूल ऑर्केस्ट्रेशन');
-      blueprint = 'LangGraph State Bus + Redis + Deterministic JSON Tooling';
-    } else if (calcWorkload === 'vision') {
-      workflowApproach = t('Structured Document Parsing', 'संरचित दस्तावेज़ पार्सिंग');
-      blueprint = 'Multi-lingual OCR Engine + PyTorch + Fast Inference Pods';
-    } else if (calcWorkload === 'predictive') {
-      workflowApproach = t('Streaming Anomaly Scoring', 'स्ट्रीमिंग विसंगति स्कोरिंग');
-      blueprint = 'ClickHouse + Time-series Neural Pipeline + Grafana Hub';
-    }
-
-    if (calcScale === 'enterprise') {
-      tierProfile = t('Dedicated Multi-Node VPC', 'समर्पित मल्टी-नोड VPC');
-    } else if (calcScale === 'startup') {
-      tierProfile = t('Lean Single-Tenant Pilot', 'सिंगल-टेनेंट पायलट');
-    }
-
-    return { workflowApproach, tierProfile, validationMethod, blueprint };
-  };
-
-  const est = getEstimation();
+  const est = getAiArchitectureEstimate(calcWorkload, calcScale, t);
 
   return (
     <section id="ai-solutions" className="py-20 sm:py-28 bg-slate-50/70 border-b border-slate-200">
@@ -225,6 +199,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                     { id: 'retail', label: 'Retail & POS', labelHi: 'खुदरा व बिक्री' },
                   ].map((ind) => (
                     <button
+                      type="button"
                       key={ind.id}
                       onClick={() => setCalcIndustry(ind.id)}
                       className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors ${
@@ -251,6 +226,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                     { id: 'predictive', label: 'Predictive Anomaly Engine', labelHi: 'पूर्वानुमानित विसंगति इंजन' },
                   ].map((w) => (
                     <button
+                      type="button"
                       key={w.id}
                       onClick={() => setCalcWorkload(w.id)}
                       className={`p-2.5 rounded-md text-xs font-semibold text-left border cursor-pointer transition-colors ${
@@ -276,6 +252,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                     { id: 'enterprise', label: '1M+ high-load queries', labelHi: '1M+ उच्च-लोड क्वेरी' },
                   ].map((s) => (
                     <button
+                      type="button"
                       key={s.id}
                       onClick={() => setCalcScale(s.id)}
                       className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors ${
@@ -301,6 +278,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
               </div>
 
               <button
+                type="button"
                 onClick={onOpenConsultation}
                 className="w-full flex items-center justify-center gap-2 px-5 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all cursor-pointer shadow-xs"
               >

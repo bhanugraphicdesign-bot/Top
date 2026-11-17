@@ -135,51 +135,51 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
         </div>
 
         {/* 4-Column Full-Width Enterprise KPI Strip Below Hero */}
-        <div className="mt-12 sm:mt-14 pt-8 border-t border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 lg:gap-8">
+        <div className="mt-12 sm:mt-14 pt-8 border-t border-slate-200 grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-5 sm:gap-6 lg:gap-8">
           <div>
-            <div className="text-2xl sm:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
+            <div className="text-xl sm:text-3xl lg:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
               HA Design
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
               {t('Target Availability Architecture', 'लक्षित उच्च उपलब्धता डिज़ाइन')}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <div className="text-xs text-slate-600 mt-0.5">
               {t('Custom SLA defined per SOW', 'प्रोजेक्ट अनुबंध के अनुसार निर्धारित')}
             </div>
           </div>
 
           <div>
-            <div className="text-2xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
+            <div className="text-xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
               Modular Core
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
               {t('Low-Latency Service Design', 'कम लेटेंसी सर्विस डिज़ाइन')}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <div className="text-xs text-slate-600 mt-0.5">
               {t('Idempotent API & event-driven workers', 'आइडमपोटेंट एपीआई और इवेंट-ड्रिवेन वर्कर्स')}
             </div>
           </div>
 
           <div>
-            <div className="text-2xl sm:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
+            <div className="text-xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 font-mono tabular-nums">
               Client IP
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
               {t('Full Code & IP Handover', 'पूर्ण कोड व आईपी स्वामित्व')}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <div className="text-xs text-slate-600 mt-0.5">
               {t('Zero proprietary vendor lock-in', 'शून्य मालिकाना वेंडर लॉक-इन')}
             </div>
           </div>
 
           <div>
-            <div className="text-2xl sm:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
+            <div className="text-xl sm:text-3xl lg:text-4xl font-extrabold text-blue-700 font-mono tabular-nums">
               Web + AI
             </div>
             <div className="text-xs font-semibold text-slate-900 mt-1">
               {t('Full-Stack Delivery Focus', 'फुल-स्टैक डिलीवरी फोकस')}
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
+            <div className="text-xs text-slate-600 mt-0.5">
               {t('Android, Cloud & Sovereign AI', 'एंड्रॉइड, क्लाउड एवं एआई')}
             </div>
           </div>

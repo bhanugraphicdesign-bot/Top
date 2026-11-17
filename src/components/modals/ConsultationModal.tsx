@@ -72,6 +72,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [attachment, setAttachment] = useState<UploadedFileRecord | null>(null);
   const [uploaderKey, setUploaderKey] = useState(0);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submittedQuoteId, setSubmittedQuoteId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -83,12 +84,47 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     trackConsultationFormOpen(domain);
     setErrorMessage('');
     setIsSubmitted(false);
+    setSubmittedQuoteId('');
     setFormData((prev) => ({
       ...prev,
       service: domain,
       brief: demoContext ? `Requesting demo & walkthrough for: ${demoContext}` : prev.brief,
     }));
   }, [isOpen, preselectedService]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (isSubmitted) {
+          const { domain } = normalizeServiceDomain(preselectedService);
+          setIsSubmitted(false);
+          setSubmittedQuoteId('');
+          setHoneypot('');
+          formOpenedAtRef.current = Date.now();
+          setFormData({
+            fullName: '',
+            email: '',
+            phone: '',
+            company: '',
+            service: domain,
+            timeline: '3-6-months',
+            budget: 'enterprise-custom',
+            brief: '',
+          });
+          setAttachment(null);
+          setUploaderKey((k) => k + 1);
+          setErrorMessage('');
+          onClose();
+        } else {
+          setErrorMessage('');
+          onClose();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isSubmitted, preselectedService, onClose]);
 
   if (!isOpen) return null;
 
@@ -123,7 +159,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setSubmitting(true);
 
     try {
-      await submitQuotation({
+      const quoteId = await submitQuotation({
         fullName: formData.fullName,
         email: formData.email,
         phone: formData.phone,
@@ -151,6 +187,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         timeline: formData.timeline,
         hasAttachment: Boolean(attachment),
       });
+      setSubmittedQuoteId(quoteId || '');
       setIsSubmitted(true);
       showToast(dict.notifications.consultationBooked, 'success');
     } catch (err: any) {
@@ -170,6 +207,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const handleReset = () => {
     const { domain } = normalizeServiceDomain(preselectedService);
     setIsSubmitted(false);
+    setSubmittedQuoteId('');
     setHoneypot('');
     formOpenedAtRef.current = Date.now();
     setFormData({
@@ -216,8 +254,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         >
           {/* Close button */}
           <button
+            type="button"
             onClick={handleClose}
-            className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+            className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -239,8 +278,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               </p>
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 max-w-md mx-auto text-xs text-slate-600 text-left space-y-1.5">
                 <p>
-                  <span className="font-bold text-slate-900">{t('Reference ID:', 'संदर्भ आईडी:')}</span> PWS-
-                  {Math.floor(100000 + Math.random() * 900000)}
+                  <span className="font-bold text-slate-900">{t('Reference ID:', 'संदर्भ आईडी:')}</span>{' '}
+                  <span className="font-mono">{submittedQuoteId || 'PWS-CONFIRMED'}</span>
                 </p>
                 <p>
                   <span className="font-bold text-slate-900">{t('Direct Line:', 'सीधा संपर्क:')}</span> {siteContact.phone}
@@ -419,8 +458,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   onRemove={() => setAttachment(null)}
                 />
 
-                <div className="flex items-center justify-between pt-2">
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+                  <div className="flex items-center gap-2 text-xs text-slate-600">
                     <Shield className="w-3.5 h-3.5 text-blue-700 shrink-0" />
                     <span>{t('Strict NDA protected', 'सख्त एनडीए द्वारा सुरक्षित')}</span>
                   </div>

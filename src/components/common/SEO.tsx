@@ -43,6 +43,7 @@ export interface SEOProps {
   ogType?: 'website' | 'article' | 'product';
   canonicalPath?: string;
   noIndex?: boolean;
+  structuredDataExtra?: Record<string, unknown>[];
 }
 
 function upsertMetaTag(attrName: 'name' | 'property', attrValue: string, content: string): void {
@@ -66,6 +67,84 @@ function upsertCanonicalLink(href: string): void {
     document.head.appendChild(link);
   }
   link.setAttribute('href', href);
+}
+
+function upsertStructuredData(
+  origin: string,
+  canonicalUrl: string,
+  pageTitle: string,
+  extraNodes?: Record<string, unknown>[]
+): void {
+  if (typeof document === 'undefined') return;
+  let script = document.head.querySelector<HTMLScriptElement>('#pws-structured-data');
+  if (!script) {
+    script =
+      document.head.querySelector<HTMLScriptElement>('script[type="application/ld+json"]') ||
+      document.createElement('script');
+    script.id = 'pws-structured-data';
+    script.type = 'application/ld+json';
+    if (!script.parentNode) {
+      document.head.appendChild(script);
+    }
+  }
+
+  const graph: Record<string, unknown>[] = [
+    {
+      '@type': 'Organization',
+      name: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
+      alternateName: SITE_NAME,
+      url: `${origin}/`,
+      logo: `${origin}/apple-touch-icon.png`,
+      image: `${origin}${DEFAULT_OG_IMAGE_PATH}`,
+      email: 'powerusertopuser@gmail.com',
+      telephone: '+91-8305457717',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Fingeshwar Borid Mod, Rajim Subdistrict',
+        addressLocality: 'Gariaband District',
+        addressRegion: 'Chhattisgarh',
+        postalCode: '493992',
+        addressCountry: 'IN',
+      },
+    },
+    {
+      '@type': 'WebApplication',
+      name: SITE_NAME,
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web, Android',
+      url: `${origin}/`,
+      image: `${origin}${DEFAULT_OG_IMAGE_PATH}`,
+    },
+  ];
+
+  if (canonicalUrl !== `${origin}/`) {
+    graph.push({
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: SITE_NAME,
+          item: `${origin}/`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: pageTitle,
+          item: canonicalUrl,
+        },
+      ],
+    });
+  }
+
+  if (Array.isArray(extraNodes) && extraNodes.length > 0) {
+    graph.push(...extraNodes);
+  }
+
+  script.textContent = JSON.stringify({
+    '@context': 'https://schema.org',
+    '@graph': graph,
+  });
 }
 
 export function resolveOgImageUrl(imageSrc?: string): string {
@@ -110,6 +189,7 @@ export function useSEO(props: SEOProps): void {
     ogType = 'website',
     canonicalPath,
     noIndex = false,
+    structuredDataExtra,
   } = props;
 
   useEffect(() => {
@@ -127,12 +207,14 @@ export function useSEO(props: SEOProps): void {
       ? ogImageAltHi || ogImageAltEn || resolvedOgTitle
       : ogImageAltEn || resolvedOgTitle;
 
+    const resolvedOrigin = resolveSiteOrigin();
     const resolvedImage = resolveOgImageUrl(ogImage);
     const resolvedUrl = resolveCanonicalUrl(canonicalPath);
 
     document.title = resolvedTitle;
     document.documentElement.lang = language;
 
+    upsertMetaTag('name', 'site-url', resolvedOrigin);
     upsertMetaTag('name', 'description', resolvedDescription);
     upsertMetaTag('name', 'robots', noIndex ? 'noindex, nofollow' : 'index, follow');
 
@@ -159,6 +241,7 @@ export function useSEO(props: SEOProps): void {
     upsertMetaTag('name', 'twitter:image:alt', resolvedImageAlt);
 
     upsertCanonicalLink(resolvedUrl);
+    upsertStructuredData(resolvedOrigin, resolvedUrl, resolvedTitle, structuredDataExtra);
   }, [
     language,
     titleEn,
@@ -175,6 +258,7 @@ export function useSEO(props: SEOProps): void {
     ogType,
     canonicalPath,
     noIndex,
+    structuredDataExtra,
   ]);
 }
 
@@ -185,8 +269,8 @@ export const SEO: React.FC<SEOProps> = (props) => {
 
 export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
   home: {
-    titleEn: 'POWER WEB STUDIO AI — Bhanu Ram Bariha Digital Technologies | Enterprise Software & AI',
-    titleHi: 'POWER WEB STUDIO AI — भानु राम बरीहा डिजिटल टेक्नोलॉजीज | एंटरप्राइज सॉफ्टवेयर एवं एआई',
+    titleEn: 'POWER WEB STUDIO AI — Enterprise Software & AI Suite',
+    titleHi: 'POWER WEB STUDIO AI — एंटरप्राइज सॉफ्टवेयर एवं एआई सुइट',
     descriptionEn:
       'Bhanu Ram Bariha Digital Technologies (POWER WEB STUDIO AI): Mission-critical distributed backends, native Android apps, and sovereign AI systems.',
     descriptionHi:
@@ -211,8 +295,8 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/services',
   },
   'ai-solutions': {
-    titleEn: 'Sovereign Enterprise AI & RAG Solutions | POWER WEB STUDIO AI',
-    titleHi: 'सॉवरेन एंटरप्राइज एआई और आरएजी (RAG) समाधान | POWER WEB STUDIO AI',
+    titleEn: 'Sovereign Enterprise AI & RAG | POWER WEB STUDIO AI',
+    titleHi: 'सॉवरेन एंटरप्राइज एआई और आरएजी | POWER WEB STUDIO AI',
     descriptionEn:
       'Privacy-first private LLMs, verified RAG pipelines, workflow automation, and sovereign AI orchestration by Bhanu Ram Bariha Digital Technologies.',
     descriptionHi:
@@ -221,8 +305,8 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/ai-solutions',
   },
   'android-portfolio': {
-    titleEn: 'Native Android App Portfolio & Enterprise APK Showcase | POWER WEB STUDIO AI',
-    titleHi: 'नेटिव एंड्रॉइड ऐप पोर्टफोलियो और एंटरप्राइज एपीके शोकेस | POWER WEB STUDIO AI',
+    titleEn: 'Native Android Apps Portfolio | POWER WEB STUDIO AI',
+    titleHi: 'नेटिव एंड्रॉइड ऐप पोर्टफोलियो | POWER WEB STUDIO AI',
     descriptionEn:
       'Production-hardened Kotlin, Jetpack Compose, and offline-first SQLiteCipher Android applications engineered for FinTech, GovTech, EdTech, and Commerce.',
     descriptionHi:
@@ -231,8 +315,8 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/android-portfolio',
   },
   'app-detail': {
-    titleEn: 'Android Application Architecture & Specifications | POWER WEB STUDIO AI',
-    titleHi: 'एंड्रॉइड एप्लिकेशन आर्किटेक्चर और तकनीकी विवरण | POWER WEB STUDIO AI',
+    titleEn: 'Android App Architecture & Specs | POWER WEB STUDIO AI',
+    titleHi: 'एंड्रॉइड ऐप आर्किटेक्चर व विवरण | POWER WEB STUDIO AI',
     descriptionEn:
       'Detailed mobile architecture, offline SQLite synchronization, performance benchmarks, and changelog for our enterprise Android platforms.',
     descriptionHi:
@@ -241,8 +325,8 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/android-portfolio',
   },
   process: {
-    titleEn: '6-Phase Enterprise Engineering Methodology | POWER WEB STUDIO AI',
-    titleHi: '6-चरणीय एंटरप्राइज सॉफ्टवेयर इंजीनियरिंग प्रक्रिया | POWER WEB STUDIO AI',
+    titleEn: '6-Phase Engineering Methodology | POWER WEB STUDIO AI',
+    titleHi: '6-चरणीय इंजीनियरिंग कार्यप्रणाली | POWER WEB STUDIO AI',
     descriptionEn:
       'Zero-surprise delivery from architectural blueprint and SOW scoping to automated testing, security hardening, and production SLA governance.',
     descriptionHi:
@@ -251,8 +335,8 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/process',
   },
   about: {
-    titleEn: 'About Bhanu Ram Bariha Digital Technologies | POWER WEB STUDIO AI',
-    titleHi: 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज के बारे में | POWER WEB STUDIO AI',
+    titleEn: 'About Bhanu Ram Bariha Digital | POWER WEB STUDIO AI',
+    titleHi: 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज | POWER WEB STUDIO AI',
     descriptionEn:
       'Registered Indian digital engineering firm founded by Bhanu Ram Bariha delivering enterprise software, native Android ecosystems, and sovereign AI.',
     descriptionHi:
@@ -261,8 +345,8 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/about',
   },
   contact: {
-    titleEn: 'Book Architecture Consultation & Contact | POWER WEB STUDIO AI',
-    titleHi: 'तकनीकी परामर्श और संपर्क करें | POWER WEB STUDIO AI',
+    titleEn: 'Consultation & Contact | POWER WEB STUDIO AI',
+    titleHi: 'तकनीकी परामर्श और संपर्क | POWER WEB STUDIO AI',
     descriptionEn:
       'Schedule an engineering consultation or submit an RFP/RFQ with Bhanu Ram Bariha Digital Technologies in Chhattisgarh, India.',
     descriptionHi:
@@ -271,7 +355,7 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/contact',
   },
   blog: {
-    titleEn: 'Architectural Dispatch & Engineering Blog | POWER WEB STUDIO AI',
+    titleEn: 'Engineering Blog & Research | POWER WEB STUDIO AI',
     titleHi: 'तकनीकी शोध और इंजीनियरिंग ब्लॉग | POWER WEB STUDIO AI',
     descriptionEn:
       'Technical insights written by Principal Architects on distributed systems, offline Kotlin Android engineering, and sovereign enterprise AI.',
@@ -290,7 +374,7 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     canonicalPath: '/privacy',
   },
   terms: {
-    titleEn: 'Terms of Engagement & Legal Notice | POWER WEB STUDIO AI',
+    titleEn: 'Terms & Conditions of Service | POWER WEB STUDIO AI',
     titleHi: 'सेवा की शर्तें और कानूनी सूचना | POWER WEB STUDIO AI',
     descriptionEn:
       'Master service terms, intellectual property rights, and SOW engagement guidelines for POWER WEB STUDIO AI clients.',
@@ -307,11 +391,19 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     noIndex: true,
   },
   'admin-dashboard': {
-    titleEn: 'Executive Admin Control Console | POWER WEB STUDIO AI',
+    titleEn: 'Executive Admin Console | POWER WEB STUDIO AI',
     titleHi: 'प्रशासनिक नियंत्रण कंसोल | POWER WEB STUDIO AI',
     descriptionEn: 'Authorized administrator portal for operations, RBAC governance, and lead management.',
     descriptionHi: 'संचालन, भूमिका प्रबंधन और अनुरोध नियंत्रण के लिए अधिकृत एडमिन कंसोल।',
     canonicalPath: '/admin-dashboard',
+    noIndex: true,
+  },
+  'not-found': {
+    titleEn: 'Page Not Found (404) | POWER WEB STUDIO AI',
+    titleHi: 'पृष्ठ नहीं मिला (404) | POWER WEB STUDIO AI',
+    descriptionEn: 'The requested enterprise page or resource could not be found.',
+    descriptionHi: 'अनुरोधित पृष्ठ या संसाधन उपलब्ध नहीं है।',
+    canonicalPath: '/',
     noIndex: true,
   },
 };

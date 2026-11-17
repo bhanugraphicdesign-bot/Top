@@ -3,16 +3,17 @@ import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
 import { useAuth } from '../context/AuthContext';
-import { AppCategory } from '../types';
+import { AppCategory, AndroidApp } from '../types';
 import { Smartphone, Check, ArrowRight, ExternalLink, Search, Settings } from 'lucide-react';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
+import { AppDetailModal } from '../components/modals/AppDetailModal';
 import { OptimizedImage } from '../components/common/OptimizedImage';
 
 interface AndroidPortfolioPageProps {
   onOpenConsultation?: () => void;
 }
 
-export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOpenConsultation: _onOpenConsultation }) => {
+export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOpenConsultation }) => {
   const { language, t } = useLanguage();
   const { navigate } = useNavigation();
   const { apps } = useApps();
@@ -21,6 +22,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
   const [selectedCategory, setSelectedCategory] = useState<AppCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [previewApp, setPreviewApp] = useState<AndroidApp | null>(null);
 
   const categories: (AppCategory | 'all')[] = [
     'all',
@@ -44,12 +46,20 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
     'AI-powered Apps': { en: 'AI-powered Apps', hi: 'एआई-पावर्ड ऐप्स' },
   };
 
+  const q = searchQuery.trim().toLowerCase();
   const filteredApps = apps.filter((app) => {
     const matchesCategory = selectedCategory === 'all' || app.category === selectedCategory;
     const matchesSearch =
-      app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.tagline.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      app.techStack.some((tech) => tech.toLowerCase().includes(searchQuery.toLowerCase()));
+      !q ||
+      app.name.toLowerCase().includes(q) ||
+      (app.nameHi || '').toLowerCase().includes(q) ||
+      app.tagline.toLowerCase().includes(q) ||
+      (app.taglineHi || '').toLowerCase().includes(q) ||
+      app.description.toLowerCase().includes(q) ||
+      (app.descriptionHi || '').toLowerCase().includes(q) ||
+      app.category.toLowerCase().includes(q) ||
+      (app.categoryHi || '').toLowerCase().includes(q) ||
+      app.techStack.some((tech) => tech.toLowerCase().includes(q));
     return matchesCategory && matchesSearch;
   });
 
@@ -122,9 +132,10 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
 
           {/* Search Box */}
           <div className="relative w-full lg:w-[300px]">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
               type="text"
+              aria-label={t('Search Android applications', 'एंड्रॉइड एप्लिकेशन खोजें')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={t('Search by app name, tech, or feature...', 'ऐप नाम या फीचर से खोजें...')}
@@ -134,14 +145,14 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
         </div>
 
         {/* Apps Count indicator */}
-        <div className="flex items-center justify-between text-xs text-slate-500">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
           <span>
             {t(
               `Showing ${filteredApps.length} Android applications`,
               `${filteredApps.length} एंड्रॉइड एप्लिकेशन दिखाए जा रहे हैं`
             )}
           </span>
-          <span className="font-mono text-slate-400">Target SDK: Android 14 (API 34)</span>
+          <span className="font-mono text-slate-600">Target SDK: Android 14 (API 34)</span>
         </div>
 
         {/* 2-Column App Cards Grid */}
@@ -182,7 +193,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                 </div>
 
                 {/* Release Status Notice (Strictly Honest: Concept / Demo status) */}
-                <div className="mb-4 p-2.5 rounded-md bg-amber-50/70 border border-amber-200 flex items-center justify-between text-xs">
+                <div className="mb-4 p-2.5 rounded-md bg-amber-50/70 border border-amber-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <span className="text-slate-700 font-medium">
                     {t('Release Status:', 'रिलीज़ स्थिति:')}
                   </span>
@@ -214,7 +225,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
-                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[11px] text-white">
+                    <div className="absolute bottom-2.5 left-3 right-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-white">
                       <span>{app.architecture}</span>
                       <span className="font-mono">{app.downloadSize}</span>
                     </div>
@@ -265,19 +276,21 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {/* Concept Preview Button */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Concept Preview Button (Opens quick modal preview) */}
                     <button
-                      onClick={() => navigate('app-detail', { id: app.id })}
-                      className="px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
+                      type="button"
+                      onClick={() => setPreviewApp(app)}
+                      className="px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
                       {t('Concept Preview', 'कॉन्सेप्ट पूर्वावलोकन')}
                     </button>
 
-                    {/* App Details Button */}
+                    {/* App Details Button (Opens full page) */}
                     <button
+                      type="button"
                       onClick={() => navigate('app-detail', { id: app.id })}
-                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs"
+                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
                       <span>{t('App Details', 'ऐप विवरण')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -288,7 +301,34 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
             </div>
           ))}
         </div>
+
+        {filteredApps.length === 0 && (
+          <div className="p-10 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center space-y-3">
+            <p className="text-sm font-semibold text-slate-800">
+              {t('No Android applications matched your current search or category filter.', 'आपकी वर्तमान खोज या श्रेणी फ़िल्टर से कोई एंड्रॉइड ऐप मेल नहीं खाता।')}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedCategory('all');
+                setSearchQuery('');
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+            >
+              {t('Reset Filters', 'फ़िल्टर रीसेट करें')}
+            </button>
+          </div>
+        )}
       </div>
+
+      <AppDetailModal
+        app={previewApp}
+        onClose={() => setPreviewApp(null)}
+        onRequestApkDemo={() => {
+          setPreviewApp(null);
+          onOpenConsultation?.();
+        }}
+      />
 
       {/* Admin App Manager Modal (Verified Admin Only) */}
       {isAdmin && (

@@ -65,6 +65,15 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
     }
   }, [editingApp, isOpen]);
 
+  React.useEffect(() => {
+    if (!isOpen || !isAdmin) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isAdmin, onClose]);
+
   if (!isOpen || !isAdmin) return null;
 
   const handleStartAdd = () => {
@@ -220,6 +229,9 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
 
       <div className="min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-app-manager-modal-title"
           className="relative bg-white rounded-xl shadow-2xl max-w-3xl w-full p-6 sm:p-8 text-left border border-slate-200"
           onClick={(e) => e.stopPropagation()}
         >
@@ -230,7 +242,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
                 <Smartphone className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900">
+                <h3 id="admin-app-manager-modal-title" className="text-lg font-bold text-slate-900">
                   {t('Portfolio Architecture Admin Console', 'पोर्टफोलियो आर्किटेक्चर एडमिन कंसोल')}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -239,7 +251,9 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
               </div>
             </div>
             <button
+              type="button"
               onClick={onClose}
+              aria-label="Close modal"
               className="p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
@@ -254,6 +268,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
                 </span>
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={resetToDefaults}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
                   >
@@ -261,6 +276,7 @@ export const AdminAppManagerModal: React.FC<AdminAppManagerModalProps> = ({ isOp
                     <span>{t('Reset Defaults', 'डिफ़ॉल्ट रीसेट')}</span>
                   </button>
                   <button
+                    type="button"
                     onClick={handleStartAdd}
                     className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-2xs"
                   >

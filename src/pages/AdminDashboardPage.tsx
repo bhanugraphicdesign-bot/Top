@@ -30,6 +30,7 @@ import {
   fetchSupportTickets,
   updateSupportTicketStatus,
   addTicketResponse,
+  authenticatedFetch,
 } from '../firebase/services';
 import { SERVICES_DATA } from '../data/content';
 import { BLOG_POSTS } from '../data/blogData';
@@ -451,13 +452,14 @@ export const AdminDashboardPage: React.FC = () => {
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [creatingInvoice, setCreatingInvoice] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({
-    clientName: 'Rajiv Sengupta',
-    clientEmail: 'kalinga@enterprise.in',
-    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
-    clientGstin: '21AAACK1924L1ZZ',
-    projectName: 'Bharat Fleet ERP & Distributed Telematics',
-    milestoneTitle: 'Sprint 15 Deliverable — Edge Telemetry Reconciliation',
-    subtotal: '250000',
+    clientId: '',
+    clientName: '',
+    clientEmail: '',
+    clientCompany: '',
+    clientGstin: '',
+    projectName: '',
+    milestoneTitle: '',
+    subtotal: '',
   });
 
   // Modals state
@@ -486,12 +488,63 @@ export const AdminDashboardPage: React.FC = () => {
   } | null>(null);
   const [deletingItem, setDeletingItem] = useState(false);
 
+  useEffect(() => {
+    if (!pendingDelete) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !deletingItem) {
+        setPendingDelete(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pendingDelete, deletingItem]);
+
   // Data collections state (demo arrays are loaded ONLY when isDemoSandbox is active)
   const [usersList, setUsersList] = useState<any[]>([]);
-  const [leads, setLeads] = useState<InboundLead[]>([]);
+  const [demoLeads, setDemoLeads] = useState<InboundLead[]>([]);
   const [projectsList, setProjectsList] = useState<any[]>([]);
   const [servicesList, setServicesList] = useState<ServiceItem[]>(SERVICES_DATA);
   const [quotationsList, setQuotationsList] = useState<any[]>([]);
+
+  // Live Inbound Leads derived from Cloud Firestore quotations (when isRealAdmin) vs local demo leads
+  const leads: InboundLead[] = useMemo(() => {
+    if (isDemoSandbox) {
+      return demoLeads;
+    }
+    return quotationsList.map((q: any) => {
+      const qStatus = String(q.status || 'pending').toLowerCase();
+      const status: InboundLead['status'] =
+        qStatus === 'approved' || qStatus === 'accepted'
+          ? 'Converted'
+          : qStatus === 'reviewed'
+          ? 'In Discussion'
+          : qStatus === 'under_review'
+          ? 'Contacted'
+          : 'New';
+      const statusHi: InboundLead['statusHi'] =
+        status === 'Converted'
+          ? 'सफल ग्राहक'
+          : status === 'In Discussion'
+          ? 'चर्चा जारी'
+          : status === 'Contacted'
+          ? 'संपर्क स्थापित'
+          : 'नई पूछताछ';
+      return {
+        id: q.id,
+        name: q.clientName || 'Enterprise Inquiry',
+        company: q.company || 'Enterprise Organization',
+        email: q.clientEmail || '',
+        phone: q.phone || 'Not provided',
+        service: q.serviceType || 'Custom Software Architecture',
+        serviceHi: q.serviceType || 'कस्टम सॉफ्टवेयर आर्किटेक्चर',
+        budget: q.estimatedBudget || 'Enterprise SOW',
+        receivedDate: q.createdAt || new Date().toISOString(),
+        status,
+        statusHi,
+        notes: q.brief || 'Submitted via enterprise scoping form.',
+      };
+    });
+  }, [isDemoSandbox, demoLeads, quotationsList]);
   const [blogList, setBlogList] = useState<BlogPost[]>(BLOG_POSTS);
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'settings'>('articles');
 
@@ -563,12 +616,22 @@ export const AdminDashboardPage: React.FC = () => {
     if (isDemoSandbox) {
       setInvoicesList(DEMO_ADMIN_INVOICES);
       setUsersList(DEMO_ADMIN_USERS);
-      setLeads(DEMO_ADMIN_LEADS);
+      setDemoLeads(DEMO_ADMIN_LEADS);
       setProjectsList(DEMO_ADMIN_PROJECTS);
       setQuotationsList(DEMO_ADMIN_QUOTATIONS);
       setAuditLogs(DEMO_ADMIN_AUDIT_LOGS);
       setTicketsList(DEMO_ADMIN_TICKETS);
       setActiveTicketIdForReply('TKT-2026-904');
+      setInvoiceForm({
+        clientId: 'kalinga-client-id',
+        clientName: 'Rajiv Sengupta',
+        clientEmail: 'kalinga@enterprise.in',
+        clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
+        clientGstin: '21AAACK1924L1ZZ',
+        projectName: 'Bharat Fleet ERP & Distributed Telematics',
+        milestoneTitle: 'Sprint 15 Deliverable — Edge Telemetry Reconciliation',
+        subtotal: '250000',
+      });
       return () => {
         isCancelled = true;
       };
@@ -579,7 +642,7 @@ export const AdminDashboardPage: React.FC = () => {
       setTelemetryData(null);
       setInvoicesList([]);
       setUsersList([]);
-      setLeads([]);
+      setDemoLeads([]);
       setProjectsList([]);
       setQuotationsList([]);
       setAuditLogs([]);
@@ -590,26 +653,31 @@ export const AdminDashboardPage: React.FC = () => {
       };
     }
 
-    setLeads([]);
+    setDemoLeads([]);
+    setInvoiceForm((prev) =>
+      prev.clientEmail === 'kalinga@enterprise.in'
+        ? {
+            clientId: '',
+            clientName: '',
+            clientEmail: '',
+            clientCompany: '',
+            clientGstin: '',
+            projectName: '',
+            milestoneTitle: '',
+            subtotal: '',
+          }
+        : prev
+    );
     setLoadingInvoices(true);
-    currentUser
-      .getIdToken()
-      .then((idToken) => {
-        if (isCancelled) return null;
-        fetch('/api/telemetry', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => {
-            if (!isCancelled && data) setTelemetryData(data);
-          })
-          .catch(() => {});
-
-        return fetch('/api/invoices', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
+    authenticatedFetch('/api/telemetry', {}, { user: currentUser })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isCancelled && data) setTelemetryData(data);
       })
-      .then((res) => (res && res.ok ? res.json() : null))
+      .catch(() => {});
+
+    authenticatedFetch('/api/invoices', {}, { user: currentUser })
+      .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!isCancelled) {
           setInvoicesList(data && Array.isArray(data.invoices) ? data.invoices : []);
@@ -673,6 +741,17 @@ export const AdminDashboardPage: React.FC = () => {
       isCancelled = true;
     };
   }, [currentUser, isRealAdmin, isDemoSandbox]);
+
+  useEffect(() => {
+    if (!pendingDelete) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !deletingItem) {
+        setPendingDelete(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [pendingDelete, deletingItem]);
 
   // Enter / Exit Demo Admin Mode
   const handleToggleDemoMode = (enable: boolean) => {
@@ -752,58 +831,90 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  // Leads: cycle status
-  const handleToggleLeadStatus = (leadId: string) => {
-    setLeads((prev) =>
-      prev.map((lead) => {
-        if (lead.id === leadId) {
-          const nextStatus =
-            lead.status === 'New'
-              ? 'Contacted'
-              : lead.status === 'Contacted'
-              ? 'In Discussion'
-              : lead.status === 'In Discussion'
-              ? 'Converted'
-              : 'Contacted';
+  // Leads: cycle status (persists to Firestore quotations collection when isRealAdmin)
+  const handleToggleLeadStatus = async (leadId: string) => {
+    if (isDemoSandbox) {
+      setDemoLeads((prev) =>
+        prev.map((lead) => {
+          if (lead.id === leadId) {
+            const nextStatus =
+              lead.status === 'New'
+                ? 'Contacted'
+                : lead.status === 'Contacted'
+                ? 'In Discussion'
+                : lead.status === 'In Discussion'
+                ? 'Converted'
+                : 'Contacted';
 
-          const nextStatusHi =
-            nextStatus === 'Contacted'
-              ? 'संपर्क स्थापित'
-              : nextStatus === 'In Discussion'
-              ? 'चर्चा जारी'
-              : nextStatus === 'Converted'
-              ? 'सफल ग्राहक'
-              : 'संपर्क स्थापित';
+            const nextStatusHi =
+              nextStatus === 'Contacted'
+                ? 'संपर्क स्थापित'
+                : nextStatus === 'In Discussion'
+                ? 'चर्चा जारी'
+                : nextStatus === 'Converted'
+                ? 'सफल ग्राहक'
+                : 'संपर्क स्थापित';
 
-          return {
-            ...lead,
-            status: nextStatus,
-            statusHi: nextStatusHi,
-          };
-        }
-        return lead;
-      })
-    );
-    showToast(
-      language === 'hi' ? 'लीड की स्थिति सफलतापूर्वक अपडेट की गई।' : 'Lead pipeline status updated.',
-      'success'
-    );
+            return {
+              ...lead,
+              status: nextStatus,
+              statusHi: nextStatusHi,
+            };
+          }
+          return lead;
+        })
+      );
+      showToast(
+        language === 'hi' ? 'लीड की स्थिति सफलतापूर्वक अपडेट की गई।' : 'Lead pipeline status updated.',
+        'info'
+      );
+      return;
+    }
+
+    const currentQuote = quotationsList.find((q) => q.id === leadId);
+    const currentStatus = String(currentQuote?.status || 'pending').toLowerCase();
+    const nextQuoteStatus =
+      currentStatus === 'pending'
+        ? 'under_review'
+        : currentStatus === 'under_review'
+        ? 'reviewed'
+        : currentStatus === 'reviewed'
+        ? 'approved'
+        : 'under_review';
+
+    try {
+      await updateQuotationStatus(leadId, nextQuoteStatus);
+      setQuotationsList((prev) =>
+        prev.map((q) => (q.id === leadId ? { ...q, status: nextQuoteStatus } : q))
+      );
+      showToast(
+        language === 'hi' ? 'लीड की स्थिति Cloud Firestore में अपडेट की गई।' : 'Lead status persisted to Cloud Firestore.',
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to update lead status', 'alert');
+    }
   };
 
-  // Convert Lead to Quotation
+  // Convert Lead to Quotation (opens existing Firestore quotation in live mode or scaffolds new quote in demo)
   const handleConvertLeadToQuote = (lead: InboundLead) => {
-    setEditingQuotation({
-      id: `quote-${Date.now()}`,
-      clientName: lead.name,
-      clientEmail: lead.email,
-      phone: lead.phone,
-      company: lead.company,
-      serviceType: lead.service,
-      estimatedBudget: lead.budget,
-      timeline: '3-6 Months',
-      brief: lead.notes,
-      status: 'pending',
-    });
+    const existingQuote = !isDemoSandbox ? quotationsList.find((q) => q.id === lead.id) : null;
+    if (existingQuote) {
+      setEditingQuotation(existingQuote);
+    } else {
+      setEditingQuotation({
+        id: `quote-${Date.now()}`,
+        clientName: lead.name,
+        clientEmail: lead.email,
+        phone: lead.phone,
+        company: lead.company,
+        serviceType: lead.service,
+        estimatedBudget: lead.budget,
+        timeline: '3-6 Months',
+        brief: lead.notes,
+        status: 'pending',
+      });
+    }
     setQuotationModalOpen(true);
   };
 
@@ -957,11 +1068,10 @@ export const AdminDashboardPage: React.FC = () => {
       return;
     }
     try {
-      const headers: Record<string, string> = {};
-      if (currentUser && url.startsWith('/api/files/')) {
-        headers['Authorization'] = `Bearer ${await currentUser.getIdToken()}`;
-      }
-      const res = await fetch(url, { headers });
+      const res =
+        currentUser && url.startsWith('/api/files/')
+          ? await authenticatedFetch(url, {}, { user: currentUser })
+          : await fetch(url);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `Download failed (HTTP ${res.status})`);
@@ -1033,18 +1143,21 @@ export const AdminDashboardPage: React.FC = () => {
 
     setCreatingInvoice(true);
     try {
-      const idToken = await currentUser.getIdToken();
-      const res = await fetch('/api/invoices/generate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
+      const res = await authenticatedFetch(
+        '/api/invoices/generate',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            ...invoiceForm,
+            clientId: invoiceForm.clientId.trim() || undefined,
+            subtotal: numericSubtotal,
+          }),
         },
-        body: JSON.stringify({
-          ...invoiceForm,
-          subtotal: numericSubtotal,
-        }),
-      });
+        { user: currentUser }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data.error || `Invoice generation failed (HTTP ${res.status})`);
@@ -1259,7 +1372,7 @@ export const AdminDashboardPage: React.FC = () => {
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-6 text-white">
         <div className="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl text-center space-y-6">
           <div className="w-16 h-16 rounded-2xl bg-blue-900/40 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
-            <ShieldAlert className="w-8 h-8 text-blue-400 animate-pulse" />
+            <ShieldAlert className="w-8 h-8 text-blue-400" />
           </div>
 
           <div className="space-y-2">
@@ -1278,19 +1391,19 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-left space-y-2 text-xs font-mono text-slate-300">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">{t('Required Privilege:', 'आवश्यक अधिकार:')}</span>
-              <span className="text-emerald-400 font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-400">{t('Required Privilege:', 'आवश्यक अधिकार:')}</span>
+              <span className="text-emerald-400 font-bold text-right">
                 {t('Firestore user_roles (admin)', 'Firestore user_roles (एडमिन)')}
               </span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">{t('Security Policy:', 'सुरक्षा नीति:')}</span>
-              <span className="text-blue-400 font-bold">Role-Based RBAC / Default Deny</span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-400">{t('Security Policy:', 'सुरक्षा नीति:')}</span>
+              <span className="text-blue-400 font-bold text-right">Role-Based RBAC / Default Deny</span>
             </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">{t('Current Session:', 'वर्तमान सत्र:')}</span>
-              <span className="text-amber-400 font-bold">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-400">{t('Current Session:', 'वर्तमान सत्र:')}</span>
+              <span className="text-amber-400 font-bold break-all text-right">
                 {currentUser ? currentUser.email : t('Unauthenticated Guest', 'अनाधिकृत आगंतुक')}
               </span>
             </div>
@@ -1417,8 +1530,8 @@ export const AdminDashboardPage: React.FC = () => {
             </div>
           </div>
 
-          {/* 6 High-Density Enterprise Metrics */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
+          {/* 7 High-Density Enterprise Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 mt-6">
             <div className="p-3.5 bg-slate-800/60 rounded-lg border border-slate-800">
               <div className="flex items-center gap-1.5 text-slate-400 text-[11px] font-semibold uppercase tracking-wider mb-1">
                 <Users className="w-3.5 h-3.5 text-blue-400" />
@@ -1484,11 +1597,14 @@ export const AdminDashboardPage: React.FC = () => {
           </div>
         </div>
 
-        {/* 9 Primary Tabs Navigation */}
-        <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto pb-1 scrollbar-thin">
+        {/* 10 Primary Tabs Navigation */}
+        <div role="tablist" aria-label={t('Admin Console Sections', 'एडमिन कंसोल अनुभाग')} className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto pb-1 scrollbar-thin">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'customers'}
             onClick={() => setActiveTab('customers')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'customers'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1496,14 +1612,17 @@ export const AdminDashboardPage: React.FC = () => {
           >
             <Users className="w-4 h-4" />
             <span>{t('Customers & Users', 'ग्राहक एवं उपयोगकर्ता')}</span>
-            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
               {usersList.length}
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'leads'}
             onClick={() => setActiveTab('leads')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'leads'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1517,8 +1636,11 @@ export const AdminDashboardPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'projects'}
             onClick={() => setActiveTab('projects')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'projects'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1526,14 +1648,17 @@ export const AdminDashboardPage: React.FC = () => {
           >
             <Layers className="w-4 h-4" />
             <span>{t('Client Projects', 'क्लाइंट प्रोजेक्ट्स')}</span>
-            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
               {projectsList.length}
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'services'}
             onClick={() => setActiveTab('services')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'services'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1541,14 +1666,17 @@ export const AdminDashboardPage: React.FC = () => {
           >
             <Cpu className="w-4 h-4" />
             <span>{t('Service Catalog', 'सेवा कैटलॉग')}</span>
-            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
               {servicesList.length}
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'portfolio'}
             onClick={() => setActiveTab('portfolio')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'portfolio'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1556,14 +1684,17 @@ export const AdminDashboardPage: React.FC = () => {
           >
             <Smartphone className="w-4 h-4" />
             <span>{t('Android Apps', 'एंड्रॉइड पोर्टफोलियो')}</span>
-            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
               {apps.length}
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'quotations'}
             onClick={() => setActiveTab('quotations')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'quotations'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1577,8 +1708,11 @@ export const AdminDashboardPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'billing'}
             onClick={() => setActiveTab('billing')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'billing'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1592,8 +1726,11 @@ export const AdminDashboardPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'support'}
             onClick={() => setActiveTab('support')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'support'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1607,8 +1744,11 @@ export const AdminDashboardPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'content'}
             onClick={() => setActiveTab('content')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'content'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1619,8 +1759,11 @@ export const AdminDashboardPage: React.FC = () => {
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'telemetry'}
             onClick={() => setActiveTab('telemetry')}
-            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'telemetry'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1649,7 +1792,7 @@ export const AdminDashboardPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 <div className="relative max-w-xs w-full">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                   <input
@@ -1798,7 +1941,7 @@ export const AdminDashboardPage: React.FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
                       onClick={() => handleToggleLeadStatus(lead.id)}
                       className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-md transition-colors cursor-pointer"
@@ -1839,7 +1982,7 @@ export const AdminDashboardPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                 <div className="relative max-w-xs w-full">
                   <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
                   <input
@@ -2028,11 +2171,11 @@ export const AdminDashboardPage: React.FC = () => {
                     </ul>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
                     <span className="font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
                       {svc.metric} ({svc.metricLabel})
                     </span>
-                    <div className="flex gap-1">
+                    <div className="flex flex-wrap gap-1">
                       {(svc.techStack || []).slice(0, 3).map((tech) => (
                         <span key={tech} className="text-[10px] font-mono px-1.5 py-0.2 bg-slate-100 rounded text-slate-600">
                           {tech}
@@ -2354,6 +2497,49 @@ export const AdminDashboardPage: React.FC = () => {
               </div>
 
               <form onSubmit={handleGenerateInvoice} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {t('Select Registered Client (Auto-Fills UID & Email)', 'पंजीकृत ग्राहक चुनें (UID स्वतः भरें)')}
+                  </label>
+                  <select
+                    value={invoiceForm.clientId}
+                    onChange={(e) => {
+                      const selectedUid = e.target.value;
+                      const matched = usersList.find((u) => u.uid === selectedUid);
+                      if (matched) {
+                        setInvoiceForm((prev) => ({
+                          ...prev,
+                          clientId: matched.uid,
+                          clientName: matched.displayName || prev.clientName,
+                          clientEmail: matched.email || prev.clientEmail,
+                          clientCompany: matched.companyName || prev.clientCompany,
+                        }));
+                      } else {
+                        setInvoiceForm((prev) => ({ ...prev, clientId: selectedUid }));
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white focus:border-blue-700 focus:outline-none"
+                  >
+                    <option value="">{t('-- Select Client Account or Enter Manually Below --', '-- ग्राहक खाता चुनें या नीचे विवरण दर्ज करें --')}</option>
+                    {usersList.map((u) => (
+                      <option key={u.uid} value={u.uid}>
+                        {u.displayName || 'User'} ({u.email}) — {u.uid.slice(0, 8)}...
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {t('Target Client Firebase UID (Optional / Resolved via Email)', 'ग्राहक Firebase UID (वैकल्पिक)')}
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Firebase Auth UID"
+                    value={invoiceForm.clientId}
+                    onChange={(e) => setInvoiceForm({ ...invoiceForm, clientId: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
+                  />
+                </div>
                 <div>
                   <label className="block font-semibold text-slate-700 mb-1">{t('Client Name', 'ग्राहक का नाम')}</label>
                   <input
@@ -2726,7 +2912,7 @@ export const AdminDashboardPage: React.FC = () => {
                           </div>
                         )}
 
-                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-100">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 font-mono pt-1 border-t border-slate-100">
                           <div>
                             {t('Client:', 'क्लाइंट:')}{' '}
                             <span className="text-slate-700 font-bold">{ticket.clientEmail || 'enterprise-client'}</span>
@@ -2784,7 +2970,7 @@ export const AdminDashboardPage: React.FC = () => {
                                             : t('Enterprise Client', 'एंटरप्राइज क्लाइंट')}
                                         </span>
                                       </div>
-                                      <span className="text-[11px] font-mono text-slate-400">
+                                      <span className="text-[11px] font-mono text-slate-600">
                                         {formatDate(resp.timestamp)}
                                       </span>
                                     </div>
@@ -2951,7 +3137,7 @@ export const AdminDashboardPage: React.FC = () => {
                           <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
                             {language === 'hi' && post.categoryHi ? post.categoryHi : post.category}
                           </span>
-                          <span className="text-xs text-slate-400 font-mono">
+                          <span className="text-xs text-slate-600 font-mono">
                             {language === 'hi' && post.dateHi ? post.dateHi : post.date} · {post.readTime}
                           </span>
                         </div>
@@ -3153,7 +3339,7 @@ export const AdminDashboardPage: React.FC = () => {
                       serverHealth?.database?.status === 'CONNECTED' ? 'text-emerald-400' : 'text-amber-400'
                     }`}
                   >
-                    {serverHealth?.database?.status || 'CHECKING'} · 17 Collections
+                    {serverHealth?.database?.status || 'CHECKING'} · 21 Collections
                     {serverHealth?.database?.probeLatencyMs != null ? ` (${serverHealth.database.probeLatencyMs}ms)` : ''}
                   </span>
                 </div>
@@ -3204,7 +3390,7 @@ export const AdminDashboardPage: React.FC = () => {
                       <p className="text-slate-600 font-sans text-xs">{log.details}</p>
                     </div>
 
-                    <div className="text-right text-[11px] text-slate-400 shrink-0">
+                    <div className="text-left sm:text-right text-[11px] text-slate-600 shrink-0">
                       <div>{log.actorEmail}</div>
                       <div>{log.timestamp ? formatDate(log.timestamp) : 'Recent'}</div>
                     </div>
@@ -3334,6 +3520,11 @@ export const AdminDashboardPage: React.FC = () => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="admin-delete-confirm-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deletingItem) {
+              setPendingDelete(null);
+            }
+          }}
         >
           <div className="bg-white border border-slate-200 rounded-xl max-w-md w-full p-6 shadow-2xl space-y-4">
             <div className="flex items-start gap-3">

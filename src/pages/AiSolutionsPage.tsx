@@ -3,6 +3,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { AI_SOLUTIONS } from '../data/content';
 import { Check, ArrowRight, Calculator } from 'lucide-react';
 import { OptimizedImage } from '../components/common/OptimizedImage';
+import { getAiArchitectureEstimate } from '../utils/aiEstimator';
 
 interface AiSolutionsPageProps {
   onOpenConsultation: () => void;
@@ -15,33 +16,7 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
   const [calcWorkload, setCalcWorkload] = useState('rag');
   const [calcScale, setCalcScale] = useState('mid');
 
-  const getEstimation = () => {
-    let workflowApproach = t('Grounded Citation Pipeline', 'संदर्भ-सत्यापित पाइपलाइन');
-    let tierProfile = t('Standard Cloud Pod', 'मानक क्लाउड पॉड');
-    const validationMethod = t('Scoped in Discovery Pilot', 'पायलट में सत्यापित');
-    let blueprint = 'Hybrid Qdrant + Gemini 2.5 Flash + Private Cloud VPC';
-
-    if (calcWorkload === 'agents') {
-      workflowApproach = t('Stateful Tool Orchestration', 'स्टेटफुल टूल ऑर्केस्ट्रेशन');
-      blueprint = 'LangGraph State Bus + Redis + Deterministic JSON Tooling';
-    } else if (calcWorkload === 'vision') {
-      workflowApproach = t('Structured Document Parsing', 'संरचित दस्तावेज़ पार्सिंग');
-      blueprint = 'Multi-lingual OCR Engine + PyTorch + Fast Inference Pods';
-    } else if (calcWorkload === 'predictive') {
-      workflowApproach = t('Streaming Anomaly Scoring', 'स्ट्रीमिंग विसंगति स्कोरिंग');
-      blueprint = 'ClickHouse + Time-series Neural Pipeline + Grafana Hub';
-    }
-
-    if (calcScale === 'enterprise') {
-      tierProfile = t('Dedicated Multi-Node VPC', 'समर्पित मल्टी-नोड VPC');
-    } else if (calcScale === 'startup') {
-      tierProfile = t('Lean Single-Tenant Pilot', 'सिंगल-टेनेंट पायलट');
-    }
-
-    return { workflowApproach, tierProfile, validationMethod, blueprint };
-  };
-
-  const est = getEstimation();
+  const est = getAiArchitectureEstimate(calcWorkload, calcScale, t);
 
   return (
     <div className="bg-white">
@@ -198,9 +173,10 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                     { id: 'retail', label: 'Retail & POS', labelHi: 'खुदरा व बिक्री' },
                   ].map((ind) => (
                     <button
+                      type="button"
                       key={ind.id}
                       onClick={() => setCalcIndustry(ind.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         calcIndustry === ind.id
                           ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -224,9 +200,10 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                     { id: 'predictive', label: 'Predictive Anomaly Engine', labelHi: 'पूर्वानुमानित विसंगति इंजन' },
                   ].map((w) => (
                     <button
+                      type="button"
                       key={w.id}
                       onClick={() => setCalcWorkload(w.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-left border cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-md text-xs font-semibold text-left border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         calcWorkload === w.id
                           ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -242,16 +219,17 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   3. {t('Monthly Processing Scale', 'मासिक प्रसंस्करण का पैमाना')}
                 </label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { id: 'startup', label: '<10K requests/mo', labelHi: '<10,000 अनुरोध/माह' },
                     { id: 'mid', label: '10K - 250K requests/mo', labelHi: '10K - 250K अनुरोध/माह' },
                     { id: 'enterprise', label: '1M+ high-load requests', labelHi: '1M+ उच्च-लोड अनुरोध' },
                   ].map((s) => (
                     <button
+                      type="button"
                       key={s.id}
                       onClick={() => setCalcScale(s.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         calcScale === s.id
                           ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -267,14 +245,15 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                 <div className="text-xs font-bold text-slate-900">
                   {t('Recommended Production Topology:', 'अनुशंसित प्रोडक्शन टोपोलॉजी:')}
                 </div>
-                <div className="text-xs font-mono text-blue-700 font-semibold">
+                <div className="text-xs font-mono text-blue-700 font-semibold break-words">
                   {est.blueprint}
                 </div>
               </div>
 
               <button
+                type="button"
                 onClick={onOpenConsultation}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all cursor-pointer shadow-xs"
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all cursor-pointer shadow-xs focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <span>{t('Deploy This Enterprise AI Architecture', 'यह एंटरप्राइज एआई आर्किटेक्चर तैनात करें')}</span>
                 <ArrowRight className="w-4 h-4" />

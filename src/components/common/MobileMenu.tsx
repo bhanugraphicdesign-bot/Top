@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -21,6 +21,17 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   const { currentRoute, navigate } = useNavigation();
   const { currentUser, isAdmin, openAuthModal, logout } = useAuth();
   const siteContact = useSiteContact();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -72,8 +83,9 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             <span className="text-blue-700">POWER</span> WEB STUDIO <span className="text-blue-600">AI</span>
           </span>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-500 hover:text-slate-800 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center p-2 text-slate-600 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
             aria-label="Close menu"
           >
             <X className="w-5 h-5" />
@@ -166,16 +178,18 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             </div>
           </div>
 
-          <p className="text-xs font-bold text-slate-400 tracking-wider mb-2">
+          <p className="text-xs font-bold text-slate-600 tracking-wider mb-2">
             {t('PLATFORM DIRECTORY', 'प्लेटफ़ॉर्म निर्देशिका')}
           </p>
 
           <div className="space-y-0.5">
             {pages.map((p) => (
               <button
+                type="button"
                 key={p.route}
+                aria-current={currentRoute === p.route ? 'page' : undefined}
                 onClick={() => handleRouteClick(p.route)}
-                className={`w-full text-left py-2.5 px-3 rounded-md text-sm font-semibold transition-colors cursor-pointer ${
+                className={`w-full text-left py-2.5 px-3 rounded-md text-sm font-semibold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 ${
                   currentRoute === p.route
                     ? 'bg-blue-50 text-blue-700 font-bold'
                     : 'text-slate-800 hover:bg-slate-50 hover:text-blue-700'

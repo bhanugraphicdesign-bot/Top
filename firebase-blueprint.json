@@ -9,6 +9,8 @@
         "email": { "type": "string", "format": "email" },
         "displayName": { "type": "string" },
         "photoURL": { "type": "string" },
+        "companyName": { "type": "string" },
+        "phone": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "lastLoginAt": { "type": "string", "format": "date-time" }
       },
@@ -130,9 +132,13 @@
         "id": { "type": "string" },
         "clientName": { "type": "string" },
         "clientEmail": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "company": { "type": "string" },
         "serviceType": { "type": "string" },
         "estimatedBudget": { "type": "string" },
         "timeline": { "type": "string" },
+        "brief": { "type": "string" },
+        "attachment": { "type": "object" },
         "status": { "type": "string", "enum": ["pending", "reviewed", "accepted", "rejected", "under_review", "approved"] },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -145,14 +151,31 @@
       "properties": {
         "id": { "type": "string" },
         "invoiceNumber": { "type": "string" },
+        "projectId": { "type": "string" },
+        "projectName": { "type": "string" },
         "clientId": { "type": "string" },
+        "clientName": { "type": "string" },
+        "clientEmail": { "type": "string", "format": "email" },
+        "clientCompany": { "type": "string" },
+        "clientGstin": { "type": "string" },
+        "milestoneTitle": { "type": "string" },
+        "subtotal": { "type": "number" },
+        "gstRate": { "type": "number" },
+        "gstAmount": { "type": "number" },
+        "totalAmount": { "type": "number" },
         "amount": { "type": "number" },
         "taxAmount": { "type": "number" },
+        "hsnSac": { "type": "string" },
         "status": { "type": "string", "enum": ["draft", "issued", "paid", "overdue"] },
         "dueDate": { "type": "string", "format": "date" },
-        "issuedAt": { "type": "string", "format": "date-time" }
+        "dueAt": { "type": "string", "format": "date-time" },
+        "issuedAt": { "type": "string", "format": "date-time" },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "paymentTxnId": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "verificationHash": { "type": "string" }
       },
-      "required": ["id", "invoiceNumber", "clientId", "amount", "status"]
+      "required": ["id", "invoiceNumber", "clientId", "status"]
     },
     "Payment": {
       "title": "Payment",
@@ -192,7 +215,13 @@
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "title": { "type": "string" },
+        "titleHi": { "type": "string" },
         "body": { "type": "string" },
+        "message": { "type": "string" },
+        "messageHi": { "type": "string" },
+        "type": { "type": "string" },
+        "linkRoute": { "type": "string" },
+        "linkParams": { "type": "object" },
         "read": { "type": "boolean" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -205,14 +234,17 @@
       "properties": {
         "id": { "type": "string" },
         "actorId": { "type": "string" },
+        "actorUid": { "type": "string" },
         "actorEmail": { "type": "string" },
         "action": { "type": "string" },
         "resource": { "type": "string" },
+        "outcome": { "type": "string" },
         "details": { "type": "string" },
+        "ip": { "type": "string" },
         "ipAddress": { "type": "string" },
         "timestamp": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "actorId", "action", "resource", "timestamp"]
+      "required": ["id", "action", "resource", "timestamp"]
     },
     "SiteSetting": {
       "title": "SiteSetting",
@@ -221,7 +253,11 @@
       "properties": {
         "id": { "type": "string" },
         "companyName": { "type": "string" },
+        "brandName": { "type": "string" },
+        "companyRegistration": { "type": "string" },
         "cin": { "type": "string" },
+        "slaTarget": { "type": "string" },
+        "headquarters": { "type": "string" },
         "maintenanceMode": { "type": "boolean" },
         "contactEmail": { "type": "string" },
         "contactPhone": { "type": "string" },
@@ -308,6 +344,16 @@
         "used": { "type": "boolean" }
       },
       "required": ["orderId", "invoiceId", "amount", "uid", "used"]
+    },
+    "TestDoc": {
+      "title": "TestDoc",
+      "description": "Restricted admin-only diagnostic probe document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id"]
     }
   },
   "firestore": {
@@ -390,6 +436,10 @@
     "/payment_intents/{intentId}": {
       "schema": "PaymentIntent",
       "description": "Single-use server-tracked payment intents"
+    },
+    "/test/{docId}": {
+      "schema": "TestDoc",
+      "description": "Admin-only rules verification test documents"
     }
   }
 }

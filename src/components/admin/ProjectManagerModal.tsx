@@ -94,6 +94,15 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
     }
   }, [project, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSelectRegisteredClient = (selectedUid: string) => {
@@ -165,11 +174,16 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
 
       <div className="min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="project-manager-modal-title"
           className="relative bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 text-left border border-slate-200"
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close modal"
             className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -180,7 +194,7 @@ export const ProjectManagerModal: React.FC<ProjectModalProps> = ({
               <Layers className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-950">
+              <h3 id="project-manager-modal-title" className="text-lg font-bold text-slate-950">
                 {project ? t('Edit Software Project', 'परियोजना संपादित करें') : t('Create New Enterprise Project', 'नई एंटरप्राइज परियोजना बनाएं')}
               </h3>
               <p className="text-xs text-slate-500">

@@ -54,7 +54,7 @@ export const ContactPage: React.FC = () => {
               {siteContact.location}
             </p>
             {siteContact.companyRegistration && (
-              <p className="text-[11px] font-mono text-slate-400 pt-1">
+              <p className="text-[11px] font-mono text-slate-600 pt-1">
                 {siteContact.companyRegistration}
               </p>
             )}

@@ -88,9 +88,10 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
         <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 rounded-lg border border-slate-200 w-fit max-w-full">
           {categories.map((cat) => (
             <button
+              type="button"
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap ${
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 ${
                 activeCategory === cat.id
                   ? 'bg-blue-700 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
@@ -128,8 +129,9 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                     </span>
                   </div>
                   <button
+                    type="button"
                     onClick={() => onSelectService(service)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs"
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs focus-visible:outline-2 focus-visible:outline-blue-600"
                   >
                     <span>{t('View Full Specs', 'पूर्ण विवरण देखें')}</span>
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -179,8 +181,9 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                 </div>
 
                 <button
+                  type="button"
                   onClick={onOpenConsultation}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-900 cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 hover:text-blue-900 cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 rounded-sm"
                 >
                   <span>{t('Schedule Scoping Call', 'परामर्श सत्र बुक करें')}</span>
                   <ArrowRight className="w-3.5 h-3.5" />
@@ -188,6 +191,20 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
               </div>
             </div>
           ))}
+          {filtered.length === 0 && (
+            <div className="p-10 rounded-xl border border-dashed border-slate-300 bg-slate-50 text-center space-y-3">
+              <p className="text-sm font-semibold text-slate-800">
+                {t('No services matched the selected category filter.', 'चयनित श्रेणी फ़िल्टर से कोई सेवा मेल नहीं खाती।')}
+              </p>
+              <button
+                type="button"
+                onClick={() => setActiveCategory('all')}
+                className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+              >
+                {t('Show All Services', 'सभी सेवाएं दिखाएं')}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

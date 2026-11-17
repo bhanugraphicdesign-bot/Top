@@ -61,15 +61,16 @@ export const AndroidPortfolioSection: React.FC<AndroidPortfolioSectionProps> = (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {displayApps.map((app: AndroidApp, index: number) => (
                 <button
+                  type="button"
                   key={app.id}
                   onClick={() => setActiveAppIndex(index)}
-                  className={`p-3 rounded-lg text-left transition-all cursor-pointer border ${
+                  className={`p-3 rounded-lg text-left transition-all cursor-pointer border focus-visible:outline-2 focus-visible:outline-blue-600 ${
                     activeAppIndex === index
                       ? 'bg-blue-50 border-blue-600 shadow-xs ring-1 ring-blue-600'
                       : 'bg-white border-slate-200 hover:bg-slate-50'
                   }`}
                 >
-                  <div className="text-[11px] font-bold text-slate-400 font-mono">
+                  <div className="text-[11px] font-bold text-slate-600 font-mono">
                     0{index + 1}
                   </div>
                   <div className="text-xs font-bold text-slate-900 truncate mt-1">

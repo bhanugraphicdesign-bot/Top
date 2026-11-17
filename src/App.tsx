@@ -138,6 +138,42 @@ function MainApp() {
         return <ClientDashboardPage />;
       case 'admin-dashboard':
         return <AdminDashboardPage />;
+      case 'not-found':
+        return (
+          <section className="py-24 sm:py-32 bg-slate-50 border-b border-slate-200">
+            <div className="max-w-2xl mx-auto px-4 sm:px-6 text-center space-y-6">
+              <div className="inline-block px-3 py-1 rounded bg-blue-50 border border-blue-200 text-xs font-mono font-bold text-blue-700">
+                HTTP 404 · {language === 'hi' ? 'पृष्ठ उपलब्ध नहीं' : 'RESOURCE NOT FOUND'}
+              </div>
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight">
+                {language === 'hi'
+                  ? 'क्षमा करें, अनुरोधित पृष्ठ नहीं मिला'
+                  : 'Page Not Found'}
+              </h1>
+              <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
+                {language === 'hi'
+                  ? 'आप जिस URL तक पहुँचने का प्रयास कर रहे हैं वह या तो स्थानांतरित हो गया है या मौजूद नहीं है।'
+                  : 'The URL path you requested does not match an active platform route.'}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate('home')}
+                  className="px-5 py-2.5 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  {language === 'hi' ? 'मुख्य पृष्ठ पर जाएं' : 'Return to Home'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('services')}
+                  className="px-5 py-2.5 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
+                >
+                  {language === 'hi' ? 'सेवाएं देखें' : 'Explore Services'}
+                </button>
+              </div>
+            </div>
+          </section>
+        );
       case 'home':
       default:
         return (

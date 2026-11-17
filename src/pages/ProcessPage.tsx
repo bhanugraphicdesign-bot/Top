@@ -110,7 +110,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
                   </div>
                 </div>
 
-                <span className="text-xs font-mono font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-md border border-slate-200 self-start sm:self-auto">
+                <span className="text-xs font-mono font-bold text-slate-600 bg-slate-50 px-3 py-1 rounded-md border border-slate-200 self-start sm:self-auto">
                   Phase {step.number} of 06
                 </span>
               </div>

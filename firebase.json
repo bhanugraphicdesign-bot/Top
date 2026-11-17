@@ -1,0 +1,18 @@
+{
+  "firestore": {
+    "database": "ai-studio-powerwebstudioai-4b6a19ad-e6d7-4bd0-a968-9c08eb07a897",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "ui": {
+      "enabled": true
+    }
+  }
+}

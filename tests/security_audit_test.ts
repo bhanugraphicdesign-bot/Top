@@ -432,6 +432,181 @@ async function runSecurityTests() {
       rejectedWeakSecret ? 'PASS' : 'FAIL',
       `paymentSecretConfigured=${healthJson?.security?.paymentSecretConfigured}; paymentSecretValid=${healthJson?.environmentValidation?.paymentSecretValid}; trustProxyHops=${healthJson?.security?.trustProxyHops}; cspStrictProd=${healthJson?.security?.cspStrictScriptSrcInProd}`
     );
+    // SEC-05 additions checked below in SEC-13 as well
+    // SEC-12: App Check Invalid Token Rejection (403) + Missing Token Enforced Rejection When Enabled
+    try {
+      const invalidAppCheckRes = await fetch(`${SERVER_BASE}/api/quotations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Firebase-AppCheck': 'forged.invalid.appcheck.token',
+        },
+        body: JSON.stringify({
+          fullName: 'PenTest User',
+          email: 'pentest@example.com',
+          serviceType: 'Enterprise Web',
+        }),
+      });
+      const invalidAppCheckJson: any = await invalidAppCheckRes.json().catch(() => ({}));
+
+      // Also spawn an isolated server with ENFORCE_APP_CHECK=true to verify missing tokens are never silently bypassed
+      const appCheckPort = 3099;
+      const appCheckBase = `http://127.0.0.1:${appCheckPort}`;
+      const appCheckProc = spawn('node', ['server.ts'], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          NODE_ENV: 'production',
+          PORT: String(appCheckPort),
+          ENFORCE_APP_CHECK: 'true',
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      let acReady = false;
+      for (let i = 0; i < 20; i++) {
+        try {
+          const r = await fetch(`${appCheckBase}/api/health`);
+          if (r.ok) {
+            acReady = true;
+            break;
+          }
+        } catch {
+          // Wait for boot
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+      let missingRejected = false;
+      let missingStatus = 0;
+      try {
+        if (acReady) {
+          const missingAcRes = await fetch(`${appCheckBase}/api/quotations`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fullName: 'PenTest Missing AC',
+              email: 'pentest@example.com',
+              serviceType: 'Enterprise Web',
+            }),
+          });
+          missingStatus = missingAcRes.status;
+          missingRejected = missingAcRes.status === 403 || missingAcRes.status === 503;
+        }
+      } finally {
+        appCheckProc.kill('SIGTERM');
+      }
+
+      const sec12Ok =
+        (invalidAppCheckRes.status === 403 || invalidAppCheckRes.status === 503) &&
+        missingRejected;
+      record(
+        'SEC-12',
+        'App Check rejects invalid X-Firebase-AppCheck headers and never silently bypasses missing tokens when enforced',
+        sec12Ok ? 'PASS' : 'FAIL',
+        `Invalid header HTTP ${invalidAppCheckRes.status} (${invalidAppCheckJson?.code || 'rejected'}); Enforced missing token HTTP ${missingStatus}`
+      );
+    } catch (err: any) {
+      record('SEC-12', 'App Check enforcement & invalid token rejection', 'FAIL', err.message);
+    }
+
+    // SEC-13: CSRF Non-JSON Form Blocking (415), CORS credentials:false, File CSP Sandbox & Firestore Rules Poisoning Guards
+    try {
+      const [csrfFormRes, corsOptionsRes] = await Promise.all([
+        fetch(`${SERVER_BASE}/api/quotations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'fullName=Evil+Form&email=csrf@example.com',
+        }),
+        fetch(`${SERVER_BASE}/api/health`, {
+          headers: { Origin: 'http://localhost:3000' },
+        }),
+      ]);
+      const allowCredentials = corsOptionsRes.headers.get('access-control-allow-credentials');
+      const rules = fs.readFileSync(path.resolve(process.cwd(), 'firestore.rules'), 'utf8');
+      const serverTs = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf8');
+
+      const rulesGuardsOk =
+        rules.includes("data.email == request.auth.token.email") &&
+        rules.includes("incoming.updatedAt == request.time || incoming.updatedAt is timestamp") &&
+        rules.includes("request.resource.data.userId == resource.data.userId") &&
+        rules.includes("linkParams.size() <= 10");
+      const downloadSandboxOk = serverTs.includes("default-src 'none'; sandbox");
+      const paymentAntiFakeOk =
+        serverTs.includes('PAYMENT_FAKE_SETTLEMENT_BLOCKED') &&
+        serverTs.includes('TXN_') &&
+        serverTs.includes('PAYMENT_WEBHOOK_SECRET');
+
+      const sec13Ok =
+        csrfFormRes.status === 415 &&
+        allowCredentials !== 'true' &&
+        rulesGuardsOk &&
+        downloadSandboxOk &&
+        paymentAntiFakeOk;
+
+      record(
+        'SEC-13',
+        'Non-JSON CSRF blocked (415), CORS credentials disabled, download CSP sandbox active, anti-fake payment & rules poisoning guards verified',
+        sec13Ok ? 'PASS' : 'FAIL',
+        `CSRF form HTTP ${csrfFormRes.status}; ACAC=${allowCredentials || 'omitted'}; rulesGuards=${rulesGuardsOk}; downloadSandbox=${downloadSandboxOk}; paymentAntiFake=${paymentAntiFakeOk}`
+      );
+    } catch (err: any) {
+      record('SEC-13', 'CSRF/CORS/Rules/Payment hardening probe', 'FAIL', err.message);
+    }
+
+    // SEC-14: Expired JWT & alg:none JWT Rejection (401) + Frontend Secret Scan
+    try {
+      const algNoneHeader = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+      const expiredPayload = Buffer.from(
+        JSON.stringify({
+          aud: 'turnkey-invention-70z9n',
+          iss: 'https://securetoken.google.com/turnkey-invention-70z9n',
+          sub: 'expired-user-1',
+          email: 'user@example.com',
+          exp: Math.floor(Date.now() / 1000) - 3600,
+          iat: Math.floor(Date.now() / 1000) - 7200,
+        })
+      ).toString('base64url');
+      const algNoneJwt = `${algNoneHeader}.${expiredPayload}.`;
+      const expiredRsHeader = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'expired-kid' })).toString('base64url');
+      const expiredRsJwt = `${expiredRsHeader}.${expiredPayload}.bad_sig`;
+
+      const [rNone, rExpired] = await Promise.all([
+        fetch(`${SERVER_BASE}/api/invoices`, { headers: { Authorization: `Bearer ${algNoneJwt}` } }),
+        fetch(`${SERVER_BASE}/api/invoices`, { headers: { Authorization: `Bearer ${expiredRsJwt}` } }),
+      ]);
+
+      const scanTargets = ['src', 'public'];
+      const secretPatterns = [
+        /-----BEGIN PRIVATE KEY-----/,
+        /PAYMENT_SECRET\s*=\s*['"][^'"]+['"]/,
+        /FIREBASE_SERVICE_ACCOUNT_JSON\s*=\s*['"][^'"]+['"]/,
+        /AIzaSy[0-9A-Za-z_-]{33}.*PRIVATE/s,
+      ];
+      let secretLeakFound = false;
+      const walkScan = (dir: string) => {
+        if (!fs.existsSync(dir)) return;
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          if (entry.isDirectory()) walkScan(full);
+          else if (/\.(ts|tsx|js|jsx|json|html)$/i.test(entry.name)) {
+            const txt = fs.readFileSync(full, 'utf8');
+            if (secretPatterns.some((re) => re.test(txt))) {
+              secretLeakFound = true;
+            }
+          }
+        }
+      };
+      scanTargets.forEach((d) => walkScan(path.resolve(process.cwd(), d)));
+
+      const sec14Ok = rNone.status === 401 && rExpired.status === 401 && !secretLeakFound;
+      record(
+        'SEC-14',
+        'alg:none and expired JWTs rejected with 401 and zero secrets found in frontend src/ or public/',
+        sec14Ok ? 'PASS' : 'FAIL',
+        `alg:none HTTP ${rNone.status}; expired JWT HTTP ${rExpired.status}; secretLeakFound=${secretLeakFound}`
+      );
+    } catch (err: any) {
+      record('SEC-14', 'JWT edge cases & secret scan', 'FAIL', err.message);
+    }
   } catch (err: any) {
     record('SEC-09', 'Production proxy & XFF spoofing protection', 'FAIL', err.message);
     record('SEC-10', 'Production CSP verification', 'FAIL', err.message);

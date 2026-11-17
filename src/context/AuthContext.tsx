@@ -14,6 +14,7 @@ import {
   syncUserAccount,
   fetchUserRole,
   logAuditEvent,
+  authenticatedFetch,
 } from '../firebase/services';
 
 interface AuthContextType {
@@ -82,10 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           if (!resolvedAdmin) {
             try {
-              const idToken = await user.getIdToken();
-              const statusRes = await fetch('/api/auth/status', {
-                headers: { Authorization: `Bearer ${idToken}` },
-              });
+              const statusRes = await authenticatedFetch('/api/auth/status', {}, { user });
               if (statusRes.ok) {
                 const statusData = await statusRes.json();
                 resolvedAdmin = statusData?.isAdmin === true;

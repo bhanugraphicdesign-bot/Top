@@ -13,7 +13,8 @@ export type PageRoute =
   | 'privacy'
   | 'terms'
   | 'client-dashboard'
-  | 'admin-dashboard';
+  | 'admin-dashboard'
+  | 'not-found';
 
 export type AppCategory =
   | 'Business Apps'

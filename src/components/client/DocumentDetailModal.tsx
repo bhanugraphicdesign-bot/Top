@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { X, ShieldCheck, Download, CheckCircle2 } from 'lucide-react';
 
@@ -13,10 +13,12 @@ export interface EnterpriseDocument {
   statusHi: string;
   fileSize: string;
   sha256: string;
-  format: 'PDF' | 'APK' | 'ZIP' | 'DEED';
+  format: 'PDF' | 'APK' | 'ZIP' | 'DEED' | 'DOCX' | 'PNG' | 'JPG';
   signatories: string[];
   description: string;
   descriptionHi: string;
+  downloadUrl?: string;
+  fileName?: string;
 }
 
 interface DocumentDetailModalProps {
@@ -34,6 +36,15 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
 }) => {
   const { language, t, formatDate } = useLanguage();
 
+  useEffect(() => {
+    if (!isOpen || !document) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, document, onClose]);
+
   if (!isOpen || !document) return null;
 
   return (
@@ -46,12 +57,17 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
 
       <div className="min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="document-detail-modal-title"
           className="relative bg-white rounded-xl shadow-2xl max-w-xl w-full p-6 text-left border border-slate-200"
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            type="button"
             onClick={onClose}
-            className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+            aria-label="Close modal"
+            className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
           >
             <X className="w-5 h-5" />
           </button>
@@ -69,7 +85,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
                   {language === 'hi' ? document.statusHi : document.status}
                 </span>
               </div>
-              <h3 className="text-lg font-bold text-slate-950 mt-1">
+              <h3 id="document-detail-modal-title" className="text-lg font-bold text-slate-950 mt-1">
                 {language === 'hi' ? document.titleHi : document.title}
               </h3>
             </div>
@@ -80,16 +96,16 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
               {language === 'hi' ? document.descriptionHi : document.description}
             </p>
 
-            <div className="grid grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200">
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 bg-white p-3 rounded-lg border border-slate-200">
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block">
                   {t('Execution Date', 'निष्पादन तिथि')}
                 </span>
                 <span className="font-bold text-slate-900">{formatDate(document.executedDate)}</span>
               </div>
 
               <div>
-                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block">
                   {t('Legal Classification', 'कानूनी वर्गीकरण')}
                 </span>
                 <span className="font-bold text-slate-900">
@@ -99,7 +115,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
             </div>
 
             <div>
-              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+              <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wider block mb-1">
                 {t('Authorized Signatories & Attestation', 'अधिकृत हस्ताक्षरकर्ता एवं अनुप्रमाणन')}
               </span>
               <div className="space-y-1">
@@ -124,7 +140,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-4 mt-4 border-t border-slate-100">
+          <div className="flex flex-wrap items-center justify-end gap-2 pt-4 mt-4 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}

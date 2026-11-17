@@ -77,6 +77,15 @@ export const ServiceManagerModal: React.FC<ServiceModalProps> = ({
     }
   }, [service, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,11 +149,16 @@ export const ServiceManagerModal: React.FC<ServiceModalProps> = ({
 
       <div className="min-h-full flex items-center justify-center p-4 sm:p-6 text-center">
         <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="service-manager-modal-title"
           className="relative bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 text-left border border-slate-200"
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            type="button"
             onClick={onClose}
+            aria-label="Close modal"
             className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -155,7 +169,7 @@ export const ServiceManagerModal: React.FC<ServiceModalProps> = ({
               <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-slate-950">
+              <h3 id="service-manager-modal-title" className="text-lg font-bold text-slate-950">
                 {service ? t('Edit Technology Service', 'प्रौद्योगिकी सेवा संपादित करें') : t('Add Technology Service', 'नई प्रौद्योगिकी सेवा जोड़ें')}
               </h3>
               <p className="text-xs text-slate-500">

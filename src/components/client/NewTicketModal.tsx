@@ -58,6 +58,17 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
     }
   }, [isOpen, defaultProjectCode]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,9 +171,10 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+            className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
           >
             <X className="w-5 h-5" />
           </button>

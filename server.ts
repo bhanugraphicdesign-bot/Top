@@ -208,6 +208,11 @@ const PAYMENT_SECRET = HAS_EXPLICIT_PAYMENT_SECRET
   ? RAW_PAYMENT_SECRET
   : EPHEMERAL_PAYMENT_SECRET;
 
+const RAW_PAYMENT_WEBHOOK_SECRET = (process.env.PAYMENT_WEBHOOK_SECRET || '').trim();
+const HAS_PAYMENT_WEBHOOK_SECRET =
+  RAW_PAYMENT_WEBHOOK_SECRET.length >= 32 &&
+  !PAYMENT_SECRET_PLACEHOLDER_RE.test(RAW_PAYMENT_WEBHOOK_SECRET);
+
 if (HAS_WEAK_OR_PLACEHOLDER_PAYMENT_SECRET) {
   console.warn(
     '[Security Warning] Configured PAYMENT_SECRET rejected (must be >= 32 characters and non-placeholder). Payment endpoints remain disabled in optional mode.'
@@ -341,16 +346,31 @@ app.use(
       }
     },
     methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck'],
-    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck', 'X-Payment-Gateway-Signature'],
+    credentials: false,
     maxAge: 600,
   })
 );
 
+function requireJsonContentType(
+  req: express.Request,
+  res: express.Response,
+  next: express.NextFunction
+) {
+  if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+    if (!req.is('application/json')) {
+      return res.status(415).json({
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+        error: 'Requests must use Content-Type: application/json.',
+      });
+    }
+  }
+  return next();
+}
+
 // Route-scoped body limits: 15mb for base64 file uploads, strict 1mb everywhere else
 app.use('/api/files/upload', express.json({ limit: '15mb' }));
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* =========================================================================
    CLOUD FIRESTORE AUDIT LOGGING & SAFE DTO HELPERS (NO LOCAL DISK WRITES)
@@ -661,7 +681,7 @@ async function verifyFirebaseBearerToken(
       typeof payload.iat !== 'number' ||
       payload.iat > nowSec + 300 ||
       typeof payload.sub !== 'string' ||
-      payload.sub.length === 0
+      !SAFE_ID_REGEX.test(payload.sub)
     ) {
       return null;
     }
@@ -969,24 +989,13 @@ function rateLimiter(req: express.Request, res: express.Response, next: express.
 async function verifyAppCheckForForm(
   req: express.Request,
   res: express.Response,
-  scope: 'inquiry' | 'newsletter'
+  scope: 'inquiry' | 'newsletter' | 'upload' | 'audit' | 'payment'
 ): Promise<boolean> {
   const token = (req.header('x-firebase-appcheck') || '').trim();
   const lang = resolveRequestedLanguage(req);
   const mustEnforce = HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK;
 
-  if (!mustEnforce) {
-    if (token && adminApp) {
-      try {
-        await getAppCheck(adminApp).verifyToken(token);
-      } catch (err) {
-        console.warn(`[AppCheck Notice] Optional ${scope} token verification failed:`, err);
-      }
-    }
-    return true;
-  }
-
-  if (ENFORCE_APP_CHECK && (!HAS_RECAPTCHA_SITE_KEY || !adminApp)) {
+  if (mustEnforce && !adminApp) {
     const errorEn = 'App Check enforcement is enabled, but server App Check verification is not configured.';
     const errorHi = 'App Check सुरक्षा सक्षम है, लेकिन सर्वर पर App Check सत्यापन कॉन्फ़िगर नहीं है।';
     res.status(503).json({
@@ -998,7 +1007,11 @@ async function verifyAppCheckForForm(
     return false;
   }
 
+  // Missing token is rejected when enforced; allowed only in pre-config advisory mode
   if (!token) {
+    if (!mustEnforce) {
+      return true;
+    }
     const errorEn = 'App Check verification token is missing. Please reload the page and try again.';
     const errorHi = 'App Check सत्यापन टोकन अनुपस्थित है। कृपया पृष्ठ रीलोड करें और पुनः प्रयास करें।';
     res.status(403).json({
@@ -1010,12 +1023,14 @@ async function verifyAppCheckForForm(
     return false;
   }
 
+  // If a token header was supplied, ALWAYS verify it strictly (never silently bypass invalid tokens)
   if (!adminApp) {
-    console.warn('[AppCheck Warning] Firebase Admin App not initialized; denying strict App Check request.');
-    return res.status(503).json({
+    console.warn('[AppCheck Warning] Firebase Admin App not initialized; denying App Check verification request.');
+    res.status(503).json({
       code: 'APP_CHECK_NOT_CONFIGURED',
       error: 'App Check verification unavailable without Firebase Admin initialization.',
-    }), false;
+    });
+    return false;
   }
 
   try {
@@ -1220,7 +1235,13 @@ app.get('/api/health', async (req, res) => {
       corsStrictAllowlist: true,
       unauthenticatedUploadsDisabled: true,
       paymentSecretConfigured: HAS_EXPLICIT_PAYMENT_SECRET,
-      paymentGatewayMode: HAS_EXPLICIT_PAYMENT_SECRET ? 'configured' : 'optional_mode',
+      paymentWebhookSecretConfigured: HAS_PAYMENT_WEBHOOK_SECRET,
+      paymentGatewayMode:
+        HAS_EXPLICIT_PAYMENT_SECRET && HAS_PAYMENT_WEBHOOK_SECRET
+          ? 'configured_verified'
+          : HAS_EXPLICIT_PAYMENT_SECRET
+          ? 'configured'
+          : 'optional_mode',
       rateLimiting: 'ACTIVE',
       hstsEnabled: true,
     },
@@ -1256,6 +1277,7 @@ app.get('/api/system/capabilities', (_req, res) => {
     appCheckMode:
       HAS_RECAPTCHA_SITE_KEY || ENFORCE_APP_CHECK ? 'enforced' : 'advisory_until_configured',
     paymentGatewayEnabled: HAS_EXPLICIT_PAYMENT_SECRET,
+    paymentWebhookConfigured: HAS_PAYMENT_WEBHOOK_SECRET,
     paymentMode: HAS_EXPLICIT_PAYMENT_SECRET ? 'configured' : 'optional_mode',
     geminiApiConfigured: HAS_GEMINI_API_KEY,
     authProvider: 'Firebase Authentication',
@@ -1386,8 +1408,8 @@ app.get('/api/telemetry', requireAdmin, (_req: AuthenticatedRequest, res) => {
   });
 });
 
-// 3. Server-side Inbound Scoping Validator (Rate-limited per IP + anti-bot + App Check + Zod)
-app.post('/api/inquiries/validate', createFormRateLimiter('validate'), async (req, res) => {
+// 3. Server-side Inbound Scoping Validator (Rate-limited per IP + JSON CSRF guard + anti-bot + App Check + Zod)
+app.post('/api/inquiries/validate', requireJsonContentType, createFormRateLimiter('validate'), async (req, res) => {
   if (!validateAntiBotFields(req, res, 'validate')) {
     return;
   }
@@ -1419,8 +1441,8 @@ app.post('/api/inquiries/validate', createFormRateLimiter('validate'), async (re
   });
 });
 
-// 3a. Authoritative Server-Side Quotation Submission Endpoint (Rate-limited + Honeypot + App Check + Zod -> firebase-admin)
-app.post('/api/quotations', createFormRateLimiter('quotation'), async (req, res) => {
+// 3a. Authoritative Server-Side Quotation Submission Endpoint (Rate-limited + JSON CSRF guard + Honeypot + App Check + Zod -> firebase-admin)
+app.post('/api/quotations', requireJsonContentType, createFormRateLimiter('quotation'), async (req, res) => {
   if (!validateAntiBotFields(req, res, 'quotation')) {
     return;
   }
@@ -1503,8 +1525,8 @@ app.post('/api/quotations', createFormRateLimiter('quotation'), async (req, res)
   }
 });
 
-// 3b. Newsletter Dispatch Subscription Endpoint (Firestore via firebase-admin + rate limit + anti-bot + App Check + Zod)
-app.post('/api/newsletter/subscribe', createFormRateLimiter('newsletter'), async (req, res) => {
+// 3b. Newsletter Dispatch Subscription Endpoint (Firestore via firebase-admin + rate limit + JSON CSRF guard + anti-bot + App Check + Zod)
+app.post('/api/newsletter/subscribe', requireJsonContentType, createFormRateLimiter('newsletter'), async (req, res) => {
   if (!validateAntiBotFields(req, res, 'newsletter')) {
     return;
   }
@@ -1600,6 +1622,13 @@ const EXTENSION_MIME_ALLOWLIST: Record<string, Set<string>> = {
   ]),
 };
 
+const EXTENSION_CANONICAL_MIME: Record<string, string> = {
+  pdf: 'application/pdf',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+};
+
 const ALLOWED_UPLOAD_CATEGORIES = new Set([
   'consultation_rfp',
   'rfp_attachment',
@@ -1612,7 +1641,10 @@ const ALLOWED_UPLOAD_CATEGORIES = new Set([
 const MAX_AUTH_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB max
 const BASE64_STRICT_REGEX = /^[A-Za-z0-9+/]+={0,2}$/;
 
-app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/files/upload', requireAuth, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
+  if (!(await verifyAppCheckForForm(req, res, 'upload'))) {
+    return;
+  }
   const user = req.authUser!;
   const idToken = req.authToken!;
   const clientIp = getClientIp(req);
@@ -1800,11 +1832,13 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
     const randomizedFileName = `${crypto.randomUUID()}.${ext}`;
     const gcsObjectPath = `vault/${user.uid}/${randomizedFileName}`;
 
+    const canonicalMime = EXTENSION_CANONICAL_MIME[ext] || 'application/octet-stream';
+
     await gcsStorageClient
       .bucket(EXPLICIT_GCS_BUCKET)
       .file(gcsObjectPath)
       .save(buffer, {
-        contentType: mime || 'application/octet-stream',
+        contentType: canonicalMime,
         resumable: false,
         metadata: {
           metadata: {
@@ -1825,7 +1859,7 @@ app.post('/api/files/upload', requireAuth, async (req: AuthenticatedRequest, res
       projectId: safeProjectId,
       fileSize: buffer.length,
       fileSizeFormatted: `${(buffer.length / 1024).toFixed(1)} KB`,
-      mimeType: mime || `application/${ext}`,
+      mimeType: canonicalMime,
       extension: ext,
       sha256,
       ownerUid: user.uid,
@@ -1962,6 +1996,7 @@ app.get('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, res
     const safeDispositionName = String(record.fileName || 'artifact').replace(/["\r\n]/g, '_');
     res.setHeader('Content-Type', record.mimeType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${safeDispositionName}"`);
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, no-store');
     res.setHeader('X-Artifact-SHA256', record.sha256);
@@ -2047,7 +2082,10 @@ app.delete('/api/files/:fileId', requireAuth, async (req: AuthenticatedRequest, 
 });
 
 // Authenticated Server Audit Event Ingestion (Derives actor & ip strictly on server; client cannot supply ipAddress)
-app.post('/api/audit-events', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/audit-events', requireAuth, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
+  if (!(await verifyAppCheckForForm(req, res, 'audit'))) {
+    return;
+  }
   if ('ipAddress' in (req.body || {}) || 'ip' in (req.body || {})) {
     return res.status(400).json({
       error: 'Client-supplied ipAddress is forbidden. Audit IP is always derived on the server.',
@@ -2225,7 +2263,10 @@ app.get('/api/invoices/:invoiceId', requireAuth, async (req: AuthenticatedReques
 });
 
 // 10. Secure Payment Intent Creator (Authenticated + Optional Mode Guard + Firestore Persistence)
-app.post('/api/payments/create-intent', requireAuth, async (req: AuthenticatedRequest, res) => {
+app.post('/api/payments/create-intent', requireAuth, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
+  if (!(await verifyAppCheckForForm(req, res, 'payment'))) {
+    return;
+  }
   if (!HAS_EXPLICIT_PAYMENT_SECRET) {
     return res.status(503).json({
       error: 'Payment Gateway is currently in Optional Mode (PAYMENT_SECRET not configured). Invoices remain viewable without online charges.',
@@ -2264,10 +2305,11 @@ app.post('/api/payments/create-intent', requireAuth, async (req: AuthenticatedRe
 
     // Authoritative amount strictly from server Firestore invoice, never client body
     const authoritativeAmount = Number(invoice.totalAmount);
+    const expiresAt = Date.now() + 30 * 60 * 1000;
     const orderId = `ORDER_${Date.now()}_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
     const checksum = crypto
       .createHmac('sha256', PAYMENT_SECRET)
-      .update(`${orderId}:${invoice.id}:${authoritativeAmount}:${user.uid}`)
+      .update(`${orderId}:${invoice.id}:${authoritativeAmount}:${user.uid}:${expiresAt}`)
       .digest('hex');
 
     await adminDb.collection('payment_intents').doc(orderId).set({
@@ -2275,7 +2317,7 @@ app.post('/api/payments/create-intent', requireAuth, async (req: AuthenticatedRe
       invoiceId: invoice.id,
       amount: authoritativeAmount,
       uid: user.uid,
-      expiresAt: Date.now() + 30 * 60 * 1000,
+      expiresAt,
       used: false,
       createdAt: new Date().toISOString(),
     });
@@ -2290,8 +2332,12 @@ app.post('/api/payments/create-intent', requireAuth, async (req: AuthenticatedRe
       gstRate: invoice.gstRate,
       gstAmount: invoice.gstAmount,
       clientCompany: invoice.clientCompany,
+      expiresAt,
       checksum,
-      paymentGateway: 'NPCI UPI 2.0 / Server-Verified Escrow Settlement',
+      gatewayVerificationRequired: !user.isAdmin,
+      paymentGateway: HAS_PAYMENT_WEBHOOK_SECRET
+        ? 'NPCI UPI 2.0 / Server-Verified Webhook Settlement'
+        : 'Escrow Ledger (Requires Gateway Webhook or Verified Admin Settlement)',
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
@@ -2300,8 +2346,11 @@ app.post('/api/payments/create-intent', requireAuth, async (req: AuthenticatedRe
   }
 });
 
-// 11. Cryptographic Payment Verification & Transactional Settlement in Firestore
-app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, res) => {
+// 11. Cryptographic Payment Verification & Transactional Settlement in Firestore (Zero Fake Success)
+app.post('/api/payments/verify', requireAuth, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
+  if (!(await verifyAppCheckForForm(req, res, 'payment'))) {
+    return;
+  }
   if (!HAS_EXPLICIT_PAYMENT_SECRET) {
     return res.status(503).json({
       error: 'Payment Gateway is currently in Optional Mode (PAYMENT_SECRET not configured).',
@@ -2330,6 +2379,38 @@ app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, 
     typeof checksum !== 'string'
   ) {
     return res.status(400).json({ error: 'Valid orderId, invoiceId, and checksum are required' });
+  }
+
+  const normalizedTxnRef =
+    typeof transactionRef === 'string' && transactionRef.trim().length > 4
+      ? transactionRef.trim().substring(0, 64)
+      : '';
+
+  // Prevent fake client self-settlement: non-admin callers must supply a valid external gateway HMAC signature
+  if (!user.isAdmin) {
+    if (!HAS_PAYMENT_WEBHOOK_SECRET) {
+      void appendServerAuditEvent({
+        action: 'PAYMENT_FAKE_SETTLEMENT_BLOCKED',
+        actorUid: user.uid,
+        actorEmail: user.email || user.uid,
+        resource: `invoices/${invoiceId}`,
+        outcome: 'DENIED',
+        ip: getClientIp(req),
+        details: 'Blocked client settlement attempt without configured gateway webhook verifier',
+      });
+      return res.status(403).json({
+        code: 'PAYMENT_GATEWAY_VERIFICATION_REQUIRED',
+        error:
+          'Direct client payment confirmation is disabled. Settlements require verified bank/gateway webhook signature or verified Administrator reconciliation.',
+      });
+    }
+    const gatewaySig = (req.header('x-payment-gateway-signature') || '').trim();
+    if (!gatewaySig || !normalizedTxnRef) {
+      return res.status(403).json({
+        code: 'PAYMENT_GATEWAY_SIGNATURE_REQUIRED',
+        error: 'Valid gateway signature and external transaction reference are required to settle payment.',
+      });
+    }
   }
 
   try {
@@ -2379,7 +2460,7 @@ app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, 
 
       const expectedChecksum = crypto
         .createHmac('sha256', PAYMENT_SECRET)
-        .update(`${orderId}:${invoice.id}:${invoice.totalAmount}:${intent.uid}`)
+        .update(`${orderId}:${invoice.id}:${invoice.totalAmount}:${intent.uid}:${intent.expiresAt}`)
         .digest('hex');
 
       const providedBuf = Buffer.from(checksum, 'utf8');
@@ -2391,14 +2472,41 @@ app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, 
         };
       }
 
+      if (!user.isAdmin) {
+        const gatewaySig = (req.header('x-payment-gateway-signature') || '').trim();
+        const expectedGatewaySig = crypto
+          .createHmac('sha256', RAW_PAYMENT_WEBHOOK_SECRET)
+          .update(`${orderId}:${invoice.id}:${invoice.totalAmount}:${normalizedTxnRef}`)
+          .digest('hex');
+        const sigBuf = Buffer.from(gatewaySig, 'utf8');
+        const expSigBuf = Buffer.from(expectedGatewaySig, 'utf8');
+        if (sigBuf.length !== expSigBuf.length || !crypto.timingSafeEqual(sigBuf, expSigBuf)) {
+          return {
+            errorStatus: 403,
+            error: 'Invalid payment gateway settlement signature.',
+          };
+        }
+      }
+
       const allowedMethods = new Set(['UPI', 'NEFT_RTGS', 'Corporate_Card', 'Escrow']);
       const safeMethod = allowedMethods.has(method) ? method : 'UPI';
 
       const paymentId = `PAY_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
       const verifiedTxnRef =
-        typeof transactionRef === 'string' && transactionRef.trim().length > 4
-          ? transactionRef.trim().substring(0, 64)
-          : `TXN_NPCI_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        normalizedTxnRef || `TXN_NPCI_${Date.now()}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+      const txnLockHash = crypto
+        .createHash('sha256')
+        .update(verifiedTxnRef.toLowerCase())
+        .digest('hex');
+      const txnLockRef = adminDb!.collection('payment_intents').doc(`TXN_${txnLockHash}`);
+      const existingTxnSnap = await tx.get(txnLockRef);
+      if (existingTxnSnap.exists) {
+        return {
+          errorStatus: 409,
+          error: 'Duplicate transaction reference detected; replay settlement rejected.',
+        };
+      }
+
       const paidAt = new Date().toISOString();
 
       const updatedInvoice: Record<string, any> = {
@@ -2427,6 +2535,14 @@ app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, 
         verifiedBy: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES // SECURE_LEDGER_KERNEL',
       };
 
+      tx.set(txnLockRef, {
+        paymentId,
+        invoiceId: invoice.id,
+        orderId,
+        used: true,
+        expiresAt: Date.now() + 365 * 86400 * 1000,
+        createdAt: paidAt,
+      });
       tx.update(intentDocRef, { used: true, settledAt: paidAt });
       tx.set(resolvedInvoiceDocRef, updatedInvoice);
       tx.set(adminDb!.collection('payments').doc(paymentId), paymentRecord);
@@ -2461,7 +2577,7 @@ app.post('/api/payments/verify', requireAuth, async (req: AuthenticatedRequest, 
 });
 
 // 12. Admin Invoice Generator (Strict Verified Admin Only -> Firestore `invoices`)
-app.post('/api/invoices/generate', requireAdmin, async (req: AuthenticatedRequest, res) => {
+app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
   if (!adminDb) {
     return res.status(503).json({
       code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
@@ -2494,8 +2610,31 @@ app.post('/api/invoices/generate', requireAdmin, async (req: AuthenticatedReques
   const gstRate = 18;
   const gstAmount = Math.round((numSubtotal * gstRate) / 100);
   const totalAmount = numSubtotal + gstAmount;
-  const invoiceNumber = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-  const invoiceId = `inv-${Date.now()}`;
+  const randSuffix = String(1000 + (crypto.randomBytes(2).readUInt16BE(0) % 9000));
+  const uniqueTag = crypto.randomBytes(2).toString('hex').toUpperCase();
+  const invoiceNumber = `INV-${new Date().getFullYear()}-${randSuffix}-${uniqueTag}`;
+  const invoiceId = `inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  const normalizedClientEmail = clientEmail.trim().toLowerCase();
+
+  let resolvedClientId =
+    typeof clientId === 'string' && SAFE_ID_REGEX.test(clientId.trim()) ? clientId.trim() : '';
+  if (!resolvedClientId) {
+    try {
+      const userSnap = await adminDb
+        .collection('users')
+        .where('email', '==', normalizedClientEmail)
+        .limit(1)
+        .get();
+      if (!userSnap.empty) {
+        resolvedClientId = userSnap.docs[0].id;
+      }
+    } catch (lookupErr) {
+      console.warn('[Invoice Client Lookup Notice]', lookupErr);
+    }
+  }
+  if (!resolvedClientId) {
+    resolvedClientId = 'client-custom';
+  }
 
   const verificationHash = crypto
     .createHash('sha256')
@@ -2511,12 +2650,12 @@ app.post('/api/invoices/generate', requireAdmin, async (req: AuthenticatedReques
         ? projectName.trim().substring(0, 160)
         : 'Enterprise Architecture Engagement',
     projectNameHi: 'उद्यम सॉफ्टवेयर इंजीनियरिंग अनुबंध',
-    clientId: typeof clientId === 'string' && clientId.trim() ? clientId.trim() : 'client-custom',
+    clientId: resolvedClientId,
     clientName:
       typeof clientName === 'string' && clientName.trim()
         ? clientName.trim().substring(0, 120)
         : 'Enterprise Partner',
-    clientEmail: clientEmail.trim().toLowerCase(),
+    clientEmail: normalizedClientEmail,
     clientCompany:
       typeof clientCompany === 'string' && clientCompany.trim()
         ? clientCompany.trim().substring(0, 160)
@@ -2571,16 +2710,38 @@ app.post('/api/invoices/generate', requireAdmin, async (req: AuthenticatedReques
 
 const DEFAULT_SITE_URL = 'https://YOUR-DOMAIN.com';
 
-function resolveSeoBaseUrl(): string {
-  const envUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(envUrl)) {
+const SITEMAP_APP_IDS = [
+  'bariha-pay',
+  'vidyasetu-lms',
+  'taskmatrix-pro',
+  'networkpulse-diagnostic',
+  'bharatbazaar-omnichannel',
+  'trackcore-logistics',
+  'docusense-vision-ai',
+  'retailflow-pos',
+];
+
+function resolveSeoBaseUrl(req?: express.Request): string {
+  const envUrl = (process.env.SITE_URL || process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  if (/^https?:\/\//i.test(envUrl) && !envUrl.includes('YOUR-DOMAIN.com')) {
     return envUrl;
+  }
+  if (req) {
+    const reqHost = (req.get('host') || '').trim();
+    if (reqHost && !reqHost.includes('YOUR-DOMAIN.com')) {
+      const protoHeader = (req.headers['x-forwarded-proto'] || '')
+        .toString()
+        .split(',')[0]
+        .trim();
+      const proto = req.secure || protoHeader === 'https' ? 'https' : req.protocol || 'http';
+      return `${proto}://${reqHost}`;
+    }
   }
   return DEFAULT_SITE_URL;
 }
 
-app.get('/robots.txt', (_req, res) => {
-  const baseUrl = resolveSeoBaseUrl();
+app.get('/robots.txt', (req, res) => {
+  const baseUrl = resolveSeoBaseUrl(req);
   const publicFile = path.resolve(__dirname, 'public', 'robots.txt');
   const distFile = path.resolve(__dirname, 'dist', 'robots.txt');
   const targetFile = fs.existsSync(publicFile) ? publicFile : distFile;
@@ -2596,24 +2757,53 @@ app.get('/robots.txt', (_req, res) => {
   );
 });
 
-app.get('/sitemap.xml', (_req, res) => {
-  const baseUrl = resolveSeoBaseUrl();
+app.get('/sitemap.xml', async (req, res) => {
+  const baseUrl = resolveSeoBaseUrl(req);
   const publicFile = path.resolve(__dirname, 'public', 'sitemap.xml');
   const distFile = path.resolve(__dirname, 'dist', 'sitemap.xml');
   const targetFile = fs.existsSync(publicFile) ? publicFile : distFile;
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+
+  const lastMod = new Date().toISOString().split('T')[0];
+  let dynamicAppIds = [...SITEMAP_APP_IDS];
+  if (adminDb) {
+    try {
+      const appsSnap = await adminDb.collection('apps').select('id').limit(100).get();
+      const firestoreIds = appsSnap.docs
+        .map((d) => String(d.data()?.id || d.id || '').trim())
+        .filter((id) => SAFE_ID_REGEX.test(id));
+      dynamicAppIds = Array.from(new Set([...SITEMAP_APP_IDS, ...firestoreIds]));
+    } catch {
+      // Fall back safely to default catalog app IDs when Admin Firestore read is unavailable
+    }
+  }
+
   if (fs.existsSync(targetFile)) {
-    const content = fs
+    let content = fs
       .readFileSync(targetFile, 'utf8')
       .replaceAll(DEFAULT_SITE_URL, baseUrl);
+    const extraEntries = dynamicAppIds
+      .filter((id) => !content.includes(`/apps/${id}</loc>`))
+      .map(
+        (id) =>
+          `  <url>\n    <loc>${baseUrl}/apps/${id}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`
+      );
+    if (extraEntries.length > 0 && content.includes('</urlset>')) {
+      content = content.replace('</urlset>', `${extraEntries.join('\n')}\n</urlset>`);
+    }
     return res.send(content);
   }
-  const lastMod = new Date().toISOString().split('T')[0];
+
   const entries = [
     { path: '/', changefreq: 'weekly', priority: '1.0' },
     { path: '/services', changefreq: 'weekly', priority: '0.9' },
     { path: '/ai-solutions', changefreq: 'weekly', priority: '0.9' },
     { path: '/android-portfolio', changefreq: 'weekly', priority: '0.9' },
+    ...dynamicAppIds.map((id) => ({
+      path: `/apps/${id}`,
+      changefreq: 'monthly',
+      priority: '0.8',
+    })),
     { path: '/process', changefreq: 'monthly', priority: '0.8' },
     { path: '/about', changefreq: 'monthly', priority: '0.8' },
     { path: '/contact', changefreq: 'monthly', priority: '0.8' },

@@ -56,8 +56,9 @@ export const ProcessSection: React.FC = () => {
               >
                 {/* Clickable Header Bar */}
                 <button
+                  type="button"
                   onClick={() => toggleStep(step.number)}
-                  className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 cursor-pointer"
+                  className="w-full p-5 sm:p-6 text-left flex items-center justify-between gap-4 cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                   aria-expanded={isExpanded}
                 >
                   <div className="flex items-center gap-4 sm:gap-6 min-w-0">

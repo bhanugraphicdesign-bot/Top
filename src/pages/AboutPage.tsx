@@ -101,16 +101,16 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                 : 'We operate with zero proprietary vendor lock-in. Every client retains full intellectual property rights, verified by formal escrow and reproducible CI/CD pipelines from Sprint 1.'}
             </p>
 
-            <div className="grid grid-cols-2 gap-4 pt-2">
+            <div className="grid grid-cols-1 min-[360px]:grid-cols-2 gap-4 pt-2">
               <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <div className="text-2xl font-extrabold text-blue-700 font-mono tabular-nums">Full-Stack</div>
+                <div className="text-xl sm:text-2xl font-extrabold text-blue-700 font-mono tabular-nums">Full-Stack</div>
                 <div className="text-xs font-semibold text-slate-900 mt-0.5">Dedicated Engineering Pods</div>
-                <div className="text-[11px] text-slate-500">Go, Kotlin, React, Python</div>
+                <div className="text-[11px] text-slate-600">Go, Kotlin, React, Python</div>
               </div>
               <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
-                <div className="text-2xl font-extrabold text-blue-700 font-mono tabular-nums">HA Target</div>
+                <div className="text-xl sm:text-2xl font-extrabold text-blue-700 font-mono tabular-nums">HA Target</div>
                 <div className="text-xs font-semibold text-slate-900 mt-0.5">Availability Design Goal</div>
-                <div className="text-[11px] text-slate-500">Custom SLA scoped per SOW</div>
+                <div className="text-[11px] text-slate-600">Custom SLA scoped per SOW</div>
               </div>
             </div>
           </div>

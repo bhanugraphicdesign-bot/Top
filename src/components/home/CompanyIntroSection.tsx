@@ -93,8 +93,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
 
             <div className="space-y-4">
               <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors">
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-700" />
+                <h4 className="text-sm font-bold text-slate-900">
                   {t('Zero-Loss Architectural Discipline', 'शून्य-हानि आर्किटेक्चर अनुशासन')}
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
@@ -106,8 +105,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
               </div>
 
               <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors">
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-700" />
+                <h4 className="text-sm font-bold text-slate-900">
                   {t('Complete Sovereign IP Ownership', 'संपूर्ण संप्रभु आईपी स्वामित्व')}
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
@@ -119,8 +117,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
               </div>
 
               <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors">
-                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-700" />
+                <h4 className="text-sm font-bold text-slate-900">
                   {t('Deterministic AI Grounding', 'विश्वसनीय व सत्यापित एआई इंटीग्रेशन')}
                 </h4>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">

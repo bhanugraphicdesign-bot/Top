@@ -74,8 +74,9 @@ export const Header: React.FC<HeaderProps> = ({
               <a
                 key={item.route}
                 href={`/${item.route}`}
+                aria-current={currentRoute === item.route ? 'page' : undefined}
                 onClick={(e) => handleNavClick(e, item.route)}
-                className={`transition-colors whitespace-nowrap shrink-0 py-1 ${
+                className={`transition-colors whitespace-nowrap shrink-0 py-1 rounded-sm focus-visible:outline-2 focus-visible:outline-blue-600 ${
                   currentRoute === item.route
                     ? 'text-blue-700 font-bold'
                     : 'hover:text-blue-700'
@@ -99,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
                 role="radio"
                 aria-checked={language === 'hi'}
                 onClick={() => setLanguage('hi')}
-                className={`min-h-[34px] sm:min-h-0 px-1.5 sm:px-2.5 py-1 rounded transition-all cursor-pointer whitespace-nowrap ${
+                className={`min-h-[38px] sm:min-h-0 px-1.5 sm:px-2.5 py-1 rounded transition-all cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 ${
                   language === 'hi'
                     ? 'bg-blue-700 text-white shadow-xs'
                     : 'text-slate-600 hover:text-blue-700'
@@ -113,7 +114,7 @@ export const Header: React.FC<HeaderProps> = ({
                 role="radio"
                 aria-checked={language === 'en'}
                 onClick={() => setLanguage('en')}
-                className={`min-h-[34px] sm:min-h-0 px-1.5 sm:px-2.5 py-1 rounded transition-all cursor-pointer whitespace-nowrap ${
+                className={`min-h-[38px] sm:min-h-0 px-1.5 sm:px-2.5 py-1 rounded transition-all cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 ${
                   language === 'en'
                     ? 'bg-blue-700 text-white shadow-xs'
                     : 'text-slate-600 hover:text-blue-700'
@@ -131,7 +132,8 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={(e) => handleNavClick(e, 'client-dashboard')}
               type="button"
-              className={`hidden md:inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-md border transition-colors cursor-pointer whitespace-nowrap ${
+              aria-current={currentRoute === 'client-dashboard' ? 'page' : undefined}
+              className={`hidden md:inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-md border transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 ${
                 currentRoute === 'client-dashboard'
                   ? 'bg-blue-50 text-blue-700 border-blue-200'
                   : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
@@ -142,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* Authentication State / Action */}
             {currentUser ? (
-              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md px-1.5 sm:px-2.5 py-1 text-xs min-h-[36px] sm:min-h-0">
+              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md px-1.5 sm:px-2.5 py-1 text-xs min-h-[38px] sm:min-h-0">
                 <div className="flex items-center gap-1 sm:gap-1.5 font-semibold text-slate-800">
                   <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
                   <span className="hidden min-[380px]:inline max-w-[46px] min-[430px]:max-w-[70px] sm:max-w-[140px] truncate">
@@ -159,7 +161,7 @@ export const Header: React.FC<HeaderProps> = ({
                   type="button"
                   aria-label={t('Sign Out', 'लॉग आउट')}
                   title={t('Sign Out', 'लॉग आउट')}
-                  className="p-1 text-slate-500 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                  className="p-1.5 text-slate-600 hover:text-rose-600 rounded transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -168,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={() => openAuthModal('login')}
                 type="button"
-                className="inline-flex items-center justify-center gap-1 min-h-[36px] sm:min-h-0 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0"
+                className="inline-flex items-center justify-center gap-1 min-h-[38px] sm:min-h-0 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
                 <span>{t('Sign In', 'लॉगिन')}</span>

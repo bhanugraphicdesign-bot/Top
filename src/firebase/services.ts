@@ -12,6 +12,7 @@ import {
   limit,
   serverTimestamp,
 } from 'firebase/firestore';
+import type { User } from 'firebase/auth';
 import { db, auth, ensureClientFirestoreOnline } from './config';
 import { getAppCheckTokenHeader } from './appCheck';
 import { handleFirestoreError, OperationType } from './errorHandler';
@@ -111,6 +112,58 @@ function clampStr(val: string | undefined | null, maxLen: number): string {
   return String(val || '').trim().slice(0, maxLen);
 }
 
+export async function authenticatedFetch(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  options: {
+    includeAppCheck?: boolean;
+    user?: User | null;
+    optionalAuth?: boolean;
+  } = {}
+): Promise<Response> {
+  const targetUser = options.user !== undefined ? options.user : auth.currentUser;
+  if (!targetUser && !options.optionalAuth) {
+    throw new Error('Authentication required. Please sign in to continue.');
+  }
+
+  const buildHeaders = async (forceRefresh: boolean): Promise<Headers> => {
+    const headers = new Headers(init.headers);
+    if (options.includeAppCheck) {
+      const appCheckHeaders = await getAppCheckTokenHeader();
+      for (const [key, value] of Object.entries(appCheckHeaders)) {
+        if (value) headers.set(key, value);
+      }
+    }
+    if (targetUser) {
+      try {
+        const idToken = await targetUser.getIdToken(forceRefresh);
+        if (idToken) {
+          headers.set('Authorization', `Bearer ${idToken}`);
+        }
+      } catch (err) {
+        if (!options.optionalAuth) {
+          throw err;
+        }
+      }
+    }
+    return headers;
+  };
+
+  let res = await fetch(input, {
+    ...init,
+    headers: await buildHeaders(false),
+  });
+
+  if (res.status === 401 && targetUser) {
+    res = await fetch(input, {
+      ...init,
+      headers: await buildHeaders(true),
+    });
+  }
+
+  return res;
+}
+
 async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
   const currentUser = auth.currentUser;
   if (!currentUser) return false;
@@ -131,13 +184,10 @@ async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
     // Continue to server check below
   }
 
-  // 3. Server-verified RBAC (checks `user_roles/{uid}` + custom claims)
+  // 3. Server-verified RBAC (checks `user_roles/{uid}` + custom claims, refreshes expired token on 401)
   if (typeof fetch !== 'undefined' && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
     try {
-      const idToken = await currentUser.getIdToken();
-      const statusRes = await fetch('/api/auth/status', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const statusRes = await authenticatedFetch('/api/auth/status', {}, { user: currentUser });
       if (statusRes.ok) {
         const statusData = await statusRes.json();
         if (statusData?.isAdmin === true) {
@@ -161,19 +211,21 @@ export async function logAuditEvent(action: string, resource: string, details: s
     return;
   }
   try {
-    const idToken = await currentUser.getIdToken();
-    await fetch('/api/audit-events', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${idToken}`,
+    await authenticatedFetch(
+      '/api/audit-events',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: clampStr(action, 100),
+          resource: clampStr(resource, 200),
+          details: clampStr(details, 1000),
+        }),
       },
-      body: JSON.stringify({
-        action: clampStr(action, 100),
-        resource: clampStr(resource, 200),
-        details: clampStr(details, 1000),
-      }),
-    });
+      { includeAppCheck: true, user: currentUser }
+    );
   } catch (error) {
     // Audit logging should not break primary UX flow if offline or unavailable
     console.warn('[Audit Log Failed]', error);
@@ -188,10 +240,7 @@ export async function getAuditLogs(limitCount = 20) {
   const currentUser = auth.currentUser;
   if (currentUser && typeof fetch !== 'undefined') {
     try {
-      const idToken = await currentUser.getIdToken();
-      const res = await fetch('/api/audit-events', {
-        headers: { Authorization: `Bearer ${idToken}` },
-      });
+      const res = await authenticatedFetch('/api/audit-events', {}, { user: currentUser });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data?.events)) {
@@ -371,49 +420,38 @@ export async function submitQuotation(data: {
   };
 }) {
   const lang: 'en' | 'hi' = data.language === 'hi' ? 'hi' : 'en';
-  const appCheckHeaders = await getAppCheckTokenHeader();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...appCheckHeaders,
-  };
-
-  if (auth.currentUser) {
-    try {
-      const idToken = await auth.currentUser.getIdToken();
-      if (idToken) {
-        headers.Authorization = `Bearer ${idToken}`;
-      }
-    } catch {
-      // Optional auth header on public quotation submission
-    }
-  }
-
-  const response = await fetch('/api/quotations', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      fullName: clampStr(data.fullName, 160),
-      email: clampStr(data.email, 160).toLowerCase(),
-      phone: clampStr(data.phone, 40),
-      company: clampStr(data.company, 160),
-      serviceType: clampStr(data.serviceType, 160),
-      timeline: clampStr(data.timeline || '3-6-months', 64),
-      budget: clampStr(data.budget || 'enterprise', 80),
-      brief: clampStr(data.brief, 3000),
-      language: lang,
-      _hp: data._hp || '',
-      formOpenedAt: data.formOpenedAt,
-      fillDurationMs: data.fillDurationMs,
-      attachment: data.attachment
-        ? {
-            fileUrl: clampStr(data.attachment.fileUrl, 300),
-            fileName: clampStr(data.attachment.fileName, 200),
-            sha256: clampStr(data.attachment.sha256, 128),
-            fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
-          }
-        : undefined,
-    }),
-  });
+  const response = await authenticatedFetch(
+    '/api/quotations',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fullName: clampStr(data.fullName, 160),
+        email: clampStr(data.email, 160).toLowerCase(),
+        phone: clampStr(data.phone, 40),
+        company: clampStr(data.company, 160),
+        serviceType: clampStr(data.serviceType, 160),
+        timeline: clampStr(data.timeline || '3-6-months', 64),
+        budget: clampStr(data.budget || 'enterprise', 80),
+        brief: clampStr(data.brief, 3000),
+        language: lang,
+        _hp: data._hp || '',
+        formOpenedAt: data.formOpenedAt,
+        fillDurationMs: data.fillDurationMs,
+        attachment: data.attachment
+          ? {
+              fileUrl: clampStr(data.attachment.fileUrl, 300),
+              fileName: clampStr(data.attachment.fileName, 200),
+              sha256: clampStr(data.attachment.sha256, 128),
+              fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
+            }
+          : undefined,
+      }),
+    },
+    { includeAppCheck: true, optionalAuth: true }
+  );
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -485,6 +523,24 @@ export async function fetchProjectsForClient(clientId: string) {
     return snap.docs.map((d) => d.data());
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
+  }
+}
+
+export async function fetchProjectTasksForClient(clientId?: string) {
+  const path = COLLECTIONS.PROJECT_TASKS;
+  const currentUser = auth.currentUser;
+  if (!currentUser) return [];
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return [];
+  if (!(await ensureClientFirestoreOnline())) return [];
+  try {
+    const isAdmin = await isCurrentUserVerifiedAdmin();
+    const targetClientId = isAdmin && clientId ? clientId : currentUser.uid;
+    const q = query(collection(db, path), where('clientId', '==', targetClientId));
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  } catch (error) {
+    console.warn('[fetchProjectTasksForClient]', error);
+    return [];
   }
 }
 
@@ -593,6 +649,9 @@ export async function updateSupportTicketStatus(ticketId: string, status: 'open'
   if (!auth.currentUser) {
     throw new Error('Authentication required.');
   }
+  if (!(await isCurrentUserVerifiedAdmin())) {
+    throw new Error('Forbidden: Administrator privilege required to directly update support ticket status.');
+  }
   try {
     await updateDoc(doc(db, path, ticketId), {
       status,
@@ -665,13 +724,13 @@ export async function fetchAllUsers(): Promise<any[]> {
   if (!(await isCurrentUserVerifiedAdmin())) return [];
   try {
     const snap = await getDocs(collection(db, path));
-    const usersList: any[] = [];
-    for (const d of snap.docs) {
-      const data = d.data();
-      const role = await fetchUserRole(d.id);
-      usersList.push({ ...data, role });
-    }
-    return usersList;
+    return await Promise.all(
+      snap.docs.map(async (d) => {
+        const data = d.data();
+        const role = await fetchUserRole(d.id);
+        return { ...data, role };
+      })
+    );
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
   }

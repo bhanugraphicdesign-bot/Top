@@ -114,7 +114,7 @@ function parseCurrentLocation(): {
     };
   }
 
-  return { route: 'home', params: {} };
+  return { route: 'not-found', params: pathname ? { path: pathname } : {} };
 }
 
 export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

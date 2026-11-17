@@ -40,6 +40,17 @@ export const AuthModal: React.FC = () => {
     setResetSent(false);
   }, [isAuthModalOpen, authModalTab]);
 
+  useEffect(() => {
+    if (!isAuthModalOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeAuthModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAuthModalOpen, closeAuthModal]);
+
   if (!isAuthModalOpen) return null;
 
   const mapAuthError = (err: any): string => {
@@ -166,8 +177,9 @@ export const AuthModal: React.FC = () => {
         >
           {/* Close button */}
           <button
+            type="button"
             onClick={closeAuthModal}
-            className="absolute top-5 right-5 p-1.5 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-100 transition-colors cursor-pointer"
+            className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -226,7 +238,7 @@ export const AuthModal: React.FC = () => {
                   <div className="w-full border-t border-slate-200"></div>
                 </div>
                 <div className="relative flex justify-center text-xs">
-                  <span className="px-2 bg-white text-slate-400 font-semibold uppercase">
+                  <span className="px-2 bg-white text-slate-600 font-semibold uppercase">
                     {t('Or with Work Email', 'या कार्य ईमेल द्वारा')}
                   </span>
                 </div>
@@ -272,7 +284,7 @@ export const AuthModal: React.FC = () => {
                     {t('Full Name', 'पूरा नाम')}
                   </label>
                   <div className="relative">
-                    <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <UserIcon className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" aria-hidden="true" />
                     <input
                       type="text"
                       required
@@ -290,7 +302,7 @@ export const AuthModal: React.FC = () => {
                   {t('Work Email', 'कार्य ईमेल')}
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" aria-hidden="true" />
                   <input
                     type="email"
                     required
@@ -319,7 +331,7 @@ export const AuthModal: React.FC = () => {
                     )}
                   </div>
                   <div className="relative">
-                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <Lock className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" aria-hidden="true" />
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
@@ -331,7 +343,8 @@ export const AuthModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      aria-label={showPassword ? t('Hide password', 'पासवर्ड छिपाएं') : t('Show password', 'पासवर्ड दिखाएं')}
+                      className="absolute right-2.5 top-2 p-0.5 text-slate-500 hover:text-slate-800 cursor-pointer rounded focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
@@ -385,7 +398,7 @@ export const AuthModal: React.FC = () => {
             )}
           </div>
 
-          <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+          <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-600">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
             <span>{t('Firebase Identity & Role-Based Session Verification', 'Firebase पहचान एवं भूमिका-आधारित सत्र सत्यापन')}</span>
           </div>

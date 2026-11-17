@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useApps } from '../context/AppsContext';
 import { Smartphone, Check, ArrowLeft, ShieldCheck, Download, Play } from 'lucide-react';
 import { OptimizedImage } from '../components/common/OptimizedImage';
-import { SEO, ROUTE_SEO_CONFIG } from '../components/common/SEO';
+import { SEO, ROUTE_SEO_CONFIG, resolveCanonicalUrl, resolveOgImageUrl } from '../components/common/SEO';
 import { OPTIMIZED_ASSETS } from '../data/content';
 
 interface AppDetailPageProps {
@@ -37,16 +37,44 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
     return () => clearSimTimers();
   }, [app?.id]);
 
+  const appStructuredData = useMemo(() => {
+    if (!app) return undefined;
+    const screenshot = app.screenshots?.[0];
+    const ogImg =
+      screenshot && /^https?:\/\//i.test(screenshot) && !/\.webp($|\?)/i.test(screenshot)
+        ? screenshot
+        : OPTIMIZED_ASSETS.androidImage.jpg;
+    return [
+      {
+        '@type': 'SoftwareApplication',
+        name: language === 'hi' ? app.nameHi || app.name : app.name,
+        description: language === 'hi' ? app.descriptionHi || app.description : app.description,
+        applicationCategory: app.category,
+        operatingSystem: 'Android',
+        softwareVersion: app.version,
+        url: resolveCanonicalUrl(`/apps/${encodeURIComponent(app.id)}`),
+        image: resolveOgImageUrl(ogImg),
+        author: {
+          '@type': 'Organization',
+          name: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
+        },
+      },
+    ];
+  }, [app, language]);
+
   if (!app) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+      <div className="max-w-7xl mx-auto px-4 py-20 text-center space-y-4">
         <SEO {...ROUTE_SEO_CONFIG['app-detail']} noIndex />
-        <h2 className="text-xl font-bold text-slate-900">App not found</h2>
+        <h2 className="text-xl font-bold text-slate-900">
+          {t('Application Specification Not Found', 'एप्लिकेशन विवरण नहीं मिला')}
+        </h2>
         <button
+          type="button"
           onClick={() => navigate('android-portfolio')}
-          className="mt-4 px-4 py-2 bg-blue-700 text-white rounded-md text-xs font-bold"
+          className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-md text-xs font-bold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
         >
-          Return to Portfolio
+          {t('Return to Android Portfolio', 'एंड्रॉइड पोर्टफोलियो पर वापस जाएं')}
         </button>
       </div>
     );
@@ -82,20 +110,22 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
         ogImageAltEn={`${app.name} enterprise Android application preview`}
         ogImageAltHi={`${app.nameHi || app.name} एंटरप्राइज एंड्रॉइड एप्लिकेशन पूर्वावलोकन`}
         canonicalPath={`/apps/${encodeURIComponent(app.id)}`}
+        structuredDataExtra={appStructuredData}
       />
 
       {/* Top Breadcrumb & Back Action */}
       <div className="bg-slate-50 border-b border-slate-200 py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-wrap items-center justify-between gap-2">
           <button
+            type="button"
             onClick={() => navigate('android-portfolio')}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-700 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 rounded-sm"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>{t('Back to Android Portfolio', 'वापस पोर्टफोलियो पर जाएं')}</span>
           </button>
 
-          <div className="text-xs text-slate-500 font-mono">
+          <div className="text-xs text-slate-600 font-mono">
             {app.category} · {app.version}
           </div>
         </div>
@@ -353,7 +383,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                 <div key={idx} className="p-4 rounded-lg border border-slate-200 bg-white">
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="font-mono font-bold text-blue-700">{log.version}</span>
-                    <span className="text-slate-400">{log.date}</span>
+                    <span className="text-slate-600">{log.date}</span>
                   </div>
                   <p className="text-xs text-slate-600">
                     {language === 'hi' ? log.notesHi : log.notes}

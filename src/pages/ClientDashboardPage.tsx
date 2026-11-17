@@ -5,9 +5,10 @@ import { useAuth } from '../context/AuthContext';
 import {
   createSupportTicket,
   fetchSupportTickets,
-  updateSupportTicketStatus,
   addTicketResponse,
   fetchProjectsForClient,
+  fetchProjectTasksForClient,
+  authenticatedFetch,
 } from '../firebase/services';
 import { EnterpriseInvoice } from '../types';
 import { COMPANY_INFO } from '../data/content';
@@ -195,10 +196,344 @@ const DEMO_SAMPLE_TICKETS: any[] = [
   },
 ];
 
+const DEMO_SPRINT_TASKS: SprintTask[] = [
+  {
+    id: 'task-1',
+    title: 'SQLCipher AES-256 database encryption integration',
+    titleHi: 'SQLCipher AES-256 डेटाबेस एन्क्रिप्शन एकीकरण',
+    category: 'Mobile Storage Security',
+    status: 'completed',
+    statusHi: 'सत्यापित एवं पूर्ण',
+    assignee: 'Mobility Squad Alpha',
+    estimatedHours: '40h',
+    deliverable: 'Zero-knowledge on-device storage with hardware keystore backed key rotation.',
+  },
+  {
+    id: 'task-2',
+    title: 'Bluetooth Low Energy (BLE) audio soundbox driver sub-350ms latency',
+    titleHi: 'ब्लूटूथ लो एनर्जी (BLE) ऑडियो साउंडबॉक्स सब-350ms लेटेंसी ड्राइवर',
+    category: 'Hardware Telemetry',
+    status: 'completed',
+    statusHi: 'सत्यापित एवं पूर्ण',
+    assignee: 'Hardware Integration Team',
+    estimatedHours: '64h',
+    deliverable: 'Synchronous voice payout alert across 8 Indian languages over BLE 5.3 mesh.',
+  },
+  {
+    id: 'task-3',
+    title: 'Sub-200ms UPI dynamic QR code generator & multi-bank reconciliation',
+    titleHi: 'सब-200ms यूपीआई डायनामिक क्यूआर जेनरेशन एवं बहु-बैंक निपटान',
+    category: 'Payment Core',
+    status: 'in_progress',
+    statusHi: 'प्रगति पर (92%)',
+    assignee: 'Bhanu Ram Bariha',
+    estimatedHours: '80h',
+    deliverable: 'Dynamic intent generation compliant with NPCI UPI 2.0 specifications.',
+  },
+  {
+    id: 'task-4',
+    title: 'Low-bandwidth geospatial vector compression for GPS offline queues',
+    titleHi: 'जीपीएस ऑफलाइन कतारों के लिए कम बैंडविड्थ वेक्टर्स संपीड़न',
+    category: 'Distributed Telematics',
+    status: 'in_progress',
+    statusHi: 'प्रगति पर (75%)',
+    assignee: 'Backend Distributed Squad',
+    estimatedHours: '48h',
+    deliverable: 'Delta-encoded polyline compression reducing satellite telematics payload by 84%.',
+  },
+  {
+    id: 'task-5',
+    title: 'Internal security checklist & RBAC rules verification (Sample)',
+    titleHi: 'आंतरिक सुरक्षा चेकलिस्ट एवं RBAC नियम सत्यापन (सैंपल)',
+    category: 'Security Review',
+    status: 'review',
+    statusHi: 'समीक्षाधीन',
+    assignee: 'SecOps Team',
+    estimatedHours: '32h',
+    deliverable: 'Sample milestone: Firestore rules verification and endpoint auth gate review.',
+  },
+];
+
+const DEMO_MILESTONES: Milestone[] = [
+  {
+    id: 'm1',
+    number: 'M1',
+    title: 'Architectural Blueprint & Threat Model',
+    titleHi: 'आर्किटेक्चरल ब्लूप्रिंट एवं थ्रेट मॉडल',
+    targetDate: '2026-10-10',
+    status: 'completed',
+    statusHi: 'पूर्ण एवं सत्यापित',
+    completion: 100,
+    deliverables: [
+      'Software Architecture Document (SADD v1.0)',
+      'Zero-Trust ABAC Security Invariants Spec',
+      'Private Cloud VPC Topology Deployment',
+    ],
+    deliverablesHi: [
+      'सॉफ्टवेयर आर्किटेक्चर दस्तावेज़ (SADD v1.0)',
+      'ज़ीरो-ट्रस्ट ABAC सुरक्षा विनिर्देश',
+      'प्राइवेट क्लाउड VPC टोपोलॉजी परिनियोजन',
+    ],
+    signOffBy: 'Er. Bhanu Ram Bariha & Rajiv Sengupta',
+  },
+  {
+    id: 'm2',
+    number: 'M2',
+    title: 'Core Telematics & Offline SQLite Engine',
+    titleHi: 'कोर टेलीमैटिक्स एवं ऑफलाइन SQLite इंजन',
+    targetDate: '2026-10-28',
+    status: 'completed',
+    statusHi: 'पूर्ण एवं सत्यापित',
+    deliverables: [
+      'Offline batch queue with cryptographic hash chains',
+      'SQLite Cipher hardware keystore binding',
+      'Kafka telematics ingestion microservice (10k events/sec)',
+    ],
+    deliverablesHi: [
+      'क्रिप्टोग्राफिक हैश श्रृंखलाओं के साथ ऑफ़लाइन बैच कतार',
+      'हार्डवेयर कीस्टोर बाइंडिंग के साथ SQLite साइफर',
+      'काफ्का टेलीमैटिक्स इंजेक्शन माइक्रोसर्विस (10k घटना/सेकंड)',
+    ],
+    completion: 100,
+    signOffBy: 'Mobility Lead Alpha',
+  },
+  {
+    id: 'm3',
+    number: 'M3',
+    title: 'BLE Soundbox Driver & Dynamic QR Settlement',
+    titleHi: 'बीएलई साउंडबॉक्स ड्राइवर एवं डायनामिक क्यूआर निपटान',
+    targetDate: '2026-11-05',
+    status: 'completed',
+    statusHi: 'पूर्ण एवं सत्यापित',
+    deliverables: [
+      'NPCI compliant UPI 2.0 dynamic intent generator',
+      'BLE 5.3 soundbox audio broadcast (<350ms latency)',
+      'Dual-ledger idempotent bank reconciliation',
+    ],
+    deliverablesHi: [
+      'NPCI अनुपालन UPI 2.0 डायनामिक इंटेंट जनरेटर',
+      'BLE 5.3 साउंडबॉक्स ऑडियो प्रसारण (<350ms लेटेंसी)',
+      'दोहरा खाता बही बैंक समाधान प्रक्रिया',
+    ],
+    completion: 100,
+    signOffBy: 'Er. Bhanu Ram Bariha',
+  },
+  {
+    id: 'm4',
+    number: 'M4',
+    title: 'Security Hardening & Zero-Trust Audit',
+    titleHi: 'सुरक्षा सुदृढ़ीकरण एवं ज़ीरो-ट्रस्ट ऑडिट',
+    targetDate: '2026-11-18',
+    status: 'in_progress',
+    statusHi: 'प्रगति पर (90%)',
+    deliverables: [
+      'Mutual TLS (mTLS) 1.3 cryptographic enforcement',
+      'Internal penetration checklist remediation review',
+      'Data residency topology review notes (DPDP aligned)',
+    ],
+    deliverablesHi: [
+      'म्युचुअल TLS (mTLS) 1.3 क्रिप्टोग्राफ़िक प्रवर्तन',
+      'आंतरिक सुरक्षा चेकलिस्ट सुधारात्मक समीक्षा',
+      'डेटा स्थानीयकरण टोपोलॉजी समीक्षा नोट्स (DPDP अनुरूप)',
+    ],
+    completion: 90,
+  },
+  {
+    id: 'm5',
+    number: 'M5',
+    title: 'User Acceptance Testing (UAT) & Staging Pass',
+    titleHi: 'उपयोगकर्ता स्वीकृति परीक्षण (UAT) एवं स्टेजिंग पास',
+    targetDate: '2026-11-28',
+    status: 'scheduled',
+    statusHi: 'अनुसूचित',
+    deliverables: [
+      'Private APK pilot release across 250 enterprise devices',
+      'Field terminal crash rate < 0.01% SLA validation',
+      'Executive sign-off from Client Engineering VP',
+    ],
+    deliverablesHi: [
+      '250 एंटरप्राइज टर्मिनलों पर पायलट परीक्षण',
+      'क्रैश दर < 0.01% SLA सत्यापन',
+      'क्लाइंट वाइस प्रेसिडेंट द्वारा औपचारिक स्वीकृति',
+    ],
+    completion: 0,
+  },
+  {
+    id: 'm6',
+    number: 'M6',
+    title: 'Production Fleet Rollout & 24/7 SLA Handover',
+    titleHi: 'उत्पादन बेड़ा परिनियोजन एवं 24/7 SLA हैंडओवर',
+    targetDate: '2026-12-15',
+    status: 'scheduled',
+    statusHi: 'अनुसूचित',
+    deliverables: [
+      '4,000-device enterprise fleet OTA deployment',
+      'Bariha Digital Technologies 24/7 dedicated NOC dispatch',
+      'Full Source Code Escrow & IP Ownership Deed transfer',
+    ],
+    deliverablesHi: [
+      '4,000 डिवाइस बेड़े का OTA परिनियोजन',
+      '24/7 समर्पित नेटवर्क संचालन केंद्र (NOC)',
+      'पूर्ण सोर्स कोड एस्क्रो एवं बौद्धिक संपदा विलेख हस्तांतरण',
+    ],
+    completion: 0,
+  },
+];
+
+const DEMO_PROJECT_UPDATES: ProjectUpdate[] = [
+  {
+    id: 'up-1',
+    title: 'Release Candidate v2.4.1-rc3 Deployed to Private Client Staging',
+    titleHi: 'रिलीज कैंडिडेट v2.4.1-rc3 निजी क्लाइंट स्टेजिंग में परिनियोजित',
+    summary: 'Build artifact #842 signed with enterprise production key. All 140 regression tests passed. SHA-256 digest verified.',
+    summaryHi: 'बिल्ड #842 एंटरप्राइज प्रोडक्शन की द्वारा हस्ताक्षरित। सभी 140 रिग्रेशन टेस्ट सफल। SHA-256 सत्यापित।',
+    author: 'Er. Bhanu Ram Bariha',
+    authorRole: 'Principal Systems Architect',
+    timestamp: '2026-11-09T16:30:00Z',
+    category: 'Release',
+    tag: 'Build v2.4.1-rc3',
+  },
+  {
+    id: 'up-2',
+    title: 'BLE Soundbox Latency Benchmark Reaches 310ms P99',
+    titleHi: 'BLE साउंडबॉक्स लेटेंसी बेंचमार्क 310ms P99 पर पहुंचा',
+    summary: 'Optimized thread scheduling in Jetpack Compose audio core. Multi-lingual voice playback now triggers synchronously with NPCI webhook receipt.',
+    summaryHi: 'ऑडियो कोर में थ्रेड शेड्यूलिंग अनुकूलित। NPCI वेबहुक प्राप्ति के साथ बहुभाषी वॉयस प्लेबैक समकालिक रूप से सक्रिय।',
+    author: 'Mobility Squad Alpha',
+    authorRole: 'Senior Systems Engineer',
+    timestamp: '2026-11-06T11:15:00Z',
+    category: 'Architecture',
+    tag: 'Performance SLA',
+  },
+  {
+    id: 'up-3',
+    title: 'Internal Security Checklist Review Completed (Sample)',
+    titleHi: 'आंतरिक सुरक्षा चेकलिस्ट समीक्षा पूर्ण (सैंपल)',
+    summary: 'Sample update: Automated security rules lint passed and SQLite cipher keystore checks completed in staging.',
+    summaryHi: 'सैंपल अपडेट: स्टेजिंग में स्वचालित सुरक्षा नियम जांच और SQLite कीस्टोर सत्यापन पूर्ण।',
+    author: 'SecOps Review Team',
+    authorRole: 'Security Principal',
+    timestamp: '2026-11-02T14:40:00Z',
+    category: 'Security',
+    tag: 'Sample Security Log',
+  },
+  {
+    id: 'up-4',
+    title: 'Sprint 13 Milestone Review: 100% Milestone Deliverables Accepted',
+    titleHi: 'स्प्रिंट 13 समीक्षा: 100% माइलस्टोन डिलीवरेबल्स स्वीकृत',
+    summary: 'Bi-weekly engineering sync concluded. Fleet telemetry pipeline scaled to 12,000 active concurrent simulated terminal pings with zero packet loss.',
+    summaryHi: 'पाक्षिक इंजीनियरिंग बैठक संपन्न। टेलीमैटिक्स पाइपलाइन ने 12,000 सक्रिय टर्मिनलों पर शून्य डेटा हानि दर्ज की।',
+    author: 'Er. Bhanu Ram Bariha',
+    authorRole: 'Principal Systems Architect',
+    timestamp: '2026-10-28T09:20:00Z',
+    category: 'Sprint Review',
+    tag: 'Sprint 13 Passed',
+  },
+];
+
+const DEMO_ENTERPRISE_DOCUMENTS: EnterpriseDocument[] = [
+  {
+    id: 'doc-nda',
+    title: 'Mutual Non-Disclosure Agreement (NDA)',
+    titleHi: 'आपसी गैर-प्रकटीकरण अनुबंध (NDA)',
+    category: 'Legal & IP Protection',
+    categoryHi: 'कानूनी एवं बौद्धिक संपदा संरक्षण',
+    executedDate: '2026-01-12',
+    status: 'Executed & Perpetual',
+    statusHi: 'हस्ताक्षरित एवं स्थायी सुरक्षा',
+    fileSize: '1.4 MB',
+    sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+    format: 'PDF',
+    signatories: ['Er. Bhanu Ram Bariha (Founder & Director)', 'Rajiv Sengupta (VP Systems, Kalinga Logistics)'],
+    description: 'Comprehensive non-disclosure and trade secret covenant protecting proprietary telematics algorithms, business logic, and enterprise security keys.',
+    descriptionHi: 'स्वामित्व वाले टेलीमैटिक्स एल्गोरिदम, व्यावसायिक तर्क और सुरक्षा कुंजियों की सुरक्षा करने वाला व्यापक गैर-प्रकटीकरण समझौता।',
+  },
+  {
+    id: 'doc-msa',
+    title: 'Master Services Agreement (MSA)',
+    titleHi: 'मुख्य सेवा अनुबंध (MSA)',
+    category: 'Commercial Contract',
+    categoryHi: 'वाणिज्यिक सेवा अनुबंध',
+    executedDate: '2026-01-20',
+    status: 'Active Engagement',
+    statusHi: 'सक्रिय सेवा अनुबंध',
+    fileSize: '2.8 MB',
+    sha256: '9f8a2c1b849e7284b2e81192e20bba81c9a87ef874100e4b1765ad84f881b29a',
+    format: 'PDF',
+    signatories: ['BHANU RAM BARIHA DIGITAL TECHNOLOGIES', 'Kalinga Logistics Infrastructure Ltd.'],
+    description: 'Sample MSA template outlining delivery cadence, sprint commitments, SOW-scoped SLA targets, and intellectual property allocation.',
+    descriptionHi: 'सैंपल MSA दस्तावेज़ जो वितरण गति, स्प्रिंट प्रतिबद्धताएं, SOW-आधारित SLA लक्ष्य और बौद्धिक संपदा आवंटन को परिभाषित करता है।',
+  },
+  {
+    id: 'doc-ip',
+    title: '100% Source Code & IP Ownership Deed',
+    titleHi: '100% सोर्स कोड एवं बौद्धिक संपदा स्वामित्व विलेख',
+    category: 'Intellectual Property Deed',
+    categoryHi: 'बौद्धिक संपदा विलेख',
+    executedDate: '2026-02-01',
+    status: 'Client Owned & Escrowed',
+    statusHi: 'ग्राहक स्वामित्व एवं एस्क्रो प्रमाणित',
+    fileSize: '840 KB',
+    sha256: '5d41402abc4b2a76b9719d911017c592b02ff607d73b06e902b7425f75e92c68',
+    format: 'DEED',
+    signatories: ['Er. Bhanu Ram Bariha (Principal Architect)', 'Legal Counsel, Bariha Digital Technologies'],
+    description: 'Formal legal deed guaranteeing perpetual, irrevocable, worldwide, royalty-free intellectual property assignment of all custom source code to the client.',
+    descriptionHi: 'ग्राहक को सभी कस्टम सोर्स कोड का स्थायी, अपरिवर्तनीय, विश्वव्यापी और रॉयल्टी-मुक्त बौद्धिक संपदा स्वामित्व हस्तांतरण।',
+  },
+  {
+    id: 'doc-sadd',
+    title: 'Software Architecture Design Document (SADD v3.4)',
+    titleHi: 'सॉफ्टवेयर आर्किटेक्चर डिज़ाइन दस्तावेज़ (SADD v3.4)',
+    category: 'Technical Architecture Specification',
+    categoryHi: 'तकनीकी आर्किटेक्चर विनिर्देश',
+    executedDate: '2026-11-04',
+    status: 'Engineering Approved',
+    statusHi: 'इंजीनियरिंग स्वीकृत',
+    fileSize: '14.2 MB',
+    sha256: 'b3f5c78912e45678901234567890abcdef1234567890abcdef1234567890abcd',
+    format: 'PDF',
+    signatories: ['Lead Architecture Squad', 'Client Systems Review Committee'],
+    description: '42-page comprehensive systems specification detailing MVI Kotlin Compose mobile architecture, SQLite Cipher schemas, and Kafka stream topologies.',
+    descriptionHi: 'MVI कोटलिन कम्पोज़ मोबाइल आर्किटेक्चर, SQLite साइफर स्कीमा और काफ्का स्ट्रीम टोपोलॉजी का 42-पृष्ठीय विस्तृत विनिर्देश।',
+  },
+  {
+    id: 'doc-soc2',
+    title: 'Internal Security Review Checklist (Sample Document)',
+    titleHi: 'आंतरिक सुरक्षा समीक्षा चेकलिस्ट (सैंपल दस्तावेज़)',
+    category: 'Security Checklist (Sample)',
+    categoryHi: 'सुरक्षा चेकलिस्ट (सैंपल)',
+    executedDate: '2026-11-02',
+    status: 'Sample Sandbox Record',
+    statusHi: 'सैंपल सैंडबॉक्स रिकॉर्ड',
+    fileSize: '4.6 MB',
+    sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
+    format: 'PDF',
+    signatories: ['Internal Engineering Review Team (Sample Placeholder)', 'SecOps Team'],
+    description: 'Sample sandbox checklist covering Android APK hardening, API rate limiting, and Firestore RBAC rule verification (not an external certification).',
+    descriptionHi: 'एंड्रॉइड एपीके सुरक्षा, एपीआई रेट लिमिटिंग और Firestore RBAC नियम सत्यापन की सैंपल चेकलिस्ट (कोई बाह्य प्रमाणन नहीं)।',
+  },
+  {
+    id: 'doc-apk',
+    title: 'Enterprise Release Candidate APK (v2.4.1-rc3)',
+    titleHi: 'एंटरप्राइज रिलीज कैंडिडेट APK (v2.4.1-rc3)',
+    category: 'Binary Software Build Artifact',
+    categoryHi: 'बाइनरी सॉफ्टवेयर बिल्ड आर्टिफैक्ट',
+    executedDate: '2026-11-09',
+    status: 'Cryptographically Signed',
+    statusHi: 'क्रिप्टोग्राफ़िक रूप से हस्ताक्षरित',
+    fileSize: '24.8 MB',
+    sha256: '9f8a2c1b849e7284b2e81192e20bba81c9a87ef874100e4b1765ad84f881b29a',
+    format: 'APK',
+    signatories: ['Bariha Digital Technologies Enterprise KeyStore (RSA 4096)'],
+    description: 'Production signed APK build targeting Android 14. Includes offline SQLite Cipher engine, BLE soundbox telemetry, and thermal print drivers.',
+    descriptionHi: 'एंड्रॉइड 14 लक्षित प्रोडक्शन हस्ताक्षरित एपीके। ऑफलाइन SQLite साइफर, BLE साउंडबॉक्स टेलीमेट्री और थर्मल प्रिंट ड्राइवर शामिल।',
+  },
+];
+
 export const ClientDashboardPage: React.FC = () => {
   const { language, t, formatDate, showToast } = useLanguage();
   const { navigate } = useNavigation();
-  const { currentUser, openAuthModal } = useAuth();
+  const { currentUser, isAdmin, openAuthModal } = useAuth();
   const siteContact = useSiteContact();
 
   // Strictly distinguish real authenticated Firebase session vs unauthenticated Demo Sandbox
@@ -227,6 +562,7 @@ export const ClientDashboardPage: React.FC = () => {
   const [invoicesList, setInvoicesList] = useState<EnterpriseInvoice[]>([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
   const [paymentGatewayEnabled, setPaymentGatewayEnabled] = useState(false);
+  const [paymentWebhookConfigured, setPaymentWebhookConfigured] = useState(false);
   const [activeCheckoutInvoice, setActiveCheckoutInvoice] = useState<EnterpriseInvoice | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'UPI' | 'NEFT_RTGS' | 'Corporate_Card' | 'Escrow'>('UPI');
   const [paymentRefInput, setPaymentRefInput] = useState('');
@@ -239,10 +575,14 @@ export const ClientDashboardPage: React.FC = () => {
       .then((data) => {
         if (active) {
           setPaymentGatewayEnabled(Boolean(data?.paymentGatewayEnabled));
+          setPaymentWebhookConfigured(Boolean(data?.paymentWebhookConfigured));
         }
       })
       .catch(() => {
-        if (active) setPaymentGatewayEnabled(false);
+        if (active) {
+          setPaymentGatewayEnabled(false);
+          setPaymentWebhookConfigured(false);
+        }
       });
     return () => {
       active = false;
@@ -256,6 +596,9 @@ export const ClientDashboardPage: React.FC = () => {
   const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   const [submittingReply, setSubmittingReply] = useState<Record<string, boolean>>({});
   const [firestoreProjects, setFirestoreProjects] = useState<any[] | null>(null);
+  const [liveSprintTasks, setLiveSprintTasks] = useState<any[]>([]);
+  const [liveVaultFiles, setLiveVaultFiles] = useState<any[]>([]);
+  const [demoMilestones, setDemoMilestones] = useState<Milestone[]>(DEMO_MILESTONES);
 
   // Data: Projects (Sandbox presets vs Live Firestore client engagements)
   const clientProjects = useMemo(() => {
@@ -284,6 +627,9 @@ export const ClientDashboardPage: React.FC = () => {
             : ['TypeScript', 'Cloud Firestore', 'Cloud Run']) as string[],
           targetSdk: p.targetSdk || 'Cloud Run & Android Enterprise',
           contractValue: p.contractValue || 'SOW Assigned',
+          rawMilestones: Array.isArray(p.milestones) ? p.milestones : [],
+          rawUpdates: Array.isArray(p.updates) ? p.updates : [],
+          nextQaDate: p.nextQaDate || p.targetDate || '',
         }));
       }
       return [
@@ -378,348 +724,151 @@ export const ClientDashboardPage: React.FC = () => {
     return clientProjects.find((p) => p.id === selectedProjectId) || clientProjects[0];
   }, [clientProjects, selectedProjectId]);
 
-  // Data: Sprint Tasks
-  const sprintTasks: SprintTask[] = useMemo(() => [
-    {
-      id: 'task-1',
-      title: 'SQLCipher AES-256 database encryption integration',
-      titleHi: 'SQLCipher AES-256 डेटाबेस एन्क्रिप्शन एकीकरण',
-      category: 'Mobile Storage Security',
-      status: 'completed',
-      statusHi: 'सत्यापित एवं पूर्ण',
-      assignee: 'Mobility Squad Alpha',
-      estimatedHours: '40h',
-      deliverable: 'Zero-knowledge on-device storage with hardware keystore backed key rotation.',
-    },
-    {
-      id: 'task-2',
-      title: 'Bluetooth Low Energy (BLE) audio soundbox driver sub-350ms latency',
-      titleHi: 'ब्लूटूथ लो एनर्जी (BLE) ऑडियो साउंडबॉक्स सब-350ms लेटेंसी ड्राइवर',
-      category: 'Hardware Telemetry',
-      status: 'completed',
-      statusHi: 'सत्यापित एवं पूर्ण',
-      assignee: 'Hardware Integration Team',
-      estimatedHours: '64h',
-      deliverable: 'Synchronous voice payout alert across 8 Indian languages over BLE 5.3 mesh.',
-    },
-    {
-      id: 'task-3',
-      title: 'Sub-200ms UPI dynamic QR code generator & multi-bank reconciliation',
-      titleHi: 'सब-200ms यूपीआई डायनामिक क्यूआर जेनरेशन एवं बहु-बैंक निपटान',
-      category: 'Payment Core',
-      status: 'in_progress',
-      statusHi: 'प्रगति पर (92%)',
-      assignee: 'Bhanu Ram Bariha',
-      estimatedHours: '80h',
-      deliverable: 'Dynamic intent generation compliant with NPCI UPI 2.0 specifications.',
-    },
-    {
-      id: 'task-4',
-      title: 'Low-bandwidth geospatial vector compression for GPS offline queues',
-      titleHi: 'जीपीएस ऑफलाइन कतारों के लिए कम बैंडविड्थ वेक्टर्स संपीड़न',
-      category: 'Distributed Telematics',
-      status: 'in_progress',
-      statusHi: 'प्रगति पर (75%)',
-      assignee: 'Backend Distributed Squad',
-      estimatedHours: '48h',
-      deliverable: 'Delta-encoded polyline compression reducing satellite telematics payload by 84%.',
-    },
-    {
-      id: 'task-5',
-      title: 'Internal security checklist & RBAC rules verification (Sample)',
-      titleHi: 'आंतरिक सुरक्षा चेकलिस्ट एवं RBAC नियम सत्यापन (सैंपल)',
-      category: 'Security Review',
-      status: 'review',
-      statusHi: 'समीक्षाधीन',
-      assignee: 'SecOps Team',
-      estimatedHours: '32h',
-      deliverable: 'Sample milestone: Firestore rules verification and endpoint auth gate review.',
-    },
-  ], []);
+  // Data: Sprint Tasks (Demo Sandbox fixtures vs live Firestore project_tasks)
+  const sprintTasks: SprintTask[] = useMemo(() => {
+    if (isDemoSandbox) {
+      return DEMO_SPRINT_TASKS;
+    }
+    const matching =
+      activeProject.id === 'proj-onboarding'
+        ? liveSprintTasks
+        : liveSprintTasks.filter((t: any) => !t.projectId || t.projectId === activeProject.id);
 
-  // Data: Delivery Milestones
-  const [milestonesList, setMilestonesList] = useState<Milestone[]>([
-    {
-      id: 'm1',
-      number: 'M1',
-      title: 'Architectural Blueprint & Threat Model',
-      titleHi: 'आर्किटेक्चरल ब्लूप्रिंट एवं थ्रेट मॉडल',
-      targetDate: '2026-10-10',
-      status: 'completed',
-      statusHi: 'पूर्ण एवं सत्यापित',
-      completion: 100,
-      deliverables: [
-        'Software Architecture Document (SADD v1.0)',
-        'Zero-Trust ABAC Security Invariants Spec',
-        'Private Cloud VPC Topology Deployment',
-      ],
-      deliverablesHi: [
-        'सॉफ्टवेयर आर्किटेक्चर दस्तावेज़ (SADD v1.0)',
-        'ज़ीरो-ट्रस्ट ABAC सुरक्षा विनिर्देश',
-        'प्राइवेट क्लाउड VPC टोपोलॉजी परिनियोजन',
-      ],
-      signOffBy: 'Er. Bhanu Ram Bariha & Rajiv Sengupta',
-    },
-    {
-      id: 'm2',
-      number: 'M2',
-      title: 'Core Telematics & Offline SQLite Engine',
-      titleHi: 'कोर टेलीमैटिक्स एवं ऑफलाइन SQLite इंजन',
-      targetDate: '2026-10-28',
-      status: 'completed',
-      statusHi: 'पूर्ण एवं सत्यापित',
-      deliverables: [
-        'Offline batch queue with cryptographic hash chains',
-        'SQLite Cipher hardware keystore binding',
-        'Kafka telematics ingestion microservice (10k events/sec)',
-      ],
-      deliverablesHi: [
-        'क्रिप्टोग्राफिक हैश श्रृंखलाओं के साथ ऑफ़लाइन बैच कतार',
-        'हार्डवेयर कीस्टोर बाइंडिंग के साथ SQLite साइफर',
-        'काफ्का टेलीमैटिक्स इंजेक्शन माइक्रोसर्विस (10k घटना/सेकंड)',
-      ],
-      completion: 100,
-      signOffBy: 'Mobility Lead Alpha',
-    },
-    {
-      id: 'm3',
-      number: 'M3',
-      title: 'BLE Soundbox Driver & Dynamic QR Settlement',
-      titleHi: 'बीएलई साउंडबॉक्स ड्राइवर एवं डायनामिक क्यूआर निपटान',
-      targetDate: '2026-11-05',
-      status: 'completed',
-      statusHi: 'पूर्ण एवं सत्यापित',
-      deliverables: [
-        'NPCI compliant UPI 2.0 dynamic intent generator',
-        'BLE 5.3 soundbox audio broadcast (<350ms latency)',
-        'Dual-ledger idempotent bank reconciliation',
-      ],
-      deliverablesHi: [
-        'NPCI अनुपालन UPI 2.0 डायनामिक इंटेंट जनरेटर',
-        'BLE 5.3 साउंडबॉक्स ऑडियो प्रसारण (<350ms लेटेंसी)',
-        'दोहरा खाता बही बैंक समाधान प्रक्रिया',
-      ],
-      completion: 100,
-      signOffBy: 'Er. Bhanu Ram Bariha',
-    },
-    {
-      id: 'm4',
-      number: 'M4',
-      title: 'Security Hardening & Zero-Trust Audit',
-      titleHi: 'सुरक्षा सुदृढ़ीकरण एवं ज़ीरो-ट्रस्ट ऑडिट',
-      targetDate: '2026-11-18',
-      status: 'in_progress',
-      statusHi: 'प्रगति पर (90%)',
-      deliverables: [
-        'Mutual TLS (mTLS) 1.3 cryptographic enforcement',
-        'Internal penetration checklist remediation review',
-        'Data residency topology review notes (DPDP aligned)',
-      ],
-      deliverablesHi: [
-        'म्युचुअल TLS (mTLS) 1.3 क्रिप्टोग्राफ़िक प्रवर्तन',
-        'आंतरिक सुरक्षा चेकलिस्ट सुधारात्मक समीक्षा',
-        'डेटा स्थानीयकरण टोपोलॉजी समीक्षा नोट्स (DPDP अनुरूप)',
-      ],
-      completion: 90,
-    },
-    {
-      id: 'm5',
-      number: 'M5',
-      title: 'User Acceptance Testing (UAT) & Staging Pass',
-      titleHi: 'उपयोगकर्ता स्वीकृति परीक्षण (UAT) एवं स्टेजिंग पास',
-      targetDate: '2026-11-28',
-      status: 'scheduled',
-      statusHi: 'अनुसूचित',
-      deliverables: [
-        'Private APK pilot release across 250 enterprise devices',
-        'Field terminal crash rate < 0.01% SLA validation',
-        'Executive sign-off from Client Engineering VP',
-      ],
-      deliverablesHi: [
-        '250 एंटरप्राइज टर्मिनलों पर पायलट परीक्षण',
-        'क्रैश दर < 0.01% SLA सत्यापन',
-        'क्लाइंट वाइस प्रेसिडेंट द्वारा औपचारिक स्वीकृति',
-      ],
-      completion: 0,
-    },
-    {
-      id: 'm6',
-      number: 'M6',
-      title: 'Production Fleet Rollout & 24/7 SLA Handover',
-      titleHi: 'उत्पादन बेड़ा परिनियोजन एवं 24/7 SLA हैंडओवर',
-      targetDate: '2026-12-15',
-      status: 'scheduled',
-      statusHi: 'अनुसूचित',
-      deliverables: [
-        '4,000-device enterprise fleet OTA deployment',
-        'Bariha Digital Technologies 24/7 dedicated NOC dispatch',
-        'Full Source Code Escrow & IP Ownership Deed transfer',
-      ],
-      deliverablesHi: [
-        '4,000 डिवाइस बेड़े का OTA परिनियोजन',
-        '24/7 समर्पित नेटवर्क संचालन केंद्र (NOC)',
-        'पूर्ण सोर्स कोड एस्क्रो एवं बौद्धिक संपदा विलेख हस्तांतरण',
-      ],
-      completion: 0,
-    },
-  ]);
+    return matching.map((t: any, idx: number) => {
+      const normalizedStatus: SprintTask['status'] =
+        t.status === 'completed' || t.status === 'done'
+          ? 'completed'
+          : t.status === 'review'
+          ? 'review'
+          : 'in_progress';
+      return {
+        id: t.id || `task-live-${idx}`,
+        title: t.title || 'Project Deliverable',
+        titleHi: t.titleHi || t.title || 'प्रोजेक्ट डिलीवरेबल',
+        category: t.category || 'Engineering',
+        status: normalizedStatus,
+        statusHi:
+          t.statusHi ||
+          (normalizedStatus === 'completed'
+            ? 'सत्यापित एवं पूर्ण'
+            : normalizedStatus === 'review'
+            ? 'समीक्षाधीन'
+            : 'प्रगति पर'),
+        assignee: t.assignee || t.assignedTo || activeProject.leadArchitect || 'Engineering Pod',
+        estimatedHours: t.estimatedHours ? String(t.estimatedHours) : 'SOW',
+        deliverable: t.description || t.deliverable || 'Tracked inside your active delivery sprint.',
+      };
+    });
+  }, [isDemoSandbox, liveSprintTasks, activeProject]);
 
-  // Data: Project Updates
-  const projectUpdates: ProjectUpdate[] = useMemo(() => [
-    {
-      id: 'up-1',
-      title: 'Release Candidate v2.4.1-rc3 Deployed to Private Client Staging',
-      titleHi: 'रिलीज कैंडिडेट v2.4.1-rc3 निजी क्लाइंट स्टेजिंग में परिनियोजित',
-      summary: 'Build artifact #842 signed with enterprise production key. All 140 regression tests passed. SHA-256 digest verified.',
-      summaryHi: 'बिल्ड #842 एंटरप्राइज प्रोडक्शन की द्वारा हस्ताक्षरित। सभी 140 रिग्रेशन टेस्ट सफल। SHA-256 सत्यापित।',
-      author: 'Er. Bhanu Ram Bariha',
-      authorRole: 'Principal Systems Architect',
-      timestamp: '2026-11-09T16:30:00Z',
-      category: 'Release',
-      tag: 'Build v2.4.1-rc3',
-    },
-    {
-      id: 'up-2',
-      title: 'BLE Soundbox Latency Benchmark Reaches 310ms P99',
-      titleHi: 'BLE साउंडबॉक्स लेटेंसी बेंचमार्क 310ms P99 पर पहुंचा',
-      summary: 'Optimized thread scheduling in Jetpack Compose audio core. Multi-lingual voice playback now triggers synchronously with NPCI webhook receipt.',
-      summaryHi: 'ऑडियो कोर में थ्रेड शेड्यूलिंग अनुकूलित। NPCI वेबहुक प्राप्ति के साथ बहुभाषी वॉयस प्लेबैक समकालिक रूप से सक्रिय।',
-      author: 'Mobility Squad Alpha',
-      authorRole: 'Senior Systems Engineer',
-      timestamp: '2026-11-06T11:15:00Z',
-      category: 'Architecture',
-      tag: 'Performance SLA',
-    },
-    {
-      id: 'up-3',
-      title: 'Internal Security Checklist Review Completed (Sample)',
-      titleHi: 'आंतरिक सुरक्षा चेकलिस्ट समीक्षा पूर्ण (सैंपल)',
-      summary: 'Sample update: Automated security rules lint passed and SQLite cipher keystore checks completed in staging.',
-      summaryHi: 'सैंपल अपडेट: स्टेजिंग में स्वचालित सुरक्षा नियम जांच और SQLite कीस्टोर सत्यापन पूर्ण।',
-      author: 'SecOps Review Team',
-      authorRole: 'Security Principal',
-      timestamp: '2026-11-02T14:40:00Z',
-      category: 'Security',
-      tag: 'Sample Security Log',
-    },
-    {
-      id: 'up-4',
-      title: 'Sprint 13 Milestone Review: 100% Milestone Deliverables Accepted',
-      titleHi: 'स्प्रिंट 13 समीक्षा: 100% माइलस्टोन डिलीवरेबल्स स्वीकृत',
-      summary: 'Bi-weekly engineering sync concluded. Fleet telemetry pipeline scaled to 12,000 active concurrent simulated terminal pings with zero packet loss.',
-      summaryHi: 'पाक्षिक इंजीनियरिंग बैठक संपन्न। टेलीमैटिक्स पाइपलाइन ने 12,000 सक्रिय टर्मिनलों पर शून्य डेटा हानि दर्ज की।',
-      author: 'Er. Bhanu Ram Bariha',
-      authorRole: 'Principal Systems Architect',
-      timestamp: '2026-10-28T09:20:00Z',
-      category: 'Sprint Review',
-      tag: 'Sprint 13 Passed',
-    },
-  ], []);
+  // Data: Delivery Milestones (Demo Sandbox fixtures vs live project milestones)
+  const milestonesList: Milestone[] = useMemo(() => {
+    if (isDemoSandbox) {
+      return demoMilestones;
+    }
+    const raw = (activeProject as any)?.rawMilestones;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map((m: any, idx: number) => {
+      const status: Milestone['status'] =
+        m.status === 'completed'
+          ? 'completed'
+          : m.status === 'in_progress'
+          ? 'in_progress'
+          : 'scheduled';
+      return {
+        id: m.id || `ms-live-${idx}`,
+        number: m.number || `M${idx + 1}`,
+        title: m.title || `Milestone ${idx + 1}`,
+        titleHi: m.titleHi || m.title || `माइलस्टोन ${idx + 1}`,
+        targetDate: m.targetDate || new Date().toISOString().split('T')[0],
+        status,
+        statusHi:
+          m.statusHi ||
+          (status === 'completed' ? 'पूर्ण एवं सत्यापित' : status === 'in_progress' ? 'प्रगति पर' : 'अनुसूचित'),
+        completion: typeof m.completion === 'number' ? m.completion : status === 'completed' ? 100 : 0,
+        deliverables: Array.isArray(m.deliverables) ? m.deliverables.map(String) : [],
+        deliverablesHi: Array.isArray(m.deliverablesHi)
+          ? m.deliverablesHi.map(String)
+          : Array.isArray(m.deliverables)
+          ? m.deliverables.map(String)
+          : [],
+        signOffBy: m.signOffBy,
+      };
+    });
+  }, [isDemoSandbox, demoMilestones, activeProject]);
 
-  // Data: Documents & Artifacts
-  const enterpriseDocuments: EnterpriseDocument[] = useMemo(() => [
-    {
-      id: 'doc-nda',
-      title: 'Mutual Non-Disclosure Agreement (NDA)',
-      titleHi: 'आपसी गैर-प्रकटीकरण अनुबंध (NDA)',
-      category: 'Legal & IP Protection',
-      categoryHi: 'कानूनी एवं बौद्धिक संपदा संरक्षण',
-      executedDate: '2026-01-12',
-      status: 'Executed & Perpetual',
-      statusHi: 'हस्ताक्षरित एवं स्थायी सुरक्षा',
-      fileSize: '1.4 MB',
-      sha256: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-      format: 'PDF',
-      signatories: ['Er. Bhanu Ram Bariha (Founder & Director)', 'Rajiv Sengupta (VP Systems, Kalinga Logistics)'],
-      description: 'Comprehensive non-disclosure and trade secret covenant protecting proprietary telematics algorithms, business logic, and enterprise security keys.',
-      descriptionHi: 'स्वामित्व वाले टेलीमैटिक्स एल्गोरिदम, व्यावसायिक तर्क और सुरक्षा कुंजियों की सुरक्षा करने वाला व्यापक गैर-प्रकटीकरण समझौता।',
-    },
-    {
-      id: 'doc-msa',
-      title: 'Master Services Agreement (MSA)',
-      titleHi: 'मुख्य सेवा अनुबंध (MSA)',
-      category: 'Commercial Contract',
-      categoryHi: 'वाणिज्यिक सेवा अनुबंध',
-      executedDate: '2026-01-20',
-      status: 'Active Engagement',
-      statusHi: 'सक्रिय सेवा अनुबंध',
-      fileSize: '2.8 MB',
-      sha256: '9f8a2c1b849e7284b2e81192e20bba81c9a87ef874100e4b1765ad84f881b29a',
-      format: 'PDF',
-      signatories: ['BHANU RAM BARIHA DIGITAL TECHNOLOGIES', 'Kalinga Logistics Infrastructure Ltd.'],
-      description: 'Sample MSA template outlining delivery cadence, sprint commitments, SOW-scoped SLA targets, and intellectual property allocation.',
-      descriptionHi: 'सैंपल MSA दस्तावेज़ जो वितरण गति, स्प्रिंट प्रतिबद्धताएं, SOW-आधारित SLA लक्ष्य और बौद्धिक संपदा आवंटन को परिभाषित करता है।',
-    },
-    {
-      id: 'doc-ip',
-      title: '100% Source Code & IP Ownership Deed',
-      titleHi: '100% सोर्स कोड एवं बौद्धिक संपदा स्वामित्व विलेख',
-      category: 'Intellectual Property Deed',
-      categoryHi: 'बौद्धिक संपदा विलेख',
-      executedDate: '2026-02-01',
-      status: 'Client Owned & Escrowed',
-      statusHi: 'ग्राहक स्वामित्व एवं एस्क्रो प्रमाणित',
-      fileSize: '840 KB',
-      sha256: '5d41402abc4b2a76b9719d911017c592b02ff607d73b06e902b7425f75e92c68',
-      format: 'DEED',
-      signatories: ['Er. Bhanu Ram Bariha (Principal Architect)', 'Legal Counsel, Bariha Digital Technologies'],
-      description: 'Formal legal deed guaranteeing perpetual, irrevocable, worldwide, royalty-free intellectual property assignment of all custom source code to the client.',
-      descriptionHi: 'ग्राहक को सभी कस्टम सोर्स कोड का स्थायी, अपरिवर्तनीय, विश्वव्यापी और रॉयल्टी-मुक्त बौद्धिक संपदा स्वामित्व हस्तांतरण।',
-    },
-    {
-      id: 'doc-sadd',
-      title: 'Software Architecture Design Document (SADD v3.4)',
-      titleHi: 'सॉफ्टवेयर आर्किटेक्चर डिज़ाइन दस्तावेज़ (SADD v3.4)',
-      category: 'Technical Architecture Specification',
-      categoryHi: 'तकनीकी आर्किटेक्चर विनिर्देश',
-      executedDate: '2026-11-04',
-      status: 'Engineering Approved',
-      statusHi: 'इंजीनियरिंग स्वीकृत',
-      fileSize: '14.2 MB',
-      sha256: 'b3f5c78912e45678901234567890abcdef1234567890abcdef1234567890abcd',
-      format: 'PDF',
-      signatories: ['Lead Architecture Squad', 'Client Systems Review Committee'],
-      description: '42-page comprehensive systems specification detailing MVI Kotlin Compose mobile architecture, SQLite Cipher schemas, and Kafka stream topologies.',
-      descriptionHi: 'MVI कोटलिन कम्पोज़ मोबाइल आर्किटेक्चर, SQLite साइफर स्कीमा और काफ्का स्ट्रीम टोपोलॉजी का 42-पृष्ठीय विस्तृत विनिर्देश।',
-    },
-    {
-      id: 'doc-soc2',
-      title: 'Internal Security Review Checklist (Sample Document)',
-      titleHi: 'आंतरिक सुरक्षा समीक्षा चेकलिस्ट (सैंपल दस्तावेज़)',
-      category: 'Security Checklist (Sample)',
-      categoryHi: 'सुरक्षा चेकलिस्ट (सैंपल)',
-      executedDate: '2026-11-02',
-      status: 'Sample Sandbox Record',
-      statusHi: 'सैंपल सैंडबॉक्स रिकॉर्ड',
-      fileSize: '4.6 MB',
-      sha256: 'a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0',
-      format: 'PDF',
-      signatories: ['Internal Engineering Review Team (Sample Placeholder)', 'SecOps Team'],
-      description: 'Sample sandbox checklist covering Android APK hardening, API rate limiting, and Firestore RBAC rule verification (not an external certification).',
-      descriptionHi: 'एंड्रॉइड एपीके सुरक्षा, एपीआई रेट लिमिटिंग और Firestore RBAC नियम सत्यापन की सैंपल चेकलिस्ट (कोई बाह्य प्रमाणन नहीं)।',
-    },
-    {
-      id: 'doc-apk',
-      title: 'Enterprise Release Candidate APK (v2.4.1-rc3)',
-      titleHi: 'एंटरप्राइज रिलीज कैंडिडेट APK (v2.4.1-rc3)',
-      category: 'Binary Software Build Artifact',
-      categoryHi: 'बाइनरी सॉफ्टवेयर बिल्ड आर्टिफैक्ट',
-      executedDate: '2026-11-09',
-      status: 'Cryptographically Signed',
-      statusHi: 'क्रिप्टोग्राफ़िक रूप से हस्ताक्षरित',
-      fileSize: '24.8 MB',
-      sha256: '9f8a2c1b849e7284b2e81192e20bba81c9a87ef874100e4b1765ad84f881b29a',
-      format: 'APK',
-      signatories: ['Bariha Digital Technologies Enterprise KeyStore (RSA 4096)'],
-      description: 'Production signed APK build targeting Android 14. Includes offline SQLite Cipher engine, BLE soundbox telemetry, and thermal print drivers.',
-      descriptionHi: 'एंड्रॉइड 14 लक्षित प्रोडक्शन हस्ताक्षरित एपीके। ऑफलाइन SQLite साइफर, BLE साउंडबॉक्स टेलीमेट्री और थर्मल प्रिंट ड्राइवर शामिल।',
-    },
-  ], []);
+  // Data: Project Updates (Demo Sandbox fixtures vs live project updates)
+  const projectUpdates: ProjectUpdate[] = useMemo(() => {
+    if (isDemoSandbox) {
+      return DEMO_PROJECT_UPDATES;
+    }
+    const raw = (activeProject as any)?.rawUpdates;
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    return raw.map((u: any, idx: number) => ({
+      id: u.id || `upd-live-${idx}`,
+      title: u.title || 'Project Update',
+      titleHi: u.titleHi || u.title || 'प्रोजेक्ट अपडेट',
+      summary: u.summary || u.message || '',
+      summaryHi: u.summaryHi || u.summary || u.message || '',
+      author: u.author || activeProject.leadArchitect || 'Er. Bhanu Ram Bariha',
+      authorRole: u.authorRole || 'Lead Platform Architect',
+      timestamp: u.timestamp || new Date().toISOString(),
+      category:
+        u.category === 'Release' ||
+        u.category === 'Architecture' ||
+        u.category === 'Security' ||
+        u.category === 'Sprint Review'
+          ? u.category
+          : 'Sprint Review',
+      tag: u.tag || 'Project Log',
+    }));
+  }, [isDemoSandbox, activeProject]);
+
+  // Data: Documents & Artifacts (Demo Sandbox fixtures vs authenticated /api/files/list)
+  const enterpriseDocuments: EnterpriseDocument[] = useMemo(() => {
+    if (isDemoSandbox) {
+      return DEMO_ENTERPRISE_DOCUMENTS;
+    }
+    return liveVaultFiles.map((f: any, idx: number) => {
+      const extUpper = String(f.extension || 'PDF').toUpperCase();
+      const format: EnterpriseDocument['format'] =
+        extUpper === 'APK' ||
+        extUpper === 'ZIP' ||
+        extUpper === 'DEED' ||
+        extUpper === 'DOCX' ||
+        extUpper === 'PNG' ||
+        extUpper === 'JPG'
+          ? (extUpper as EnterpriseDocument['format'])
+          : 'PDF';
+      return {
+        id: f.fileId || `file-${idx}`,
+        title: f.fileName || 'Verified Enterprise Artifact',
+        titleHi: f.fileName || 'सत्यापित एंटरप्राइज आर्टिफैक्ट',
+        category: f.category || 'general_attachment',
+        categoryHi: f.category || 'सुरक्षित वॉल्ट फ़ाइल',
+        executedDate: f.uploadedAt || new Date().toISOString(),
+        status: 'Cloud Vault Verified',
+        statusHi: 'क्लाउड वॉल्ट सत्यापित',
+        fileSize: f.fileSizeFormatted || 'Verified',
+        sha256: f.sha256 || '',
+        format,
+        signatories: [f.uploadedBy || currentUser?.email || 'Verified Owner'],
+        description: f.notes || 'Cryptographically hashed artifact stored securely in Google Cloud Storage.',
+        descriptionHi: f.notes || 'Google Cloud Storage में सुरक्षित क्रिप्टोग्राफ़िक रूप से हैश की गई फ़ाइल।',
+        downloadUrl: f.downloadUrl || (f.fileId ? `/api/files/${f.fileId}` : undefined),
+        fileName: f.fileName,
+      };
+    });
+  }, [isDemoSandbox, liveVaultFiles, currentUser]);
 
   // Data: Support Tickets (strictly separated: demo fixtures only loaded in Demo Sandbox)
   const [supportTickets, setSupportTickets] = useState<any[]>([]);
 
-  // Load Firestore tickets, projects & authoritative server invoices when authenticated (or demo samples in sandbox)
+  // Load Firestore tickets, projects, project tasks, vault files & authoritative server invoices
   useEffect(() => {
     let isCancelled = false;
 
@@ -728,6 +877,8 @@ export const ClientDashboardPage: React.FC = () => {
       setSupportTickets(DEMO_SAMPLE_TICKETS);
       setExpandedTicketId('TKT-2026-904');
       setFirestoreProjects(null);
+      setLiveSprintTasks([]);
+      setLiveVaultFiles([]);
       return () => {
         isCancelled = true;
       };
@@ -736,6 +887,8 @@ export const ClientDashboardPage: React.FC = () => {
       setInvoicesList([]);
       setSupportTickets([]);
       setFirestoreProjects(null);
+      setLiveSprintTasks([]);
+      setLiveVaultFiles([]);
       setExpandedTicketId(null);
       return () => {
         isCancelled = true;
@@ -755,6 +908,15 @@ export const ClientDashboardPage: React.FC = () => {
         if (!isCancelled) setFirestoreProjects([]);
       });
 
+    fetchProjectTasksForClient(currentUser.uid)
+      .then((tasks) => {
+        if (!isCancelled) setLiveSprintTasks(Array.isArray(tasks) ? tasks : []);
+      })
+      .catch((err) => {
+        console.warn('[Client Project Tasks Load]', err?.message || err);
+        if (!isCancelled) setLiveSprintTasks([]);
+      });
+
     fetchSupportTickets(currentUser.uid)
       .then((tickets) => {
         if (isCancelled) return;
@@ -772,16 +934,19 @@ export const ClientDashboardPage: React.FC = () => {
       });
 
     setLoadingInvoices(true);
-    currentUser
-      .getIdToken()
-      .then((idToken) => {
-        if (isCancelled) return null;
-        return fetch('/api/invoices', {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
+    authenticatedFetch('/api/files/list', {}, { user: currentUser })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isCancelled && data && Array.isArray(data.files)) {
+          setLiveVaultFiles(data.files);
+        }
       })
+      .catch(() => {
+        if (!isCancelled) setLiveVaultFiles([]);
+      });
+
+    authenticatedFetch('/api/invoices', {}, { user: currentUser })
       .then(async (res) => {
-        if (!res) return null;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
@@ -817,8 +982,15 @@ export const ClientDashboardPage: React.FC = () => {
     return projectUpdates.filter((u) => u.category === updateFilter);
   }, [projectUpdates, updateFilter]);
 
-  // Download authenticated document simulation
+  // Download authenticated vault file (for live files) or verification certificate (demo sandbox)
   const handleDownloadDocument = (doc: EnterpriseDocument) => {
+    if (!isDemoSandbox && doc.downloadUrl) {
+      void handleDownloadAttachment({
+        downloadUrl: doc.downloadUrl,
+        fileName: doc.fileName || doc.title,
+      });
+      return;
+    }
     try {
       const certificateContent = `================================================================================
 BHANU RAM BARIHA DIGITAL TECHNOLOGIES // ENTERPRISE VERIFICATION CERTIFICATE
@@ -891,11 +1063,10 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
       return;
     }
     try {
-      const headers: Record<string, string> = {};
-      if (currentUser && url.startsWith('/api/files/')) {
-        headers['Authorization'] = `Bearer ${await currentUser.getIdToken()}`;
-      }
-      const res = await fetch(url, { headers });
+      const res =
+        currentUser && url.startsWith('/api/files/')
+          ? await authenticatedFetch(url, {}, { user: currentUser })
+          : await fetch(url);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || `Download failed (HTTP ${res.status})`);
@@ -957,37 +1128,52 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
     setProcessingPayment(true);
     try {
-      const idToken = await currentUser.getIdToken();
-
       // Step 1: Request authoritative server payment intent (server looks up amount)
-      const intentRes = await fetch('/api/payments/create-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
+      const intentRes = await authenticatedFetch(
+        '/api/payments/create-intent',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoiceId: invoice.id }),
         },
-        body: JSON.stringify({ invoiceId: invoice.id }),
-      });
+        { includeAppCheck: true, user: currentUser }
+      );
       const intentData = await intentRes.json().catch(() => ({}));
       if (!intentRes.ok) {
         throw new Error(intentData.error || `Intent creation failed (HTTP ${intentRes.status})`);
       }
 
-      // Step 2: Verify cryptographic HMAC checksum and commit ledger entry
-      const verifyRes = await fetch('/api/payments/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
+      // Live client settlement is never self-signed by the browser:
+      // non-admin sessions require an external gateway webhook signature (X-Payment-Gateway-Signature)
+      // or Administrator escrow reconciliation.
+      if (intentData.gatewayVerificationRequired && !paymentWebhookConfigured) {
+        setActiveCheckoutInvoice(null);
+        showToast(
+          t(
+            `Signed payment intent ${intentData.orderId} created for INR ${Number(intentData.amount || invoice.totalAmount).toLocaleString('en-IN')}. Settlement completes only after bank/gateway webhook confirmation or Administrator verification.`,
+            `INR ${Number(intentData.amount || invoice.totalAmount).toLocaleString('en-IN')} के लिए भुगतान आशय ${intentData.orderId} बनाया गया। बैंक/गेटवे वेबहुक या एडमिन सत्यापन के बाद ही चालान भुगतान पूर्ण होगा।`
+          ),
+          'info'
+        );
+        return;
+      }
+
+      // Step 2: Admin reconciliation or gateway-signed verification
+      const verifyRes = await authenticatedFetch(
+        '/api/payments/verify',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: intentData.orderId,
+            invoiceId: intentData.invoiceId,
+            checksum: intentData.checksum,
+            method: paymentMethod,
+            transactionRef: paymentRefInput.trim() || undefined,
+          }),
         },
-        body: JSON.stringify({
-          orderId: intentData.orderId,
-          invoiceId: intentData.invoiceId,
-          checksum: intentData.checksum,
-          method: paymentMethod,
-          transactionRef: paymentRefInput.trim() || undefined,
-        }),
-      });
+        { includeAppCheck: true, user: currentUser }
+      );
       const verifyData = await verifyRes.json().catch(() => ({}));
       if (!verifyRes.ok) {
         throw new Error(verifyData.error || `Payment verification failed (HTTP ${verifyRes.status})`);
@@ -1014,9 +1200,21 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
     }
   };
 
-  // Sign off milestone (client interactive capability)
+  // Sign off milestone (demo sandbox local preview; live milestone approvals require Lead Architect verification)
   const handleSignOffMilestone = (milestoneId: string) => {
-    setMilestonesList((prev) =>
+    if (!isDemoSandbox) {
+      showToast(
+        t(
+          'Live milestone sign-offs are verified by your Lead Architect via an SLA ticket thread so formal audit history stays tamper-proof.',
+          'लाइव माइलस्टोन स्वीकृति ऑडिट सुरक्षा हेतु आपके लीड आर्किटेक्ट द्वारा SLA टिकट थ्रेड के माध्यम से दर्ज की जाती है।'
+        ),
+        'info'
+      );
+      setActiveTab('support');
+      return;
+    }
+
+    setDemoMilestones((prev) =>
       prev.map((m) => {
         if (m.id === milestoneId) {
           return {
@@ -1024,27 +1222,19 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             status: 'completed',
             statusHi: 'पूर्ण एवं सत्यापित',
             completion: 100,
-            signOffBy: `${
-              isDemoSandbox
-                ? `${activePersona === 'kalinga' ? 'Rajiv Sengupta' : 'Dr. Anita Mohanty'} (Demo Sandbox)`
-                : currentUser?.displayName || currentUser?.email || 'Verified Client'
-            }`,
+            signOffBy: `${activePersona === 'kalinga' ? 'Rajiv Sengupta' : 'Dr. Anita Mohanty'} (Demo Sandbox)`,
           };
         }
         return m;
       })
     );
     showToast(
-      isDemoSandbox
-        ? t('[Demo Sandbox] Milestone sign-off simulated locally.', '[डेमो सैंडबॉक्स] माइलस्टोन स्वीकृति स्थानीय रूप से अनुकरण की गई।')
-        : language === 'hi'
-        ? 'माइलस्टोन स्वीकृति सफलतापूर्वक दर्ज की गई। इंजीनियरिंग दल को सूचित किया गया।'
-        : 'Milestone sign-off recorded. Lead Architect notified.',
-      isDemoSandbox ? 'info' : 'success'
+      t('[Demo Sandbox] Milestone sign-off simulated locally.', '[डेमो सैंडबॉक्स] माइलस्टोन स्वीकृति स्थानीय रूप से अनुकरण की गई।'),
+      'info'
     );
   };
 
-  // Toggle ticket status
+  // Toggle ticket status (Demo Sandbox mutates locally; live client logs an authenticated close/re-open request in Firestore)
   const handleToggleTicketStatus = async (ticketId: string, currentStatus: string) => {
     const nextStatus = currentStatus === 'resolved' ? 'open' : 'resolved';
     if (isDemoSandbox) {
@@ -1062,18 +1252,34 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
     }
 
     try {
-      await updateSupportTicketStatus(ticketId, nextStatus as any);
-      setSupportTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: nextStatus } : t))
-      );
+      const requestMsg =
+        currentStatus === 'resolved'
+          ? '[Client Request] Please re-open this ticket for follow-up engineering review.'
+          : '[Client Request] Issue verified resolved on our side — please mark this ticket closed.';
+      const authorName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Enterprise Client';
+      const newReply = await addTicketResponse(ticketId, {
+        author: authorName,
+        authorRole: 'client',
+        message: requestMsg,
+      });
+      if (newReply) {
+        setSupportTickets((prev) =>
+          prev.map((t) =>
+            t.id === ticketId
+              ? { ...t, responses: [...(t.responses || []), newReply] }
+              : t
+          )
+        );
+      }
+      setExpandedTicketId(ticketId);
       showToast(
-        language === 'hi'
-          ? `टिकट स्थिति को "${nextStatus}" में अपडेट किया गया।`
-          : `Ticket status updated to "${nextStatus}".`,
+        currentStatus === 'resolved'
+          ? t('Re-open request sent to the Lead Architect thread.', 'टिकट पुनः खोलने का अनुरोध आर्किटेक्ट थ्रेड में भेजा गया।')
+          : t('Close request logged on the ticket thread for Lead Architect confirmation.', 'टिकट बंद करने का अनुरोध आर्किटेक्ट पुष्टि हेतु दर्ज किया गया।'),
         'success'
       );
     } catch (err: any) {
-      showToast(err?.message || t('Unable to update ticket status.', 'टिकट स्थिति अपडेट विफल।'), 'alert');
+      showToast(err?.message || t('Unable to submit status request.', 'स्थिति अनुरोध भेजने में त्रुटि।'), 'alert');
     }
   };
 
@@ -1229,7 +1435,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
       <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 sm:p-6 text-white">
         <div className="max-w-xl w-full bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl text-center space-y-6">
           <div className="w-16 h-16 rounded-2xl bg-blue-900/40 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
-            <Lock className="w-8 h-8 text-blue-400 animate-pulse" />
+            <Lock className="w-8 h-8 text-blue-400" />
           </div>
 
           <div className="space-y-2">
@@ -1341,7 +1547,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                   {t('Enterprise Client Portal', 'एंटरप्राइज क्लाइंट पोर्टल')}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
                   {isDemoSandbox
                     ? t('Role-Isolated Access · Sample Sandbox', 'रोल-आधारित सुरक्षा · सैंपल सैंडबॉक्स')
                     : t('Role-Isolated Verified Session', 'रोल-आधारित सत्यापित सत्र')}
@@ -1416,34 +1622,38 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           </div>
 
           {/* 4 Telemetry Metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+          <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-4 gap-4 mt-6">
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
-                <Layers className="w-4 h-4 text-blue-700" />
+              <div className="flex items-center gap-2 text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1">
+                <Layers className="w-4 h-4 text-blue-700 shrink-0" />
                 <span>{t('Current Velocity', 'वर्तमान प्रगति')}</span>
               </div>
-              <div className="text-2xl font-black text-slate-950">{activeProject.completion}%</div>
-              <div className="text-xs text-slate-500 mt-1">{activeProject.sprint}</div>
+              <div className="text-lg sm:text-2xl font-black text-slate-950">{activeProject.completion}%</div>
+              <div className="text-xs text-slate-600 mt-1">{activeProject.sprint}</div>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
-                <Activity className="w-4 h-4 text-blue-700" />
+              <div className="flex items-center gap-2 text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1">
+                <Activity className="w-4 h-4 text-blue-700 shrink-0" />
                 <span>{t('SLA Support Tickets', 'SLA सहायता टिकट')}</span>
               </div>
-              <div className="text-2xl font-black text-slate-950">
+              <div className="text-lg sm:text-2xl font-black text-slate-950">
                 {supportTickets.filter((t) => t.status !== 'resolved').length} {t('Active', 'सक्रिय')}
               </div>
               <div className="text-xs text-emerald-700 font-medium mt-1">100% {t('On-track SLA', 'समय पर निष्पादन')}</div>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
-              <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">
-                <Server className="w-4 h-4 text-blue-700" />
+              <div className="flex items-center gap-2 text-slate-600 text-xs font-semibold uppercase tracking-wider mb-1">
+                <Server className="w-4 h-4 text-blue-700 shrink-0" />
                 <span>{t('Target Availability', 'लक्षित उपलब्धता')}</span>
               </div>
-              <div className="text-2xl font-black text-emerald-700">SOW Target</div>
-              <div className="text-xs text-slate-500 mt-1">{t('Sample Sandbox Placeholder', 'सैंपल सैंडबॉक्स डेटा')}</div>
+              <div className="text-lg sm:text-2xl font-black text-emerald-700">SOW Target</div>
+              <div className="text-xs text-slate-600 mt-1">
+                {isDemoSandbox
+                  ? t('Sample Sandbox Placeholder', 'सैंपल सैंडबॉक्स डेटा')
+                  : t('Role & Auth Enforced', 'सत्यापित एवं सुरक्षित सत्र')}
+              </div>
             </div>
 
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-100">
@@ -1452,18 +1662,29 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                 <span>{t('Next Milestone QA', 'अगला माइलस्टोन QA')}</span>
               </div>
               <div className="text-base sm:text-lg font-bold text-slate-900 truncate">
-                {formatDate('2026-11-20')}
+                {isDemoSandbox
+                  ? formatDate('2026-11-20')
+                  : (activeProject as any).nextQaDate
+                  ? formatDate((activeProject as any).nextQaDate)
+                  : t('SOW Scheduled', 'अनुसूचित')}
               </div>
-              <div className="text-xs text-slate-500 mt-1">{t('Release Candidate 4 Pass', 'रिलीज कैंडिडेट 4 परीक्षण')}</div>
+              <div className="text-xs text-slate-500 mt-1">
+                {isDemoSandbox
+                  ? t('Release Candidate 4 Pass', 'रिलीज कैंडिडेट 4 परीक्षण')
+                  : activeProject.sprint}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* 6 Primary Customer Portal Navigation Tabs */}
-        <div className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1 scrollbar-thin">
+        {/* 7 Primary Customer Portal Navigation Tabs */}
+        <div role="tablist" aria-label={t('Client Portal Sections', 'क्लाइंट पोर्टल अनुभाग')} className="flex items-center gap-2 border-b border-slate-200 overflow-x-auto pb-1 scrollbar-thin">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'tracking'}
             onClick={() => setActiveTab('tracking')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'tracking'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1474,8 +1695,11 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'milestones'}
             onClick={() => setActiveTab('milestones')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'milestones'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1483,14 +1707,17 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>{t('Milestones Roadmap', 'माइलस्टोन्स रोडमैप')}</span>
-            <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.2 rounded-full font-bold">
+            <span className="text-[10px] bg-slate-200 text-slate-800 px-1.5 py-0.2 rounded-full font-bold">
               {milestonesList.length}
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'updates'}
             onClick={() => setActiveTab('updates')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'updates'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1504,8 +1731,11 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'documents'}
             onClick={() => setActiveTab('documents')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'documents'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1513,14 +1743,17 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           >
             <FileText className="w-4 h-4" />
             <span>{t('Document & Artifact Vault', 'दस्तावेज़ एवं आर्टिफैक्ट वॉल्ट')}</span>
-            <span className="text-[11px] font-mono tabular-nums text-slate-500">
+            <span className="text-[11px] font-mono tabular-nums text-slate-600">
               ({enterpriseDocuments.length})
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'invoices'}
             onClick={() => setActiveTab('invoices')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'invoices'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1528,14 +1761,17 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           >
             <Receipt className="w-4 h-4" />
             <span>{t('Invoices & Payments', 'चालान एवं भुगतान')}</span>
-            <span className="text-[11px] font-mono tabular-nums text-slate-500">
+            <span className="text-[11px] font-mono tabular-nums text-slate-600">
               ({invoicesList.length})
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'support'}
             onClick={() => setActiveTab('support')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'support'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1543,14 +1779,17 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
           >
             <LifeBuoy className="w-4 h-4" />
             <span>{t('Support Requests & SLA', 'सहायता अनुरोध एवं SLA')}</span>
-            <span className="text-[11px] font-mono tabular-nums text-slate-500">
+            <span className="text-[11px] font-mono tabular-nums text-slate-600">
               ({supportTickets.length})
             </span>
           </button>
 
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'sla'}
             onClick={() => setActiveTab('sla')}
-            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`px-4 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap shrink-0 transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
               activeTab === 'sla'
                 ? 'border-blue-700 text-blue-700'
                 : 'border-transparent text-slate-600 hover:text-slate-950'
@@ -1594,7 +1833,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                   <div className="text-xs font-semibold text-emerald-700">
                     {language === 'hi' ? activeProject.healthHi : activeProject.health}
                   </div>
-                  <div className="text-[11px] font-mono text-slate-400">
+                  <div className="text-[11px] font-mono text-slate-600">
                     {activeProject.targetSdk}
                   </div>
                 </div>
@@ -1645,38 +1884,47 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
               </div>
 
               <div className="divide-y divide-slate-100">
-                {sprintTasks.map((task) => (
-                  <div key={task.id} className="py-3.5 space-y-1 hover:bg-slate-50/50 rounded-lg p-2 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                            task.status === 'completed'
-                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                              : task.status === 'in_progress'
-                              ? 'bg-blue-50 text-blue-800 border-blue-200'
-                              : 'bg-purple-50 text-purple-800 border-purple-200'
-                          }`}
-                        >
-                          {language === 'hi' ? task.statusHi : task.status.replace('_', ' ')}
-                        </span>
-                        <h5 className="text-xs font-bold text-slate-900">
-                          {language === 'hi' ? task.titleHi : task.title}
-                        </h5>
-                      </div>
-
-                      <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono">
-                        <span>{task.category}</span>
-                        <span className="text-slate-400">·</span>
-                        <span className="font-semibold text-slate-700">{task.assignee}</span>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-slate-600 pl-1 pt-0.5">
-                      {task.deliverable}
-                    </p>
+                {sprintTasks.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                    {t(
+                      'No sprint tasks assigned to your project yet. Tasks created by your Lead Architect in Firestore will appear here automatically.',
+                      'आपके प्रोजेक्ट के लिए अभी तक कोई स्प्रिंट कार्य असाइन नहीं किया गया है। लीड आर्किटेक्ट द्वारा जोड़े गए कार्य यहां दिखाई देंगे।'
+                    )}
                   </div>
-                ))}
+                ) : (
+                  sprintTasks.map((task) => (
+                    <div key={task.id} className="py-3.5 space-y-1 hover:bg-slate-50/50 rounded-lg p-2 transition-colors">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                              task.status === 'completed'
+                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                : task.status === 'in_progress'
+                                ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                : 'bg-purple-50 text-purple-800 border-purple-200'
+                            }`}
+                          >
+                            {language === 'hi' ? task.statusHi : task.status.replace('_', ' ')}
+                          </span>
+                          <h5 className="text-xs font-bold text-slate-900">
+                            {language === 'hi' ? task.titleHi : task.title}
+                          </h5>
+                        </div>
+
+                        <div className="flex items-center gap-3 text-[11px] text-slate-500 font-mono">
+                          <span>{task.category}</span>
+                          <span className="text-slate-400">·</span>
+                          <span className="font-semibold text-slate-700">{task.assignee}</span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-slate-600 pl-1 pt-0.5">
+                        {task.deliverable}
+                      </p>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1708,94 +1956,104 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             </div>
 
             <div className="space-y-5">
-              {milestonesList.map((m) => (
-                <div
-                  key={m.id}
-                  className={`p-5 rounded-xl border transition-all ${
-                    m.status === 'completed'
-                      ? 'border-emerald-200 bg-emerald-50/20'
-                      : m.status === 'in_progress'
-                      ? 'border-blue-300 bg-blue-50/20 shadow-xs'
-                      : 'border-slate-200 bg-slate-50/40'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                    <div className="flex items-center gap-2.5">
-                      <span
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs font-mono ${
-                          m.status === 'completed'
-                            ? 'bg-emerald-600 text-white'
-                            : m.status === 'in_progress'
-                            ? 'bg-blue-700 text-white'
-                            : 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {m.number}
-                      </span>
-                      <div>
-                        <h4 className="text-sm font-bold text-slate-950">
-                          {language === 'hi' ? m.titleHi : m.title}
-                        </h4>
-                        <div className="text-[11px] text-slate-500 font-mono flex items-center gap-2 mt-0.5">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          <span>{t('Target:', 'लक्ष्य तिथि:')} {formatDate(m.targetDate)}</span>
-                          {m.signOffBy && (
-                            <>
-                              <span className="text-slate-300">·</span>
-                              <span className="text-emerald-700 font-semibold">{t('Signed:', 'स्वीकृत:')} {m.signOffBy}</span>
-                            </>
-                          )}
+              {milestonesList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  {t(
+                    'No SOW milestones published for this engagement yet. Milestones added to your project record in Cloud Firestore will appear here.',
+                    'इस अनुबंध के लिए अभी तक कोई SOW माइलस्टोन प्रकाशित नहीं किया गया है।'
+                  )}
+                </div>
+              ) : (
+                milestonesList.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`p-5 rounded-xl border transition-all ${
+                      m.status === 'completed'
+                        ? 'border-emerald-200 bg-emerald-50/20'
+                        : m.status === 'in_progress'
+                        ? 'border-blue-300 bg-blue-50/20 shadow-xs'
+                        : 'border-slate-200 bg-slate-50/40'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-2.5">
+                        <span
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs font-mono ${
+                            m.status === 'completed'
+                              ? 'bg-emerald-600 text-white'
+                              : m.status === 'in_progress'
+                              ? 'bg-blue-700 text-white'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}
+                        >
+                          {m.number}
+                        </span>
+                        <div>
+                          <h4 className="text-sm font-bold text-slate-950">
+                            {language === 'hi' ? m.titleHi : m.title}
+                          </h4>
+                          <div className="text-[11px] text-slate-600 font-mono flex flex-wrap items-center gap-2 mt-0.5">
+                            <Calendar className="w-3 h-3 text-slate-500" />
+                            <span>{t('Target:', 'लक्ष्य तिथि:')} {formatDate(m.targetDate)}</span>
+                            {m.signOffBy && (
+                              <>
+                                <span className="text-slate-300">·</span>
+                                <span className="text-emerald-700 font-semibold">{t('Signed:', 'स्वीकृत:')} {m.signOffBy}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-[11px] font-bold px-2.5 py-0.5 rounded border ${
+                            m.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                              : m.status === 'in_progress'
+                              ? 'bg-blue-100 text-blue-800 border-blue-300'
+                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                          }`}
+                        >
+                          {language === 'hi' ? m.statusHi : m.status.replace('_', ' ')}
+                        </span>
+
+                        {m.status === 'in_progress' && (
+                          <button
+                            type="button"
+                            onClick={() => handleSignOffMilestone(m.id)}
+                            className="px-3 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded border border-emerald-300 transition-colors cursor-pointer flex items-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>{isDemoSandbox ? t('Sign Off', 'स्वीकृति दें') : t('Request Sign-Off', 'स्वीकृति अनुरोध')}</span>
+                          </button>
+                        )}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`text-[11px] font-bold px-2.5 py-0.5 rounded border ${
-                          m.status === 'completed'
-                            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                            : m.status === 'in_progress'
-                            ? 'bg-blue-100 text-blue-800 border-blue-300'
-                            : 'bg-slate-100 text-slate-700 border-slate-200'
-                        }`}
-                      >
-                        {language === 'hi' ? m.statusHi : m.status.replace('_', ' ')}
+                    <div className="pt-3 space-y-2">
+                      <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+                        {t('Verified Acceptance Deliverables', 'सत्यापित वितरण परिणाम')}
                       </span>
-
-                      {m.status === 'in_progress' && (
-                        <button
-                          onClick={() => handleSignOffMilestone(m.id)}
-                          className="px-3 py-1 text-xs font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded border border-emerald-300 transition-colors cursor-pointer flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{t('Sign Off', 'स्वीकृति दें')}</span>
-                        </button>
-                      )}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        {(language === 'hi' ? m.deliverablesHi : m.deliverables).map((del, i) => (
+                          <div
+                            key={i}
+                            className="flex items-start gap-1.5 p-2 bg-white rounded border border-slate-100 text-xs text-slate-700"
+                          >
+                            <CheckCircle2
+                              className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                                m.status === 'completed' ? 'text-emerald-600' : 'text-blue-600'
+                              }`}
+                            />
+                            <span>{del}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
-
-                  <div className="pt-3 space-y-2">
-                    <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                      {t('Verified Acceptance Deliverables', 'सत्यापित वितरण परिणाम')}
-                    </span>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                      {(language === 'hi' ? m.deliverablesHi : m.deliverables).map((del, i) => (
-                        <div
-                          key={i}
-                          className="flex items-start gap-1.5 p-2 bg-white rounded border border-slate-100 text-xs text-slate-700"
-                        >
-                          <CheckCircle2
-                            className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
-                              m.status === 'completed' ? 'text-emerald-600' : 'text-blue-600'
-                            }`}
-                          />
-                          <span>{del}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
@@ -1837,38 +2095,47 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             </div>
 
             <div className="space-y-4">
-              {filteredUpdates.map((up) => (
-                <div
-                  key={up.id}
-                  className="p-5 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors space-y-2"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider font-mono">
-                        {up.tag}
-                      </span>
-                      <h4 className="text-sm font-bold text-slate-950">
-                        {language === 'hi' ? up.titleHi : up.title}
-                      </h4>
-                    </div>
-                    <span className="text-xs font-mono text-slate-400">
-                      {formatDate(up.timestamp)}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {language === 'hi' ? up.summaryHi : up.summary}
-                  </p>
-
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-                    <div className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-slate-400" />
-                      <span><strong>{up.author}</strong> ({up.authorRole})</span>
-                    </div>
-                    <span className="font-mono text-slate-400">{up.category}</span>
-                  </div>
+              {filteredUpdates.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                  {t(
+                    'No engineering digests published for this filter yet.',
+                    'इस फ़िल्टर के लिए अभी तक कोई इंजीनियरिंग अपडेट प्रकाशित नहीं हुआ है।'
+                  )}
                 </div>
-              ))}
+              ) : (
+                filteredUpdates.map((up) => (
+                  <div
+                    key={up.id}
+                    className="p-5 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors space-y-2"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider font-mono">
+                          {up.tag}
+                        </span>
+                        <h4 className="text-sm font-bold text-slate-950">
+                          {language === 'hi' ? up.titleHi : up.title}
+                        </h4>
+                      </div>
+                      <span className="text-xs font-mono text-slate-600">
+                        {formatDate(up.timestamp)}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {language === 'hi' ? up.summaryHi : up.summary}
+                    </p>
+
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11px] text-slate-600">
+                      <div className="flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-slate-500" />
+                        <span><strong>{up.author}</strong> ({up.authorRole})</span>
+                      </div>
+                      <span className="font-mono text-slate-600">{up.category}</span>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -1893,62 +2160,77 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
               <div className="flex items-center gap-1.5 text-xs text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>{t('All 6 Artifacts Cryptographically Signed', 'सभी 6 दस्तावेज़ डिजिटल रूप से हस्ताक्षरित')}</span>
+                <span>
+                  {isDemoSandbox
+                    ? t('All 6 Artifacts Cryptographically Signed', 'सभी 6 दस्तावेज़ डिजिटल रूप से हस्ताक्षरित')
+                    : t(`${enterpriseDocuments.length} Verified Files in Vault`, `वॉल्ट में ${enterpriseDocuments.length} सत्यापित फ़ाइलें`)}
+                </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {enterpriseDocuments.map((doc) => (
-                <div
-                  key={doc.id}
-                  className="p-5 rounded-lg border border-slate-200 bg-white hover:border-blue-400 hover:shadow-xs transition-all flex flex-col justify-between space-y-3"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                        {doc.format} · {doc.fileSize}
-                      </span>
-                      <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                        {language === 'hi' ? doc.statusHi : doc.status}
-                      </span>
+            {enterpriseDocuments.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                {t(
+                  'No signed artifacts or attachments uploaded to your account vault yet. Attachments uploaded with consultations or SLA tickets appear here.',
+                  'आपके खाते के वॉल्ट में अभी तक कोई फ़ाइल अपलोड नहीं की गई है। परामर्श या SLA टिकट के साथ अपलोड की गई फ़ाइलें यहां दिखेंगी।'
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {enterpriseDocuments.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-5 rounded-lg border border-slate-200 bg-white hover:border-blue-400 hover:shadow-xs transition-all flex flex-col justify-between space-y-3"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                          {doc.format} · {doc.fileSize}
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          {language === 'hi' ? doc.statusHi : doc.status}
+                        </span>
+                      </div>
+
+                      <h4 className="text-sm font-bold text-slate-950 line-clamp-1">
+                        {language === 'hi' ? doc.titleHi : doc.title}
+                      </h4>
+
+                      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                        {language === 'hi' ? doc.descriptionHi : doc.description}
+                      </p>
+
+                      <div className="text-[11px] text-slate-500 font-mono pt-1">
+                        {t('Executed:', 'निष्पादन तिथि:')} {formatDate(doc.executedDate)}
+                      </div>
                     </div>
 
-                    <h4 className="text-sm font-bold text-slate-950 line-clamp-1">
-                      {language === 'hi' ? doc.titleHi : doc.title}
-                    </h4>
+                    <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedDoc(doc);
+                          setDocModalOpen(true);
+                        }}
+                        className="text-xs font-semibold text-slate-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>{t('Verify Hash', 'हैश देखें')}</span>
+                      </button>
 
-                    <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                      {language === 'hi' ? doc.descriptionHi : doc.description}
-                    </p>
-
-                    <div className="text-[11px] text-slate-500 font-mono pt-1">
-                      {t('Executed:', 'निष्पादन तिथि:')} {formatDate(doc.executedDate)}
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadDocument(doc)}
+                        className="px-3 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>{t('Download', 'डाउनलोड')}</span>
+                      </button>
                     </div>
                   </div>
-
-                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectedDoc(doc);
-                        setDocModalOpen(true);
-                      }}
-                      className="text-xs font-semibold text-slate-600 hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>{t('Verify Hash', 'हैश देखें')}</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDownloadDocument(doc)}
-                      className="px-3 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>{t('Download', 'डाउनलोड')}</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -2067,7 +2349,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                       </div>
 
                       {inv.status !== 'paid' && (
-                        isDemoSandbox || paymentGatewayEnabled ? (
+                        isDemoSandbox || (paymentGatewayEnabled && (paymentWebhookConfigured || isAdmin)) ? (
                           <button
                             type="button"
                             onClick={() => setActiveCheckoutInvoice(inv)}
@@ -2075,6 +2357,21 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                           >
                             <CreditCard className="w-3.5 h-3.5" />
                             <span>{t('Initiate Verified Settlement', 'सत्यापित भुगतान प्रारंभ करें')}</span>
+                          </button>
+                        ) : paymentGatewayEnabled ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSettleInvoice(inv)}
+                            disabled={processingPayment}
+                            className="px-4 py-2 text-xs font-bold text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+                            <span>
+                              {t(
+                                'Generate Signed Escrow Intent (Webhook Required)',
+                                'हस्ताक्षरित एस्क्रो आशय बनाएं (वेबहुक आवश्यक)'
+                              )}
+                            </span>
                           </button>
                         ) : (
                           <span className="px-3.5 py-2 text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0">
@@ -2175,7 +2472,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center border border-slate-200 rounded-md p-0.5 bg-slate-50 text-xs font-semibold">
                   <button
                     onClick={() => setTicketFilter('all')}
@@ -2279,10 +2576,17 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
 
                         <div className="flex items-center gap-2">
                           <button
+                            type="button"
                             onClick={() => handleToggleTicketStatus(ticket.id, ticket.status)}
                             className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 rounded border border-slate-200 transition-colors cursor-pointer"
                           >
-                            {ticket.status === 'resolved' ? t('Re-open', 'पुनः खोलें') : t('Mark Resolved', 'हल चिह्नित करें')}
+                            {isDemoSandbox
+                              ? ticket.status === 'resolved'
+                                ? t('Re-open', 'पुनः खोलें')
+                                : t('Mark Resolved', 'हल चिह्नित करें')
+                              : ticket.status === 'resolved'
+                              ? t('Request Re-open', 'पुनः खोलने का अनुरोध')
+                              : t('Request Close', 'बंद करने का अनुरोध')}
                           </button>
                           <button
                             onClick={() => setExpandedTicketId(isExpanded ? null : ticket.id)}
@@ -2343,7 +2647,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                         </div>
                       )}
 
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400 font-mono pt-1 border-t border-slate-100">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 font-mono pt-1 border-t border-slate-100">
                         <div>
                           {t('Logged:', 'दिनांक:')} {formatDate(ticket.createdAt)}
                           {ticket.environment && ` · ${ticket.environment}`}
@@ -2405,7 +2709,7 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                                           : t('Enterprise Client', 'एंटरप्राइज क्लाइंट')}
                                       </span>
                                     </div>
-                                    <span className="text-[11px] font-mono text-slate-400">
+                                    <span className="text-[11px] font-mono text-slate-600">
                                       {formatDate(resp.timestamp)}
                                     </span>
                                   </div>
@@ -2435,8 +2739,8 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                             )}
                             className="w-full text-xs p-2.5 border border-slate-200 rounded-md focus:outline-none focus:border-blue-700 font-sans"
                           />
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-[11px] text-slate-400">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-[11px] text-slate-600">
                               {t('Target response governed by your project SOW.', 'प्रतिक्रिया समय आपके प्रोजेक्ट SOW द्वारा निर्धारित होता है।')}
                             </span>
                             <button
@@ -2471,19 +2775,32 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <div className="flex items-center gap-2 text-slate-950 font-bold text-base pb-2 border-b border-slate-100">
                 <Server className="w-5 h-5 text-blue-700" />
-                <span>{t('Target Availability & Telemetry (Sample)', 'लक्षित उपलब्धता एवं टेलीमेट्री (सैंपल)')}</span>
+                <span>
+                  {isDemoSandbox
+                    ? t('Target Availability & Telemetry (Sample)', 'लक्षित उपलब्धता एवं टेलीमेट्री (सैंपल)')
+                    : t('Contractual Availability & SLA Commitments', 'अनुबंधित उपलब्धता एवं SLA शर्तें')}
+                </span>
               </div>
 
               <p className="text-xs text-slate-600 leading-relaxed">
-                {t(
-                  'Sample placeholder telemetry panel. Production availability targets and SLA commitments are defined per executed client Statement of Work (SOW).',
-                  'सैंपल पूर्वावलोकन पैनल। प्रोडक्शन उपलब्धता लक्ष्य और SLA शर्तें प्रत्येक क्लाइंट के हस्ताक्षरित SOW के अनुसार तय होती हैं।'
-                )}
+                {isDemoSandbox
+                  ? t(
+                      'Sample placeholder telemetry panel. Production availability targets and SLA commitments are defined per executed client Statement of Work (SOW).',
+                      'सैंपल पूर्वावलोकन पैनल। प्रोडक्शन उपलब्धता लक्ष्य और SLA शर्तें प्रत्येक क्लाइंट के हस्ताक्षरित SOW के अनुसार तय होती हैं।'
+                    )
+                  : t(
+                      'Production availability targets, incident response guarantees, and disaster recovery windows are governed by your executed Statement of Work (SOW).',
+                      'प्रोडक्शन उपलब्धता लक्ष्य, घटना प्रतिक्रिया गारंटी और बैकअप नियम आपके हस्ताक्षरित SOW द्वारा निर्धारित होते हैं।'
+                    )}
               </p>
 
               <div className="space-y-3 font-mono text-xs">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
-                  <span className="text-slate-600 font-sans">{t('Sample Benchmark (Preview)', 'सैंपल बेंचमार्क (पूर्वावलोकन)')}</span>
+                  <span className="text-slate-600 font-sans">
+                    {isDemoSandbox
+                      ? t('Sample Benchmark (Preview)', 'सैंपल बेंचमार्क (पूर्वावलोकन)')
+                      : t('Availability Commitment', 'उपलब्धता प्रतिबद्धता')}
+                  </span>
                   <span className="font-bold text-emerald-700">HA Target (SOW)</span>
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
