@@ -6,7 +6,7 @@ import { Phone, Mail, MapPin, Send, CheckCircle, ShieldCheck, Award, ArrowUp } f
 import { PageRoute } from '../../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { extractBilingualApiError } from '../../utils/formProtection';
-import { getAppCheckTokenHeader } from '../../firebase/appCheck';
+import { authenticatedFetch } from '../../firebase/services';
 
 export const Footer: React.FC = () => {
   const { language, t, showToast } = useLanguage();
@@ -34,15 +34,17 @@ export const Footer: React.FC = () => {
     setSubscribeError('');
     setSubscribing(true);
     try {
-      const appCheckHeaders = await getAppCheckTokenHeader();
-      const res = await fetch('/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...appCheckHeaders,
+      const res = await authenticatedFetch(
+        '/api/newsletter/subscribe',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email: trimmed, language, _hp: honeypot }),
         },
-        body: JSON.stringify({ email: trimmed, language, _hp: honeypot }),
-      });
+        { includeAppCheck: true, optionalAuth: true }
+      );
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(

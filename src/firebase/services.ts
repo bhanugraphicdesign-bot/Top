@@ -409,6 +409,7 @@ export async function submitQuotation(data: {
   budget?: string;
   brief?: string;
   language?: 'en' | 'hi';
+  user?: User | null;
   _hp?: string;
   formOpenedAt?: number;
   fillDurationMs?: number;
@@ -420,38 +421,43 @@ export async function submitQuotation(data: {
   };
 }) {
   const lang: 'en' | 'hi' = data.language === 'hi' ? 'hi' : 'en';
-  const response = await authenticatedFetch(
-    '/api/quotations',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        fullName: clampStr(data.fullName, 160),
-        email: clampStr(data.email, 160).toLowerCase(),
-        phone: clampStr(data.phone, 40),
-        company: clampStr(data.company, 160),
-        serviceType: clampStr(data.serviceType, 160),
-        timeline: clampStr(data.timeline || '3-6-months', 64),
-        budget: clampStr(data.budget || 'enterprise', 80),
-        brief: clampStr(data.brief, 3000),
-        language: lang,
-        _hp: data._hp || '',
-        formOpenedAt: data.formOpenedAt,
-        fillDurationMs: data.fillDurationMs,
-        attachment: data.attachment
-          ? {
-              fileUrl: clampStr(data.attachment.fileUrl, 300),
-              fileName: clampStr(data.attachment.fileName, 200),
-              sha256: clampStr(data.attachment.sha256, 128),
-              fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
-            }
-          : undefined,
-      }),
+  const activeUser = auth.currentUser ?? data.user ?? null;
+  if (!activeUser) {
+    throw new Error('कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें।');
+  }
+
+  const freshToken = await activeUser.getIdToken(true);
+  const appCheckHeaders = await getAppCheckTokenHeader();
+  const response = await fetch('/api/quotations', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...appCheckHeaders,
+      Authorization: `Bearer ${freshToken}`,
     },
-    { includeAppCheck: true, optionalAuth: true }
-  );
+    body: JSON.stringify({
+      fullName: clampStr(data.fullName, 160),
+      email: clampStr(data.email, 160).toLowerCase(),
+      phone: clampStr(data.phone, 40),
+      company: clampStr(data.company, 160),
+      serviceType: clampStr(data.serviceType, 160),
+      timeline: clampStr(data.timeline || '3-6-months', 64),
+      budget: clampStr(data.budget || 'enterprise', 80),
+      brief: clampStr(data.brief, 3000),
+      language: lang,
+      _hp: data._hp || '',
+      formOpenedAt: data.formOpenedAt,
+      fillDurationMs: data.fillDurationMs,
+      attachment: data.attachment
+        ? {
+            fileUrl: clampStr(data.attachment.fileUrl, 300),
+            fileName: clampStr(data.attachment.fileName, 200),
+            sha256: clampStr(data.attachment.sha256, 128),
+            fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
+          }
+        : undefined,
+    }),
+  });
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {

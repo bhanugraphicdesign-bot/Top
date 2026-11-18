@@ -24,8 +24,6 @@ export const AuthModal: React.FC = () => {
     loginWithEmail,
     registerWithEmail,
     resetPassword,
-    authRedirectError,
-    clearAuthRedirectError,
   } = useAuth();
   const { language, t, showToast } = useLanguage();
 
@@ -82,8 +80,8 @@ export const AuthModal: React.FC = () => {
     }
     if (code === 'auth/popup-blocked') {
       return language === 'hi'
-        ? 'ब्राउज़र ने साइन-इन पॉपअप ब्लॉक किया है। कृपया पॉपअप अनुमति दें।'
-        : 'Sign-in popup was blocked by your browser. Please allow popups for this site.';
+        ? 'कृपया popup की अनुमति दें और दोबारा कोशिश करें'
+        : 'कृपया popup की अनुमति दें और दोबारा कोशिश करें (Popup blocked. Please allow popups and try again.)';
     }
     if (code === 'auth/network-request-failed') {
       return language === 'hi'
@@ -93,30 +91,24 @@ export const AuthModal: React.FC = () => {
     return err?.message || (language === 'hi' ? 'प्रमाणीकरण त्रुटि।' : 'Authentication error.');
   };
 
-  useEffect(() => {
-    if (isAuthModalOpen && authRedirectError) {
-      setErrorMsg(mapAuthError(authRedirectError));
-      clearAuthRedirectError();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthModalOpen, authRedirectError]);
-
   if (!isAuthModalOpen) return null;
 
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       setErrorMsg('');
-      const method = await loginWithGoogle();
-      if (method === 'popup') {
-        showToast(
-          language === 'hi' ? 'Google द्वारा सफलतापूर्वक लॉगिन संपन्न हुआ।' : 'Signed in with Google successfully.',
-          'success'
-        );
-      }
+      await loginWithGoogle();
+      showToast(
+        language === 'hi' ? 'Google द्वारा सफलतापूर्वक लॉगिन संपन्न हुआ।' : 'Signed in with Google successfully.',
+        'success'
+      );
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(mapAuthError(err));
+      const msg = mapAuthError(err);
+      setErrorMsg(msg);
+      if (err?.code === 'auth/popup-blocked') {
+        showToast(msg, 'alert');
+      }
     } finally {
       setLoading(false);
     }

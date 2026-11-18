@@ -314,16 +314,30 @@ const staticAllowedOrigins = new Set<string>(
   [
     'http://localhost:3000',
     'http://127.0.0.1:3000',
+    'https://power-web-studio-ai-enterprise-digital-platform.ai.studio',
     (process.env.SITE_URL || '').trim().replace(/\/+$/, ''),
     ...configuredOrigins,
   ].filter(Boolean)
 );
 
-function isAllowedCorsOrigin(origin?: string): boolean {
-  if (!origin) return true; // Same-origin requests, server-to-server, curl without Origin header
-  if (staticAllowedOrigins.has(origin)) return true;
+function isAllowedCorsOrigin(origin?: string, requestHost?: string): boolean {
+  if (!origin) return true; // Requests without an Origin header (curl, server-to-server)
+  const normalizedOrigin = origin.trim();
+  if (staticAllowedOrigins.has(normalizedOrigin)) return true;
   try {
-    const parsed = new URL(origin);
+    const parsed = new URL(normalizedOrigin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return false;
+    }
+    if (requestHost) {
+      const cleanReqHost = (requestHost.split(',')[0] || '')
+        .trim()
+        .toLowerCase()
+        .replace(parsed.protocol === 'https:' ? /:443$/ : /:80$/, '');
+      if (cleanReqHost && parsed.host.toLowerCase() === cleanReqHost) {
+        return true;
+      }
+    }
     if (parsed.protocol === 'https:' && parsed.hostname.endsWith('.run.app')) {
       return true;
     }
@@ -335,20 +349,24 @@ function isAllowedCorsOrigin(origin?: string): boolean {
 
 app.use(
   '/api',
-  cors({
-    origin: (origin, callback) => {
-      if (isAllowedCorsOrigin(origin)) {
-        callback(null, true);
-      } else {
-        const corsErr: any = new Error('Forbidden: Origin not permitted by CORS policy.');
-        corsErr.status = 403;
-        callback(corsErr);
-      }
-    },
-    methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck', 'X-Payment-Gateway-Signature'],
-    credentials: false,
-    maxAge: 600,
+  cors((req, callback) => {
+    const rawOrigin = req.headers.origin;
+    const rawHost = req.headers.host;
+    const reqOrigin = Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin;
+    const reqHost = Array.isArray(rawHost) ? rawHost[0] : rawHost;
+    if (isAllowedCorsOrigin(reqOrigin, reqHost)) {
+      callback(null, {
+        origin: true,
+        methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck', 'X-Payment-Gateway-Signature'],
+        credentials: false,
+        maxAge: 600,
+      });
+    } else {
+      const corsErr: any = new Error('Forbidden: Origin not permitted by CORS policy.');
+      corsErr.status = 403;
+      callback(corsErr);
+    }
   })
 );
 
@@ -540,7 +558,10 @@ async function fetchFirestoreDocumentRest(
   const timeout = setTimeout(() => controller.abort(), 2500);
   try {
     const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
-    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/${collectionName}/${encodeURIComponent(docId)}`;
+    const keySuffix = FIREBASE_CONFIG.apiKey
+      ? `?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`
+      : '';
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/${collectionName}/${encodeURIComponent(docId)}${keySuffix}`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${idToken}` },
       signal: controller.signal,
@@ -549,6 +570,155 @@ async function fetchFirestoreDocumentRest(
     return (await res.json()) as any;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function toFirestoreRestValue(val: unknown): Record<string, unknown> {
+  if (val === null || val === undefined) return { nullValue: null };
+  if (typeof val === 'string') return { stringValue: val };
+  if (typeof val === 'boolean') return { booleanValue: val };
+  if (typeof val === 'number') {
+    return Number.isInteger(val) ? { integerValue: String(val) } : { doubleValue: val };
+  }
+  if (Array.isArray(val)) {
+    return { arrayValue: { values: val.map((item) => toFirestoreRestValue(item)) } };
+  }
+  if (typeof val === 'object') {
+    const fields: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(val as Record<string, unknown>)) {
+      if (v !== undefined) {
+        fields[k] = toFirestoreRestValue(v);
+      }
+    }
+    return { mapValue: { fields } };
+  }
+  return { stringValue: String(val) };
+}
+
+function fromFirestoreRestValue(val: any): unknown {
+  if (!val || typeof val !== 'object') return null;
+  if ('nullValue' in val) return null;
+  if ('stringValue' in val) return val.stringValue;
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('timestampValue' in val) return val.timestampValue;
+  if ('arrayValue' in val) {
+    const values = Array.isArray(val.arrayValue?.values) ? val.arrayValue.values : [];
+    return values.map((v: any) => fromFirestoreRestValue(v));
+  }
+  if ('mapValue' in val) {
+    return fromFirestoreRestFields(val.mapValue?.fields || {});
+  }
+  return null;
+}
+
+function fromFirestoreRestFields(fields: Record<string, any> | undefined): Record<string, any> {
+  const out: Record<string, any> = {};
+  if (!fields) return out;
+  for (const [k, v] of Object.entries(fields)) {
+    out[k] = fromFirestoreRestValue(v);
+  }
+  return out;
+}
+
+async function runFirestoreQueryRest(
+  collectionId: string,
+  filters: Array<{ field: string; value: string }>,
+  idToken: string
+): Promise<Record<string, any>[] | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3500);
+  try {
+    const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
+    const keySuffix = FIREBASE_CONFIG.apiKey
+      ? `?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`
+      : '';
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents:runQuery${keySuffix}`;
+    const structuredQuery: Record<string, any> = {
+      from: [{ collectionId }],
+    };
+    if (filters.length === 1) {
+      structuredQuery.where = {
+        fieldFilter: {
+          field: { fieldPath: filters[0].field },
+          op: 'EQUAL',
+          value: { stringValue: filters[0].value },
+        },
+      };
+    } else if (filters.length > 1) {
+      structuredQuery.where = {
+        compositeFilter: {
+          op: 'AND',
+          filters: filters.map((f) => ({
+            fieldFilter: {
+              field: { fieldPath: f.field },
+              op: 'EQUAL',
+              value: { stringValue: f.value },
+            },
+          })),
+        },
+      };
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ structuredQuery }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+    const rows = (await res.json()) as any[];
+    if (!Array.isArray(rows)) return [];
+    return rows
+      .filter((r) => r?.document?.fields)
+      .map((r) => fromFirestoreRestFields(r.document.fields));
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function createFirestoreDocumentRest(
+  collectionName: string,
+  docId: string,
+  data: Record<string, unknown>,
+  idToken: string
+): Promise<{ ok: boolean; status: number }> {
+  if (!SAFE_ID_REGEX.test(docId)) return { ok: false, status: 400 };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 3500);
+  try {
+    const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
+    const params = new URLSearchParams();
+    params.set('currentDocument.exists', 'false');
+    if (FIREBASE_CONFIG.apiKey) {
+      params.set('key', FIREBASE_CONFIG.apiKey);
+    }
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/${collectionName}/${encodeURIComponent(docId)}?${params.toString()}`;
+    const fields: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined) {
+        fields[k] = toFirestoreRestValue(v);
+      }
+    }
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ fields }),
+      signal: controller.signal,
+    });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    return { ok: false, status: 500 };
   } finally {
     clearTimeout(timeout);
   }
@@ -624,27 +794,34 @@ async function verifyFirebaseBearerToken(
   }
 
   try {
-    // Try Firebase Admin SDK if credentialed (enforces revocation & Google cert checks)
+    // Try Firebase Admin SDK signature verification (default checkRevoked=false needs no IAM)
     if (adminApp && adminHasCredentials) {
-      const decoded = await getAuth(adminApp).verifyIdToken(token, true);
-      const email = typeof decoded.email === 'string' ? decoded.email : '';
-      const emailVerified = Boolean(decoded.email_verified);
-      const { isAdmin, roleSource } = await resolveServerAdminStatus({
-        uid: decoded.uid,
-        idToken: token,
-        hasCustomClaimAdmin: decoded.admin === true || decoded.role === 'admin',
-      });
-
-      return {
-        rawToken: token,
-        user: {
+      try {
+        const decoded = await getAuth(adminApp).verifyIdToken(token);
+        const email = typeof decoded.email === 'string' ? decoded.email : '';
+        const emailVerified = Boolean(decoded.email_verified);
+        const { isAdmin, roleSource } = await resolveServerAdminStatus({
           uid: decoded.uid,
-          email,
-          emailVerified,
-          isAdmin,
-          roleSource,
-        },
-      };
+          idToken: token,
+          hasCustomClaimAdmin: decoded.admin === true || decoded.role === 'admin',
+        });
+
+        return {
+          rawToken: token,
+          user: {
+            uid: decoded.uid,
+            email,
+            emailVerified,
+            isAdmin,
+            roleSource,
+          },
+        };
+      } catch (adminVerifyErr: any) {
+        const errCode = String(adminVerifyErr?.code || '');
+        if (errCode.startsWith('auth/')) {
+          return null;
+        }
+      }
     }
 
     // Fallback: Strict RS256 cryptographic signature & claims verification against Google public x509 certs
@@ -1212,7 +1389,10 @@ app.get('/api/health', async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2500);
     try {
-      const probeUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/test/connection`;
+      const keySuffix = FIREBASE_CONFIG.apiKey
+        ? `?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`
+        : '';
+      const probeUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/site_settings/global_config${keySuffix}`;
       const probeRes = await fetch(probeUrl, { signal: controller.signal });
       probeHttpStatus = probeRes.status;
       probeLatencyMs = Date.now() - start;
@@ -1229,6 +1409,16 @@ app.get('/api/health', async (req, res) => {
     }
   }
 
+  let serverWrites: 'available' | 'unavailable_iam' | 'unconfigured' | 'error' = 'unconfigured';
+  if (adminDb) {
+    try {
+      await adminDb.collection('site_settings').doc('global').get();
+      serverWrites = 'available';
+    } catch (adminErr: any) {
+      serverWrites = isFirestoreAdminCredentialError(adminErr) ? 'unavailable_iam' : 'error';
+    }
+  }
+
   const envSummary = getProductionEnvironmentSummary();
 
   res.json({
@@ -1240,12 +1430,14 @@ app.get('/api/health', async (req, res) => {
       : {}),
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
+    serverWrites,
     database: {
       provider: 'Google Cloud Firestore',
       projectId: FIREBASE_CONFIG.projectId,
       databaseId: dbId,
       edition: 'Enterprise',
       status: databaseStatus,
+      serverWrites,
       configured: isFirestoreConfigured,
       probeHttpStatus,
       probeLatencyMs,
@@ -1523,11 +1715,12 @@ app.post('/api/quotations', requireJsonContentType, createFormRateLimiter('quota
     });
   }
 
-  if (!adminDb) {
-    const errorEn = 'Quotation persistence requires Firebase Admin credentials on the server.';
-    const errorHi = 'कोटेशन सहेजने के लिए सर्वर पर Firebase Admin कॉन्फ़िगरेशन आवश्यक है।';
-    return res.status(503).json({
-      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+  const verifiedAuth = await verifyFirebaseBearerToken(req);
+  if (!verifiedAuth?.rawToken) {
+    const errorHi = 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें।';
+    const errorEn = 'कृपया पहले लॉगिन करें — Please sign in first to submit a quotation request.';
+    return res.status(401).json({
+      code: 'AUTH_REQUIRED',
       error: lang === 'hi' ? errorHi : errorEn,
       errorEn,
       errorHi,
@@ -1539,6 +1732,7 @@ app.post('/api/quotations', requireJsonContentType, createFormRateLimiter('quota
   const createdAt = new Date().toISOString();
   const payload = {
     id: quoteId,
+    uid: verifiedAuth.user.uid,
     clientName: data.fullName,
     clientEmail: data.email.toLowerCase(),
     phone: data.phone,
@@ -1560,13 +1754,15 @@ app.post('/api/quotations', requireJsonContentType, createFormRateLimiter('quota
   };
 
   try {
+    if (!adminDb) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
     await adminDb.collection('quotations').doc(quoteId).set(payload);
 
-    const verifiedAuth = await verifyFirebaseBearerToken(req);
     void appendServerAuditEvent({
       action: 'QUOTATION_SUBMITTED',
-      actorUid: verifiedAuth?.user?.uid || 'anonymous_lead',
-      actorEmail: verifiedAuth?.user?.email || payload.clientEmail,
+      actorUid: verifiedAuth.user.uid,
+      actorEmail: verifiedAuth.user.email || payload.clientEmail,
       resource: `quotations/${quoteId}`,
       outcome: 'SUCCESS',
       ip: getClientIp(req),
@@ -1583,12 +1779,31 @@ app.post('/api/quotations', requireJsonContentType, createFormRateLimiter('quota
       messageHi: msgHi,
     });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && verifiedAuth?.rawToken) {
+      const restWrite = await createFirestoreDocumentRest(
+        'quotations',
+        quoteId,
+        payload,
+        verifiedAuth.rawToken
+      );
+      if (restWrite.ok) {
+        const msgEn = 'Architectural scoping request securely submitted.';
+        const msgHi = 'तकनीकी परामर्श अनुरोध सफलतापूर्वक दर्ज किया गया।';
+        return res.status(201).json({
+          success: true,
+          quoteId,
+          message: lang === 'hi' ? msgHi : msgEn,
+          messageEn: msgEn,
+          messageHi: msgHi,
+        });
+      }
+    }
     console.error('[Quotation Submit Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to save architectural scoping request.', lang);
   }
 });
 
-// 3b. Newsletter Dispatch Subscription Endpoint (Firestore via firebase-admin + rate limit + JSON CSRF guard + anti-bot + App Check + Zod)
+// 3b. Newsletter Dispatch Subscription Endpoint (Firestore via firebase-admin + ID-token REST fallback + rate limit + JSON CSRF guard + anti-bot + App Check + Zod)
 app.post('/api/newsletter/subscribe', requireJsonContentType, createFormRateLimiter('newsletter'), async (req, res) => {
   if (!validateAntiBotFields(req, res, 'newsletter')) {
     return;
@@ -1607,23 +1822,34 @@ app.post('/api/newsletter/subscribe', requireJsonContentType, createFormRateLimi
     });
   }
 
-  const { email, language } = parsed.data;
-
-  if (!adminDb) {
-    const errorEn = 'Newsletter persistence requires Firebase Admin credentials on the server.';
-    const errorHi = 'न्यूज़लेटर सदस्यता सहेजने के लिए सर्वर पर Firebase Admin कॉन्फ़िगरेशन आवश्यक है।';
-    return res.status(503).json({
-      code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+  const verifiedAuth = await verifyFirebaseBearerToken(req);
+  if (!verifiedAuth?.rawToken) {
+    const errorHi = 'कृपया न्यूज़लेटर सदस्यता के लिए पहले लॉगिन करें।';
+    const errorEn = 'कृपया पहले लॉगिन करें — Please sign in first to subscribe to the newsletter.';
+    return res.status(401).json({
+      code: 'AUTH_REQUIRED',
       error: lang === 'hi' ? errorHi : errorEn,
       errorEn,
       errorHi,
     });
   }
 
+  const { email, language } = parsed.data;
+  const normalized = email.toLowerCase();
+  const subscriberHash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 32);
+  const subId = `sub-${subscriberHash}`;
+  const entry = {
+    id: subId,
+    uid: verifiedAuth.user.uid,
+    email: normalized,
+    language: language === 'hi' ? 'hi' : 'en',
+    subscribedAt: new Date().toISOString(),
+  };
+
   try {
-    const normalized = email.toLowerCase();
-    const subscriberHash = crypto.createHash('sha256').update(normalized).digest('hex').slice(0, 32);
-    const subId = `sub-${subscriberHash}`;
+    if (!adminDb) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
     const docRef = adminDb.collection('newsletter_subscribers').doc(subId);
     const existingSnap = await docRef.get();
 
@@ -1639,12 +1865,6 @@ app.post('/api/newsletter/subscribe', requireJsonContentType, createFormRateLimi
       });
     }
 
-    const entry = {
-      id: subId,
-      email: normalized,
-      language: language === 'hi' ? 'hi' : 'en',
-      subscribedAt: new Date().toISOString(),
-    };
     await docRef.set(entry);
 
     const msgEn = 'Subscribed to Quarterly Architectural Dispatch.';
@@ -1657,6 +1877,36 @@ app.post('/api/newsletter/subscribe', requireJsonContentType, createFormRateLimi
       messageHi: msgHi,
     });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && verifiedAuth?.rawToken) {
+      const restWrite = await createFirestoreDocumentRest(
+        'newsletter_subscribers',
+        subId,
+        entry,
+        verifiedAuth.rawToken
+      );
+      if (restWrite.ok) {
+        const msgEn = 'Subscribed to Quarterly Architectural Dispatch.';
+        const msgHi = 'त्रैमासिक आर्किटेक्चर डिस्पैच में सदस्यता सफल।';
+        return res.status(201).json({
+          success: true,
+          alreadySubscribed: false,
+          message: lang === 'hi' ? msgHi : msgEn,
+          messageEn: msgEn,
+          messageHi: msgHi,
+        });
+      }
+      if (restWrite.status === 409 || restWrite.status === 412) {
+        const msgEn = 'Email is already registered for Quarterly Architectural Dispatch.';
+        const msgHi = 'यह ईमेल पहले से ही त्रैमासिक आर्किटेक्चर डिस्पैच के लिए पंजीकृत है।';
+        return res.json({
+          success: true,
+          alreadySubscribed: true,
+          message: lang === 'hi' ? msgHi : msgEn,
+          messageEn: msgEn,
+          messageHi: msgHi,
+        });
+      }
+    }
     console.error('[Newsletter Subscribe Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to save newsletter subscription.', lang);
   }
@@ -2240,7 +2490,7 @@ app.get('/api/invoices', requireAuth, async (req: AuthenticatedRequest, res) => 
   const user = req.authUser!;
   const { clientId, clientEmail } = req.query as { clientId?: string; clientEmail?: string };
 
-  if (!adminDb) {
+  if (!adminDb && !req.authToken) {
     return res.status(503).json({
       code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
       error: 'Firestore Admin SDK is not configured to load invoices.',
@@ -2248,6 +2498,9 @@ app.get('/api/invoices', requireAuth, async (req: AuthenticatedRequest, res) => 
   }
 
   try {
+    if (!adminDb) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
     const colRef = adminDb.collection('invoices');
     let invoices: any[] = [];
 
@@ -2288,6 +2541,35 @@ app.get('/api/invoices', requireAuth, async (req: AuthenticatedRequest, res) => 
       invoices,
     });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && req.authToken) {
+      let restInvoices: any[] | null = null;
+      if (user.isAdmin) {
+        const filters = clientId
+          ? [{ field: 'clientId', value: clientId }]
+          : clientEmail
+          ? [{ field: 'clientEmail', value: clientEmail.toLowerCase() }]
+          : [];
+        restInvoices = await runFirestoreQueryRest('invoices', filters, req.authToken);
+      } else {
+        const byUid = await runFirestoreQueryRest(
+          'invoices',
+          [{ field: 'clientId', value: user.uid }],
+          req.authToken
+        );
+        if (byUid !== null) {
+          restInvoices = byUid.filter((inv) => canAccessInvoice(user, inv));
+        }
+      }
+      if (restInvoices !== null) {
+        restInvoices.sort(
+          (a: any, b: any) => new Date(b.issuedAt || 0).getTime() - new Date(a.issuedAt || 0).getTime()
+        );
+        return res.json({
+          count: restInvoices.length,
+          invoices: restInvoices,
+        });
+      }
+    }
     console.error('[Invoices Fetch Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to retrieve invoices from Firestore.');
   }
@@ -2300,7 +2582,7 @@ app.get('/api/invoices/:invoiceId', requireAuth, async (req: AuthenticatedReques
   if (!SAFE_ID_REGEX.test(invoiceId)) {
     return res.status(400).json({ error: 'Invalid invoiceId format.' });
   }
-  if (!adminDb) {
+  if (!adminDb && !req.authToken) {
     return res.status(503).json({
       code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
       error: 'Firestore Admin SDK is not configured to load invoice details.',
@@ -2308,18 +2590,45 @@ app.get('/api/invoices/:invoiceId', requireAuth, async (req: AuthenticatedReques
   }
 
   try {
-    const docSnap = await findInvoiceDocByIdOrNumber(invoiceId);
-    if (!docSnap) {
-      return res.status(404).json({ error: 'Invoice not found in billing ledger' });
-    }
-    const invoice = docSnap.data()!;
+    if (adminDb) {
+      const docSnap = await findInvoiceDocByIdOrNumber(invoiceId);
+      if (!docSnap) {
+        return res.status(404).json({ error: 'Invoice not found in billing ledger' });
+      }
+      const invoice = docSnap.data()!;
 
-    if (!canAccessInvoice(user, invoice)) {
-      return res.status(403).json({ error: 'Forbidden: You cannot access another tenant invoice.' });
-    }
+      if (!canAccessInvoice(user, invoice)) {
+        return res.status(403).json({ error: 'Forbidden: You cannot access another tenant invoice.' });
+      }
 
-    return res.json(invoice);
+      return res.json(invoice);
+    }
+    throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && req.authToken) {
+      let restInvoice: Record<string, any> | null = null;
+      const directRest = await fetchFirestoreDocumentRest('invoices', invoiceId, req.authToken);
+      if (directRest?.fields) {
+        restInvoice = fromFirestoreRestFields(directRest.fields);
+      } else {
+        const byNum = await runFirestoreQueryRest(
+          'invoices',
+          [{ field: 'invoiceNumber', value: invoiceId }],
+          req.authToken
+        );
+        if (byNum && byNum.length > 0) {
+          restInvoice = byNum[0];
+        } else if (byNum !== null) {
+          return res.status(404).json({ error: 'Invoice not found in billing ledger' });
+        }
+      }
+      if (restInvoice) {
+        if (!canAccessInvoice(user, restInvoice)) {
+          return res.status(403).json({ error: 'Forbidden: You cannot access another tenant invoice.' });
+        }
+        return res.json(restInvoice);
+      }
+    }
     console.error('[Invoice Detail Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to retrieve invoice.');
   }
@@ -2641,7 +2950,7 @@ app.post('/api/payments/verify', requireAuth, requireJsonContentType, async (req
 
 // 12. Admin Invoice Generator (Strict Verified Admin Only -> Firestore `invoices`)
 app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
-  if (!adminDb) {
+  if (!adminDb && !req.authToken) {
     return res.status(503).json({
       code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
       error: 'Firestore Admin SDK is not configured to generate invoices.',
@@ -2681,7 +2990,7 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
 
   let resolvedClientId =
     typeof clientId === 'string' && SAFE_ID_REGEX.test(clientId.trim()) ? clientId.trim() : '';
-  if (!resolvedClientId) {
+  if (!resolvedClientId && adminDb) {
     try {
       const userSnap = await adminDb
         .collection('users')
@@ -2693,6 +3002,20 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
       }
     } catch (lookupErr) {
       console.warn('[Invoice Client Lookup Notice]', lookupErr);
+    }
+  }
+  if (!resolvedClientId && req.authToken) {
+    try {
+      const restUsers = await runFirestoreQueryRest(
+        'users',
+        [{ field: 'email', value: normalizedClientEmail }],
+        req.authToken
+      );
+      if (restUsers && restUsers.length > 0 && typeof restUsers[0].uid === 'string') {
+        resolvedClientId = restUsers[0].uid;
+      }
+    } catch {
+      // Optional REST lookup fallback
     }
   }
   if (!resolvedClientId) {
@@ -2744,7 +3067,23 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
   };
 
   try {
-    await adminDb.collection('invoices').doc(invoiceId).set(newInvoice);
+    if (adminDb) {
+      await adminDb.collection('invoices').doc(invoiceId).set(newInvoice);
+    } else if (req.authToken) {
+      const restWrite = await createFirestoreDocumentRest('invoices', invoiceId, newInvoice, req.authToken);
+      if (!restWrite.ok) {
+        return sendFirestoreRouteError(
+          res,
+          { code: restWrite.status === 403 ? 7 : 13, message: 'PERMISSION_DENIED' },
+          'Unable to persist generated invoice to Firestore.'
+        );
+      }
+    } else {
+      return res.status(503).json({
+        code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
+        error: 'Firestore Admin SDK is not configured to generate invoices.',
+      });
+    }
 
     void appendServerAuditEvent({
       action: 'INVOICE_GENERATED',
@@ -2762,6 +3101,16 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
       invoice: newInvoice,
     });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && req.authToken) {
+      const restWrite = await createFirestoreDocumentRest('invoices', invoiceId, newInvoice, req.authToken);
+      if (restWrite.ok) {
+        return res.status(201).json({
+          success: true,
+          message: 'Official GST tax invoice generated and committed to Cloud Firestore.',
+          invoice: newInvoice,
+        });
+      }
+    }
     console.error('[Invoice Generate Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to persist generated invoice to Firestore.');
   }

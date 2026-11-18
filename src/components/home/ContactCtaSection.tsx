@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
 import { Phone, Mail, MapPin, Send, CheckCircle, Shield } from 'lucide-react';
 
@@ -14,6 +15,7 @@ import {
 
 export const ContactCtaSection: React.FC = () => {
   const { language, t, dict, showToast } = useLanguage();
+  const { currentUser } = useAuth();
   const siteContact = useSiteContact();
 
   const [formData, setFormData] = useState({
@@ -77,6 +79,15 @@ export const ContactCtaSection: React.FC = () => {
       setErrorMsg(dict.validations.emailInvalid);
       return;
     }
+    if (!currentUser) {
+      const loginMsg =
+        language === 'hi'
+          ? 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें।'
+          : 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें। (Please sign in first.)';
+      setErrorMsg(loginMsg);
+      showToast(loginMsg, 'alert');
+      return;
+    }
     setErrorMsg('');
     setSubmitting(true);
 
@@ -91,6 +102,7 @@ export const ContactCtaSection: React.FC = () => {
         budget: formData.budget,
         brief: formData.projectBrief,
         language,
+        user: currentUser,
         _hp: honeypot,
         formOpenedAt: formOpenedAtRef.current,
         fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),

@@ -3,8 +3,6 @@ import {
   User,
   onAuthStateChanged,
   signInWithPopup,
-  signInWithRedirect,
-  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   updateProfile,
@@ -18,16 +16,13 @@ import {
   logAuditEvent,
   authenticatedFetch,
 } from '../firebase/services';
-import { useLanguage } from './LanguageContext';
 
 interface AuthContextType {
   currentUser: User | null;
   userRole: 'admin' | 'client';
   isAdmin: boolean;
   isAuthReady: boolean;
-  authRedirectError: unknown | null;
-  clearAuthRedirectError: () => void;
-  loginWithGoogle: () => Promise<'popup' | 'redirect'>;
+  loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -41,17 +36,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { language, showToast } = useLanguage();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<'admin' | 'client'>('client');
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [authRedirectError, setAuthRedirectError] = useState<unknown | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
-
-  const clearAuthRedirectError = useCallback(() => {
-    setAuthRedirectError(null);
-  }, []);
 
   const openAuthModal = (tab: 'login' | 'register' | 'forgot' = 'login') => {
     setAuthModalTab(tab);
@@ -61,47 +50,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const closeAuthModal = () => {
     setIsAuthModalOpen(false);
   };
-
-  // Handle Google signInWithRedirect result on initial page load
-  useEffect(() => {
-    let active = true;
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (!active || !result?.user) return;
-        await logAuditEvent(
-          'AUTH_LOGIN_GOOGLE',
-          `users/${result.user.uid}`,
-          `Signed in with Google redirect: ${result.user.email}`
-        );
-        closeAuthModal();
-        showToast(
-          language === 'hi'
-            ? 'Google द्वारा सफलतापूर्वक लॉगिन संपन्न हुआ।'
-            : 'Signed in with Google successfully.',
-          'success'
-        );
-      })
-      .catch((err: any) => {
-        if (!active) return;
-        console.warn('[Google Redirect Auth Warning]', err);
-        setAuthRedirectError(err);
-        if (err?.code === 'auth/unauthorized-domain') {
-          showToast(
-            language === 'hi'
-              ? 'यह डोमेन अभी Firebase में अधिकृत नहीं है। This domain is not yet authorized in Firebase.'
-              : 'This domain is not yet authorized in Firebase. / यह डोमेन अभी Firebase में अधिकृत नहीं है।',
-            'alert'
-          );
-          setIsAuthModalOpen(true);
-        }
-      });
-
-    return () => {
-      active = false;
-    };
-    // Intentionally run once on mount to capture any pending OAuth redirect callback
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Listen to Firebase Auth state (admin derived strictly from user_roles/{uid} or custom claim)
   useEffect(() => {
@@ -159,31 +107,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const loginWithGoogle = useCallback(async (): Promise<'popup' | 'redirect'> => {
-    setAuthRedirectError(null);
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
-        await logAuditEvent(
-          'AUTH_LOGIN_GOOGLE',
-          `users/${result.user.uid}`,
-          `Signed in with Google: ${result.user.email}`
-        );
-      }
-      closeAuthModal();
-      return 'popup';
-    } catch (err: any) {
-      const code = err?.code || '';
-      if (
-        code === 'auth/popup-blocked' ||
-        code === 'auth/popup-closed-by-user' ||
-        code === 'auth/cancelled-popup-request'
-      ) {
-        await signInWithRedirect(auth, googleProvider);
-        return 'redirect';
-      }
-      throw err;
+  const loginWithGoogle = useCallback(async (): Promise<void> => {
+    const result = await signInWithPopup(auth, googleProvider);
+    if (result.user) {
+      await logAuditEvent(
+        'AUTH_LOGIN_GOOGLE',
+        `users/${result.user.uid}`,
+        `Signed in with Google: ${result.user.email}`
+      );
     }
+    closeAuthModal();
   }, []);
 
   const loginWithEmail = useCallback(async (email: string, pass: string) => {
@@ -234,8 +167,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         userRole,
         isAdmin: userRole === 'admin',
         isAuthReady,
-        authRedirectError,
-        clearAuthRedirectError,
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,

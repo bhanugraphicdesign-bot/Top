@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
 import { X, CheckCircle, Shield, Send } from 'lucide-react';
 import { submitQuotation } from '../../firebase/services';
@@ -53,6 +54,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   preselectedService = 'enterprise-software',
 }) => {
   const { language, t, dict, showToast } = useLanguage();
+  const { currentUser } = useAuth();
   const siteContact = useSiteContact();
 
   const initialNormalized = normalizeServiceDomain(preselectedService);
@@ -155,6 +157,15 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       setErrorMessage(dict.validations.emailInvalid);
       return;
     }
+    if (!currentUser) {
+      const loginMsg =
+        language === 'hi'
+          ? 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें।'
+          : 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें। (Please sign in first.)';
+      setErrorMessage(loginMsg);
+      showToast(loginMsg, 'alert');
+      return;
+    }
     setErrorMessage('');
     setSubmitting(true);
 
@@ -169,6 +180,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         budget: formData.budget,
         brief: formData.brief,
         language,
+        user: currentUser,
         _hp: honeypot,
         formOpenedAt: formOpenedAtRef.current,
         fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),

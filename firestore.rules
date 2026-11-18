@@ -186,6 +186,34 @@ service cloud.firestore {
         && isNonEmptyString(data.createdAt, 64);
     }
 
+    function isValidQuotationCreate(data, quotationId) {
+      return data.keys().hasAll(['id', 'uid', 'clientName', 'clientEmail', 'serviceType', 'status', 'createdAt'])
+        && data.keys().hasOnly(['id', 'uid', 'clientName', 'clientEmail', 'phone', 'company', 'serviceType', 'timeline', 'estimatedBudget', 'brief', 'attachment', 'status', 'createdAt'])
+        && data.id == quotationId
+        && data.uid == request.auth.uid
+        && isNonEmptyString(data.clientName, 160)
+        && isValidEmailStr(data.clientEmail)
+        && isOptionalString(data, 'phone', 40)
+        && isOptionalString(data, 'company', 160)
+        && isNonEmptyString(data.serviceType, 160)
+        && isOptionalString(data, 'timeline', 64)
+        && isOptionalString(data, 'estimatedBudget', 80)
+        && isOptionalString(data, 'brief', 3000)
+        && (!('attachment' in data) || isValidAttachmentMap(data.attachment))
+        && data.status == 'pending'
+        && isNonEmptyString(data.createdAt, 64);
+    }
+
+    function isValidNewsletterCreate(data, subscriberId) {
+      return data.keys().hasAll(['id', 'uid', 'email', 'language', 'subscribedAt'])
+        && data.keys().hasOnly(['id', 'uid', 'email', 'language', 'subscribedAt'])
+        && data.id == subscriberId
+        && data.uid == request.auth.uid
+        && isValidEmailStr(data.email)
+        && data.language in ['en', 'hi']
+        && isNonEmptyString(data.subscribedAt, 64);
+    }
+
     // 1. Users Collection (Prevent Self-Privilege Escalation & Shadow Fields)
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
@@ -269,7 +297,7 @@ service cloud.firestore {
         isAdmin()
       );
       allow list: if isAdmin();
-      allow create: if false;
+      allow create: if isValidId(quotationId) && isSignedIn() && isValidQuotationCreate(request.resource.data, quotationId);
       allow update, delete: if isValidId(quotationId) && isAdmin();
     }
 
@@ -349,7 +377,8 @@ service cloud.firestore {
     match /newsletter_subscribers/{subscriberId} {
       allow get, delete: if isValidId(subscriberId) && isAdmin();
       allow list: if isAdmin();
-      allow create, update: if false;
+      allow create: if isValidId(subscriberId) && isSignedIn() && isValidNewsletterCreate(request.resource.data, subscriberId);
+      allow update: if false;
     }
 
     // 19. File Storage Records (Server-Written via firebase-admin + GCS, Owner/Admin Read Only)
