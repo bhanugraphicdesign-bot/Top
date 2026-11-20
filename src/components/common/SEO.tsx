@@ -324,6 +324,16 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     ogImage: OPTIMIZED_ASSETS.androidImage.jpg,
     canonicalPath: '/android-portfolio',
   },
+  demo: {
+    titleEn: 'Desi Bazaar — Demo Website | POWER WEB STUDIO AI',
+    titleHi: 'देसी बाज़ार — डेमो वेबसाइट | POWER WEB STUDIO AI',
+    descriptionEn:
+      'Interactive sample online shopping website built by Power Web Studio AI. Demo only — no real orders or payments.',
+    descriptionHi:
+      'Power Web Studio AI द्वारा निर्मित इंटरैक्टिव ऑनलाइन शॉपिंग डेमो वेबसाइट। यह केवल नमूना है।',
+    ogImage: DEFAULT_OG_IMAGE_PATH,
+    canonicalPath: '/demo/shopping',
+  },
   process: {
     titleEn: '6-Phase Engineering Methodology | POWER WEB STUDIO AI',
     titleHi: '6-चरणीय इंजीनियरिंग कार्यप्रणाली | POWER WEB STUDIO AI',

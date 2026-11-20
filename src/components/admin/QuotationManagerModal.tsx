@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { saveQuotation } from '../../firebase/services';
+import { QUOTE_SERVICE_OPTIONS } from '../../data/quotationOptions';
 import { X, FileText, Check } from 'lucide-react';
 
 interface QuotationModalProps {
@@ -225,11 +226,11 @@ export const QuotationManagerModal: React.FC<QuotationModalProps> = ({
                   onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none bg-white"
                 >
-                  <option value="enterprise-software">Custom Enterprise Software</option>
-                  <option value="android-ecosystem">Native Android Engineering</option>
-                  <option value="ai-solutions">Sovereign AI Workflows</option>
-                  <option value="cloud-devops">Cloud DevOps & Architecture</option>
-                  <option value="web-platforms">High-Performance Web Platforms</option>
+                  {QUOTE_SERVICE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {t(opt.labelEn, opt.labelHi)}
+                    </option>
+                  ))}
                 </select>
               </div>
 

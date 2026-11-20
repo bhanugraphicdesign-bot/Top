@@ -7,7 +7,7 @@ import firebaseRulesPlugin from '@firebase/eslint-plugin-security-rules';
 
 export default tseslint.config(
   {
-    ignores: ['dist/**/*', 'node_modules/**/*', 'uploads/**/*', 'public/**/*'],
+    ignores: ['dist/**/*', 'node_modules/**/*', 'uploads/**/*', 'public/**/*', '.backups/**/*'],
   },
   {
     files: ['src/**/*.{ts,tsx}'],

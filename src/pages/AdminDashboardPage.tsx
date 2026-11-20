@@ -34,6 +34,7 @@ import {
 } from '../firebase/services';
 import { SERVICES_DATA } from '../data/content';
 import { BLOG_POSTS } from '../data/blogData';
+import { formatQuotationService, formatQuotationBudget } from '../data/quotationOptions';
 import {
   Smartphone,
   Plus,
@@ -44,7 +45,6 @@ import {
   Activity,
   CheckCircle,
   Terminal,
-  Shield,
   Search,
   ExternalLink,
   RotateCcw,
@@ -65,348 +65,9 @@ import {
   ShieldCheck,
   Receipt,
   AlertTriangle,
+  Copy,
+  LogOut,
 } from 'lucide-react';
-
-const DEMO_ADMIN_INVOICES: EnterpriseInvoice[] = [
-  {
-    id: 'inv-2026-0814',
-    invoiceNumber: 'INV-2026-0814',
-    projectId: 'proj-1',
-    projectName: 'Bharat Fleet ERP & Distributed Telematics',
-    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
-    clientId: 'kalinga-client-id',
-    clientName: 'Rajiv Sengupta',
-    clientEmail: 'kalinga@enterprise.in',
-    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
-    clientGstin: '21AAACK1924L1ZZ',
-    milestoneTitle: 'Milestone 03 — BLE Soundbox & Dynamic QR Payment Reconciliation',
-    milestoneTitleHi: 'माइलस्टोन 03 — BLE साउंडबॉक्स एवं डायनामिक QR भुगतान समाधान',
-    subtotal: 450000,
-    gstRate: 18,
-    gstAmount: 81000,
-    totalAmount: 531000,
-    currency: 'INR',
-    hsnSac: '998313',
-    status: 'paid',
-    issuedAt: '2026-10-25T10:00:00Z',
-    dueAt: '2026-11-09T18:00:00Z',
-    paidAt: '2026-11-09T14:30:00Z',
-    paymentTxnId: 'TXN-UPI-NPCI-88921102',
-    paymentMethod: 'UPI',
-    verificationHash: '9a7c3b2e5f1d4a8e6b0c2d4e6f8a0b2c4d6e8f0a2b4c6d8e0f2a4b6c8d0e2f4a',
-  },
-  {
-    id: 'inv-2026-0899',
-    invoiceNumber: 'INV-2026-0899',
-    projectId: 'proj-1',
-    projectName: 'Bharat Fleet ERP & Distributed Telematics',
-    projectNameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स',
-    clientId: 'kalinga-client-id',
-    clientName: 'Rajiv Sengupta',
-    clientEmail: 'kalinga@enterprise.in',
-    clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
-    clientGstin: '21AAACK1924L1ZZ',
-    milestoneTitle: 'Milestone 04 — Release Candidate v2.4.1 Fleet Rollout & Security Review',
-    milestoneTitleHi: 'माइलस्टोन 04 — रिलीज कैंडिडेट v2.4.1 फ्लीट रोलआउट एवं सुरक्षा समीक्षा',
-    subtotal: 500000,
-    gstRate: 18,
-    gstAmount: 90000,
-    totalAmount: 590000,
-    currency: 'INR',
-    hsnSac: '998313',
-    status: 'issued',
-    issuedAt: '2026-11-10T10:00:00Z',
-    dueAt: '2026-11-25T18:00:00Z',
-    verificationHash: '1c4e7f9a2b5d8e0c3a6f9b2d5e8a1c4f7b0d3e6a9c2f5b8e1d4a7c0f3b6e9a2d',
-  },
-  {
-    id: 'inv-2026-0912',
-    invoiceNumber: 'INV-2026-0912',
-    projectId: 'proj-2',
-    projectName: 'Odisha Krushak Mandee Multi-Tenant Core',
-    projectNameHi: 'ओडिशा कृषक मंडी मल्टी-टेनेंट कोर',
-    clientId: 'utkal-client-id',
-    clientName: 'Er. Debi Prasad Mishra',
-    clientEmail: 'utkal@odisha.gov.in',
-    clientCompany: 'Utkal Agro Infrastructure Directorate',
-    clientGstin: '21GVDPM9910A1Z5',
-    milestoneTitle: 'Milestone 01 — Vernacular Voice AI Engine & Mandee Price Sync',
-    milestoneTitleHi: 'माइलस्टोन 01 — स्थानीय ध्वनि AI इंजन एवं मंडी मूल्य समन्वय',
-    subtotal: 320000,
-    gstRate: 18,
-    gstAmount: 57600,
-    totalAmount: 377600,
-    currency: 'INR',
-    hsnSac: '998313',
-    status: 'paid',
-    issuedAt: '2026-10-15T11:00:00Z',
-    dueAt: '2026-10-30T18:00:00Z',
-    paidAt: '2026-10-28T16:15:00Z',
-    paymentTxnId: 'TXN-RTGS-RBI-29004128',
-    paymentMethod: 'NEFT_RTGS',
-    verificationHash: '4b7d0a3c6e9f2b5a8d1c4e7f0b3d6a9c2e5f8b1d4a7c0e3f6b9d2a5c8e1f4b7a',
-  },
-];
-
-const DEMO_ADMIN_USERS: any[] = [
-  {
-    uid: 'user-root',
-    displayName: 'Er. Bhanu Ram Bariha',
-    email: 'admin@barihadigital.com',
-    companyName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
-    role: 'admin',
-    lastLoginAt: '2026-11-10T11:45:00Z',
-  },
-  {
-    uid: 'user-002',
-    displayName: 'Rajiv Sengupta',
-    email: 'r.sengupta@kalingalogistics.in',
-    companyName: 'Kalinga Logistics Infrastructure Ltd.',
-    role: 'client',
-    lastLoginAt: '2026-11-09T08:20:00Z',
-  },
-  {
-    uid: 'user-003',
-    displayName: 'Dr. Anita Mohanty',
-    email: 'anita.m@utkalhealth.org',
-    companyName: 'Utkal Health Sciences Foundation',
-    role: 'client',
-    lastLoginAt: '2026-11-08T16:10:00Z',
-  },
-  {
-    uid: 'user-004',
-    displayName: 'Er. Somnath Patel',
-    email: 's.patel@barihadigital.com',
-    companyName: 'Bariha Digital Technologies',
-    role: 'architect',
-    lastLoginAt: '2026-11-10T09:30:00Z',
-  },
-];
-
-const DEMO_ADMIN_LEADS: InboundLead[] = [
-  {
-    id: 'lead-101',
-    name: 'Rajiv Sengupta',
-    company: 'Kalinga Logistics Infrastructure Ltd.',
-    email: 'r.sengupta@kalingalogistics.in',
-    phone: '+91 94370 12890',
-    service: 'Enterprise Android Engineering',
-    serviceHi: 'एंटरप्राइज एंड्रॉइड इंजीनियरिंग',
-    budget: '₹25,00,000 - ₹50,00,000',
-    receivedDate: '2026-11-09',
-    status: 'New',
-    statusHi: 'नई पूछताछ',
-    notes: 'Requires 4,000-device fleet rollout with offline geofencing.',
-  },
-  {
-    id: 'lead-102',
-    name: 'Dr. Anita Mohanty',
-    company: 'Utkal Health Sciences Foundation',
-    email: 'anita.m@utkalhealth.org',
-    phone: '+91 98610 44521',
-    service: 'Autonomous AI Workflows',
-    serviceHi: 'ऑटोनॉमस एआई वर्कफ़्लो',
-    budget: '₹15,00,000 - ₹25,00,000',
-    receivedDate: '2026-11-08',
-    status: 'Contacted',
-    statusHi: 'संपर्क स्थापित',
-    notes: 'Diagnostic document OCR pipeline in Hindi and Odia.',
-  },
-  {
-    id: 'lead-103',
-    name: 'Sunil Kumar Pradhan',
-    company: 'Barbil Minerals & Power Corp',
-    email: 'spradhan@barbilpower.com',
-    phone: '+91 97771 90812',
-    service: 'Mission-Critical Backend Architectures',
-    serviceHi: 'वितरित बैकएंड आर्किटेक्चर',
-    budget: '₹50,00,000+',
-    receivedDate: '2026-11-06',
-    status: 'In Discussion',
-    statusHi: 'चर्चा जारी',
-    notes: 'SCADA telemetry ingestion microservice with Go and Kafka.',
-  },
-];
-
-const DEMO_ADMIN_PROJECTS: any[] = [
-  {
-    id: 'proj-1',
-    code: 'PRJ-FLT-2026',
-    name: 'Bharat Fleet ERP & Distributed Telematics',
-    nameHi: 'भारत फ्लीट ईआरपी एवं वितरित टेलीमैटिक्स सिस्टम',
-    clientName: 'Kalinga Logistics Infrastructure Ltd.',
-    clientEmail: 'r.sengupta@kalingalogistics.in',
-    sprint: 'Sprint 14 of 16',
-    sprintHi: 'स्प्रिंट 14 / 16',
-    completion: 88,
-    status: 'In Sprints',
-    statusHi: 'सक्रिय स्प्रिंट',
-    health: 'Nominal (P99: 38ms)',
-    leadArchitect: 'Bhanu Ram Bariha',
-    techStack: ['Kotlin Multiplatform', 'Go 1.23', 'PostgreSQL', 'Kafka'],
-  },
-  {
-    id: 'proj-2',
-    code: 'PRJ-COLD-2026',
-    name: 'Odisha Cold-Chain Offline-First Android Core',
-    nameHi: 'ओडिशा कोल्ड-चेन ऑफलाइन-फर्स्ट एंड्रॉइड कोर',
-    clientName: 'Utkal Health Sciences Foundation',
-    clientEmail: 'anita.m@utkalhealth.org',
-    sprint: 'Sprint 9 of 10',
-    sprintHi: 'स्प्रिंट 9 / 10',
-    completion: 94,
-    status: 'Testing',
-    statusHi: 'अंतिम परीक्षण',
-    health: 'Optimal (Zero Sync Drop)',
-    leadArchitect: 'Senior Mobility Squad Alpha',
-    techStack: ['Jetpack Compose', 'Room DB', 'gRPC-Web', 'TLS 1.3'],
-  },
-  {
-    id: 'proj-3',
-    code: 'PRJ-MIN-2026',
-    name: 'Industrial SCADA Telemetry Stream Gateway',
-    nameHi: 'औद्योगिक स्काडा टेलीमेट्री गेटवे',
-    clientName: 'Barbil Minerals & Power Corp',
-    clientEmail: 'spradhan@barbilpower.com',
-    sprint: 'Sprint 3 of 12',
-    sprintHi: 'स्प्रिंट 3 / 12',
-    completion: 25,
-    status: 'In Sprints',
-    statusHi: 'सक्रिय स्प्रिंट',
-    health: 'Nominal',
-    leadArchitect: 'Bhanu Ram Bariha',
-    techStack: ['Rust', 'Apache Kafka', 'ClickHouse', 'Docker'],
-  },
-];
-
-const DEMO_ADMIN_QUOTATIONS: any[] = [
-  {
-    id: 'quote-2026-081',
-    clientName: 'Rajiv Sengupta',
-    clientEmail: 'r.sengupta@kalingalogistics.in',
-    company: 'Kalinga Logistics Infrastructure Ltd.',
-    serviceType: 'Enterprise Android Engineering',
-    estimatedBudget: '₹38,50,000',
-    timeline: '4 Months',
-    status: 'approved',
-    createdAt: '2026-11-09T14:30:00Z',
-  },
-  {
-    id: 'quote-2026-082',
-    clientName: 'Dr. Anita Mohanty',
-    clientEmail: 'anita.m@utkalhealth.org',
-    company: 'Utkal Health Sciences Foundation',
-    serviceType: 'Autonomous AI Workflows',
-    estimatedBudget: '₹22,00,000',
-    timeline: '3 Months',
-    status: 'pending',
-    createdAt: '2026-11-08T10:15:00Z',
-  },
-  {
-    id: 'quote-2026-083',
-    clientName: 'Sunil Kumar Pradhan',
-    clientEmail: 'spradhan@barbilpower.com',
-    company: 'Barbil Minerals & Power Corp',
-    serviceType: 'Mission-Critical Backend Architectures',
-    estimatedBudget: '₹65,00,000',
-    timeline: '6 Months',
-    status: 'under_review',
-    createdAt: '2026-11-06T18:40:00Z',
-  },
-];
-
-const DEMO_ADMIN_AUDIT_LOGS: any[] = [
-  {
-    id: 'log-001',
-    actorEmail: 'admin@barihadigital.com',
-    action: 'SYSTEM_BOOTSTRAP',
-    resource: 'firestore/all_collections',
-    details: 'RBAC security rules verified & 15 collections synchronized (Sample)',
-    timestamp: '2026-11-10T12:00:00Z',
-  },
-  {
-    id: 'log-002',
-    actorEmail: 'admin@barihadigital.com',
-    action: 'APP_CATALOG_SYNC',
-    resource: 'apps/bariha-pay',
-    details: 'Updated BarihaPay release v3.4.2 signature',
-    timestamp: '2026-11-10T11:50:00Z',
-  },
-  {
-    id: 'log-003',
-    actorEmail: 'system_anonymous',
-    action: 'QUOTATION_SUBMITTED',
-    resource: 'quotations/quote-2026-081',
-    details: 'Inbound quotation submitted from enterprise portal',
-    timestamp: '2026-11-09T14:30:00Z',
-  },
-];
-
-const DEMO_ADMIN_TICKETS: any[] = [
-  {
-    id: 'TKT-2026-904',
-    subject: 'BLE Soundbox latency validation report request for Odisha deployment',
-    priority: 'P2_High',
-    category: 'Hardware Telemetry',
-    projectCode: 'PRJ-FLT-2026',
-    environment: 'Android 14 / Teltonika FMB920',
-    clientEmail: 'r.sengupta@kalingalogistics.in',
-    clientId: 'user-002',
-    status: 'in_progress',
-    createdAt: '2026-11-08T10:15:00Z',
-    details: 'Requesting certified latency logs across 500 field terminals prior to district rollout.',
-    attachment: {
-      fileName: 'telemetry_sampling_odisha_v2.json',
-      fileSizeFormatted: '1.4 MB',
-      sha256: '9f83c12a4b821703e456efc829107412ab34cd56ef781290ab1234567890cdef',
-      downloadUrl: '/api/files/telemetry_sampling_odisha_v2.json',
-    },
-    responses: [
-      {
-        id: 'resp-001',
-        author: 'Er. Bhanu Ram Bariha',
-        authorRole: 'Lead Platform Architect',
-        message: 'Telemetry simulation successfully completed on Sambalpur cluster. BLE P99 latency measured at 24ms across 500 nodes. Cryptographic verification report attached.',
-        timestamp: '2026-11-08T13:45:00Z',
-      },
-    ],
-  },
-  {
-    id: 'TKT-2026-882',
-    subject: 'Add 2 new authorized client tester emails to Google Play Internal Track',
-    priority: 'P3_Normal',
-    category: 'Release & Distribution',
-    projectCode: 'PRJ-FLT-2026',
-    environment: 'Google Play Console / Production Track',
-    clientEmail: 'r.sengupta@kalingalogistics.in',
-    clientId: 'user-002',
-    status: 'resolved',
-    createdAt: '2026-11-04T14:20:00Z',
-    details: 'Added r.sengupta@kalingalogistics.in and devops@kalingalogistics.in to staging track.',
-    responses: [
-      {
-        id: 'resp-002',
-        author: 'DevOps & Release Team',
-        authorRole: 'Platform Architect',
-        message: 'Both tester accounts provisioned and invites dispatched with internal app-sharing certificate.',
-        timestamp: '2026-11-04T15:10:00Z',
-      },
-    ],
-  },
-  {
-    id: 'TKT-2026-871',
-    subject: 'Emergency Architect escalation: Scrutinize NPCI UPI 2.0 dual-webhook payload',
-    priority: 'P1_Critical',
-    category: 'Payment Core',
-    projectCode: 'PRJ-MED-2026',
-    environment: 'PCI-DSS Bare-metal Cluster',
-    clientEmail: 'anita.m@utkalhealth.org',
-    clientId: 'user-003',
-    status: 'resolved',
-    createdAt: '2026-10-29T08:00:00Z',
-    details: 'Lead Architect resolved within 18 minutes. Verified idempotent ledger keys.',
-  },
-];
 
 interface InboundLead {
   id: string;
@@ -426,17 +87,99 @@ interface InboundLead {
 export const AdminDashboardPage: React.FC = () => {
   const { language, t, dict, formatDate, showToast } = useLanguage();
   const { apps, deleteApp, resetToDefaults } = useApps();
-  const { currentUser, isAdmin, openAuthModal } = useAuth();
+  const {
+    currentUser,
+    userRole,
+    isAdmin,
+    isSuperAdmin,
+    roleDocExists,
+    roleCheckError,
+    isAuthReady,
+    isRoleChecking,
+    refreshUserRole,
+    openAuthModal,
+    logout,
+  } = useAuth();
   const { navigate } = useNavigation();
 
-  // Admin access gate: strictly distinguish live verified Admin vs Demo Evaluation Sandbox
-  const [demoAdminMode, setDemoAdminMode] = useState<boolean>(() => {
-    return sessionStorage.getItem('pws_demo_admin') === 'true';
-  });
+  const [checkingRoleManual, setCheckingRoleManual] = useState(false);
+  const [copiedUid, setCopiedUid] = useState(false);
+
+  // Strict real Admin access gate: verified Firebase Auth UID + Firestore user_roles / custom claims ONLY
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('pws_demo_admin');
+    } catch {
+      // Ignore storage access errors
+    }
+  }, []);
 
   const isRealAdmin = Boolean(currentUser) && isAdmin;
-  const isDemoSandbox = !isRealAdmin && demoAdminMode;
-  const isAuthorizedAdmin = isRealAdmin || isDemoSandbox;
+  const isAuthorizedAdmin = isRealAdmin;
+
+  const handleRecheckAdminRole = async () => {
+    if (!currentUser) {
+      openAuthModal('login');
+      return;
+    }
+    setCheckingRoleManual(true);
+    try {
+      try {
+        await authenticatedFetch(
+          '/api/admin/bootstrap',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          },
+          { user: currentUser }
+        );
+      } catch {
+        // Non-owner accounts receive 403; role verification below determines access
+      }
+      const verified = await refreshUserRole();
+      if (verified) {
+        showToast(
+          t(
+            'Administrator role verified in Firestore user_roles. Welcome!',
+            'Firestore user_roles में एडमिन रोल सत्यापित हो गया है।'
+          ),
+          'success'
+        );
+      } else {
+        showToast(
+          t(
+            `Access Denied: No Admin role found in Firestore user_roles/${currentUser.uid}.`,
+            `त्रुटि: Firestore user_roles/${currentUser.uid} में इस खाते के लिए Admin Role नहीं मिला।`
+          ),
+          'alert'
+        );
+      }
+    } finally {
+      setCheckingRoleManual(false);
+    }
+  };
+
+  const handleSwitchAdminAccount = async () => {
+    try {
+      await logout();
+    } catch {
+      // Ignore logout failure and still allow login
+    }
+    openAuthModal('login');
+  };
+
+  const handleCopyUid = async () => {
+    if (!currentUser?.uid || typeof navigator === 'undefined' || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(currentUser.uid);
+      setCopiedUid(true);
+      setTimeout(() => setCopiedUid(false), 2000);
+      showToast(t('Firebase UID copied to clipboard.', 'Firebase UID क्लिपबोर्ड पर कॉपी हो गया।'), 'info');
+    } catch {
+      // Ignore clipboard permission errors
+    }
+  };
 
   const [activeTab, setActiveTab] = useState<
     'customers' | 'leads' | 'projects' | 'services' | 'portfolio' | 'quotations' | 'billing' | 'support' | 'content' | 'telemetry'
@@ -499,18 +242,14 @@ export const AdminDashboardPage: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [pendingDelete, deletingItem]);
 
-  // Data collections state (demo arrays are loaded ONLY when isDemoSandbox is active)
+  // Live Firestore collections state (loaded strictly for verified Firebase Administrators)
   const [usersList, setUsersList] = useState<any[]>([]);
-  const [demoLeads, setDemoLeads] = useState<InboundLead[]>([]);
   const [projectsList, setProjectsList] = useState<any[]>([]);
   const [servicesList, setServicesList] = useState<ServiceItem[]>(SERVICES_DATA);
   const [quotationsList, setQuotationsList] = useState<any[]>([]);
 
-  // Live Inbound Leads derived from Cloud Firestore quotations (when isRealAdmin) vs local demo leads
+  // Live Inbound Leads derived strictly from Cloud Firestore quotations
   const leads: InboundLead[] = useMemo(() => {
-    if (isDemoSandbox) {
-      return demoLeads;
-    }
     return quotationsList.map((q: any) => {
       const qStatus = String(q.status || 'pending').toLowerCase();
       const status: InboundLead['status'] =
@@ -535,16 +274,16 @@ export const AdminDashboardPage: React.FC = () => {
         company: q.company || 'Enterprise Organization',
         email: q.clientEmail || '',
         phone: q.phone || 'Not provided',
-        service: q.serviceType || 'Custom Software Architecture',
-        serviceHi: q.serviceType || 'कस्टम सॉफ्टवेयर आर्किटेक्चर',
-        budget: q.estimatedBudget || 'Enterprise SOW',
+        service: q.serviceType || '',
+        serviceHi: q.serviceType || '',
+        budget: q.estimatedBudget ?? '',
         receivedDate: q.createdAt || new Date().toISOString(),
         status,
         statusHi,
         notes: q.brief || 'Submitted via enterprise scoping form.',
       };
     });
-  }, [isDemoSandbox, demoLeads, quotationsList]);
+  }, [quotationsList]);
   const [blogList, setBlogList] = useState<BlogPost[]>(BLOG_POSTS);
   const [contentSubTab, setContentSubTab] = useState<'articles' | 'settings'>('articles');
 
@@ -613,36 +352,11 @@ export const AdminDashboardPage: React.FC = () => {
       })
       .catch(() => {});
 
-    if (isDemoSandbox) {
-      setInvoicesList(DEMO_ADMIN_INVOICES);
-      setUsersList(DEMO_ADMIN_USERS);
-      setDemoLeads(DEMO_ADMIN_LEADS);
-      setProjectsList(DEMO_ADMIN_PROJECTS);
-      setQuotationsList(DEMO_ADMIN_QUOTATIONS);
-      setAuditLogs(DEMO_ADMIN_AUDIT_LOGS);
-      setTicketsList(DEMO_ADMIN_TICKETS);
-      setActiveTicketIdForReply('TKT-2026-904');
-      setInvoiceForm({
-        clientId: 'kalinga-client-id',
-        clientName: 'Rajiv Sengupta',
-        clientEmail: 'kalinga@enterprise.in',
-        clientCompany: 'Kalinga Logistics Infrastructure Ltd.',
-        clientGstin: '21AAACK1924L1ZZ',
-        projectName: 'Bharat Fleet ERP & Distributed Telematics',
-        milestoneTitle: 'Sprint 15 Deliverable — Edge Telemetry Reconciliation',
-        subtotal: '250000',
-      });
-      return () => {
-        isCancelled = true;
-      };
-    }
-
     // Only load protected admin collections if user is a real verified Firebase Admin
     if (!currentUser || !isRealAdmin) {
       setTelemetryData(null);
       setInvoicesList([]);
       setUsersList([]);
-      setDemoLeads([]);
       setProjectsList([]);
       setQuotationsList([]);
       setAuditLogs([]);
@@ -653,21 +367,6 @@ export const AdminDashboardPage: React.FC = () => {
       };
     }
 
-    setDemoLeads([]);
-    setInvoiceForm((prev) =>
-      prev.clientEmail === 'kalinga@enterprise.in'
-        ? {
-            clientId: '',
-            clientName: '',
-            clientEmail: '',
-            clientCompany: '',
-            clientGstin: '',
-            projectName: '',
-            milestoneTitle: '',
-            subtotal: '',
-          }
-        : prev
-    );
     setLoadingInvoices(true);
     authenticatedFetch('/api/telemetry', {}, { user: currentUser })
       .then((res) => (res.ok ? res.json() : null))
@@ -740,7 +439,7 @@ export const AdminDashboardPage: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [currentUser, isRealAdmin, isDemoSandbox]);
+  }, [currentUser, isRealAdmin]);
 
   useEffect(() => {
     if (!pendingDelete) return;
@@ -753,37 +452,7 @@ export const AdminDashboardPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pendingDelete, deletingItem]);
 
-  // Enter / Exit Demo Admin Mode
-  const handleToggleDemoMode = (enable: boolean) => {
-    setDemoAdminMode(enable);
-    if (enable) {
-      sessionStorage.setItem('pws_demo_admin', 'true');
-      showToast(
-        language === 'hi'
-          ? 'डेमो एडमिन मोड सक्रिय: सभी 7 प्रबंधन मॉड्यूल पूरी तरह से क्रियाशील हैं।'
-          : 'Demo Admin Mode Activated: All 7 management modules fully functional.',
-        'success'
-      );
-    } else {
-      sessionStorage.removeItem('pws_demo_admin');
-      showToast(
-        language === 'hi' ? 'डेमो एडमिन मोड बंद कर दिया गया।' : 'Demo Admin Mode Deactivated.',
-        'info'
-      );
-    }
-  };
-
   const handleSeedDatabase = async () => {
-    if (isDemoSandbox) {
-      showToast(
-        t(
-          '[Demo Sandbox] Live Cloud Firestore synchronization requires signing in with a verified Administrator (user_roles) account.',
-          '[डेमो सैंडबॉक्स] लाइव Cloud Firestore सिंक्रनाइज़ेशन के लिए सत्यापित एडमिन (user_roles) खाते से साइन इन आवश्यक है।'
-        ),
-        'info'
-      );
-      return;
-    }
     try {
       setIsSeeding(true);
       const res = await seedInitialDatabaseIfEmpty();
@@ -800,19 +469,10 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  // Customers: promote/demote role
-  const handleRoleChange = async (userId: string, newRole: 'admin' | 'client' | 'architect' | 'manager') => {
-    if (isDemoSandbox) {
-      setUsersList((prev) =>
-        prev.map((u) => (u.uid === userId ? { ...u, role: newRole } : u))
-      );
-      showToast(
-        t(
-          `[Demo Sandbox] Simulated role change to "${newRole}" locally.`,
-          `[डेमो सैंडबॉक्स] भूमिका परिवर्तन "${newRole}" केवल स्थानीय पूर्वावलोकन में सहेजा गया।`
-        ),
-        'info'
-      );
+  // Customers: assign non-privileged roles strictly via server-side /api/admin/roles/update
+  const handleRoleChange = async (userId: string, newRole: 'client' | 'architect' | 'manager') => {
+    const target = usersList.find((u) => u.uid === userId);
+    if (target?.role === 'owner' || target?.isOwner === true) {
       return;
     }
     try {
@@ -831,46 +491,8 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  // Leads: cycle status (persists to Firestore quotations collection when isRealAdmin)
+  // Leads: cycle status (persists via server-side /api/admin/quotations/:id/status)
   const handleToggleLeadStatus = async (leadId: string) => {
-    if (isDemoSandbox) {
-      setDemoLeads((prev) =>
-        prev.map((lead) => {
-          if (lead.id === leadId) {
-            const nextStatus =
-              lead.status === 'New'
-                ? 'Contacted'
-                : lead.status === 'Contacted'
-                ? 'In Discussion'
-                : lead.status === 'In Discussion'
-                ? 'Converted'
-                : 'Contacted';
-
-            const nextStatusHi =
-              nextStatus === 'Contacted'
-                ? 'संपर्क स्थापित'
-                : nextStatus === 'In Discussion'
-                ? 'चर्चा जारी'
-                : nextStatus === 'Converted'
-                ? 'सफल ग्राहक'
-                : 'संपर्क स्थापित';
-
-            return {
-              ...lead,
-              status: nextStatus,
-              statusHi: nextStatusHi,
-            };
-          }
-          return lead;
-        })
-      );
-      showToast(
-        language === 'hi' ? 'लीड की स्थिति सफलतापूर्वक अपडेट की गई।' : 'Lead pipeline status updated.',
-        'info'
-      );
-      return;
-    }
-
     const currentQuote = quotationsList.find((q) => q.id === leadId);
     const currentStatus = String(currentQuote?.status || 'pending').toLowerCase();
     const nextQuoteStatus =
@@ -896,9 +518,9 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  // Convert Lead to Quotation (opens existing Firestore quotation in live mode or scaffolds new quote in demo)
+  // Convert Lead to Quotation
   const handleConvertLeadToQuote = (lead: InboundLead) => {
-    const existingQuote = !isDemoSandbox ? quotationsList.find((q) => q.id === lead.id) : null;
+    const existingQuote = quotationsList.find((q) => q.id === lead.id) || null;
     if (existingQuote) {
       setEditingQuotation(existingQuote);
     } else {
@@ -936,19 +558,6 @@ export const AdminDashboardPage: React.FC = () => {
   };
 
   const handleQuickQuotationStatus = async (quoteId: string, status: 'approved' | 'rejected') => {
-    if (isDemoSandbox) {
-      setQuotationsList((prev) =>
-        prev.map((q) => (q.id === quoteId ? { ...q, status } : q))
-      );
-      showToast(
-        t(
-          `[Demo Sandbox] Quotation marked as ${status} locally.`,
-          `[डेमो सैंडबॉक्स] कोटेशन स्थानीय रूप से ${status} के रूप में चिह्नित किया गया।`
-        ),
-        'info'
-      );
-      return;
-    }
     try {
       await updateQuotationStatus(quoteId, status);
       setQuotationsList((prev) =>
@@ -972,50 +581,24 @@ export const AdminDashboardPage: React.FC = () => {
 
     try {
       if (type === 'app') {
-        if (isDemoSandbox) {
-          showToast(
-            t(
-              '[Demo Sandbox] Live portfolio app deletion requires verified Root Admin login.',
-              '[डेमो सैंडबॉक्स] लाइव पोर्टफोलियो ऐप हटाने के लिए सत्यापित रूट एडमिन लॉगिन आवश्यक है।'
-            ),
-            'info'
-          );
-        } else {
-          await deleteApp(id);
-          showToast(dict.notifications.appDeleted, 'info');
-        }
-      } else if (isDemoSandbox) {
-        if (type === 'project') {
-          setProjectsList((prev) => prev.filter((p) => p.id !== id));
-          showToast(t('[Demo Sandbox] Project removed locally.', '[डेमो सैंडबॉक्स] प्रोजेक्ट स्थानीय रूप से हटाया गया।'), 'info');
-        } else if (type === 'service') {
-          setServicesList((prev) => prev.filter((s) => s.id !== id));
-          showToast(t('[Demo Sandbox] Service removed locally.', '[डेमो सैंडबॉक्स] सेवा स्थानीय रूप से हटाई गई।'), 'info');
-        } else if (type === 'quotation') {
-          setQuotationsList((prev) => prev.filter((q) => q.id !== id));
-          showToast(t('[Demo Sandbox] Quotation removed locally.', '[डेमो सैंडबॉक्स] कोटेशन स्थानीय रूप से हटाई गई।'), 'info');
-        } else if (type === 'blog') {
-          setBlogList((prev) => prev.filter((b) => b.id !== id));
-          showToast(t('[Demo Sandbox] Article removed locally.', '[डेमो सैंडबॉक्स] लेख स्थानीय रूप से हटाया गया।'), 'info');
-        }
-      } else {
-        if (type === 'project') {
-          await deleteProject(id);
-          setProjectsList((prev) => prev.filter((p) => p.id !== id));
-          showToast(language === 'hi' ? 'प्रोजेक्ट हटाया गया।' : 'Project removed.', 'info');
-        } else if (type === 'service') {
-          await deleteServiceItem(id);
-          setServicesList((prev) => prev.filter((s) => s.id !== id));
-          showToast(language === 'hi' ? 'सेवा हटाई गई।' : 'Service removed from catalog.', 'info');
-        } else if (type === 'quotation') {
-          await deleteQuotation(id);
-          setQuotationsList((prev) => prev.filter((q) => q.id !== id));
-          showToast(language === 'hi' ? 'कोटेशन हटाई गई।' : 'Quotation deleted.', 'info');
-        } else if (type === 'blog') {
-          await deleteBlogPost(id);
-          setBlogList((prev) => prev.filter((b) => b.id !== id));
-          showToast(language === 'hi' ? 'लेख हटाया गया।' : 'Article removed.', 'info');
-        }
+        await deleteApp(id);
+        showToast(dict.notifications.appDeleted, 'info');
+      } else if (type === 'project') {
+        await deleteProject(id);
+        setProjectsList((prev) => prev.filter((p) => p.id !== id));
+        showToast(language === 'hi' ? 'प्रोजेक्ट हटाया गया।' : 'Project removed.', 'info');
+      } else if (type === 'service') {
+        await deleteServiceItem(id);
+        setServicesList((prev) => prev.filter((s) => s.id !== id));
+        showToast(language === 'hi' ? 'सेवा हटाई गई।' : 'Service removed from catalog.', 'info');
+      } else if (type === 'quotation') {
+        await deleteQuotation(id);
+        setQuotationsList((prev) => prev.filter((q) => q.id !== id));
+        showToast(language === 'hi' ? 'कोटेशन हटाई गई।' : 'Quotation deleted.', 'info');
+      } else if (type === 'blog') {
+        await deleteBlogPost(id);
+        setBlogList((prev) => prev.filter((b) => b.id !== id));
+        showToast(language === 'hi' ? 'लेख हटाया गया।' : 'Article removed.', 'info');
       }
       setPendingDelete(null);
     } catch (err: any) {
@@ -1027,16 +610,6 @@ export const AdminDashboardPage: React.FC = () => {
 
   const handleSaveSiteSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isDemoSandbox) {
-      showToast(
-        t(
-          '[Demo Sandbox] Global settings preview updated locally. Sign in as Admin to persist to Cloud Firestore.',
-          '[डेमो सैंडबॉक्स] सेटिंग्स केवल स्थानीय पूर्वावलोकन में सहेजी गईं।'
-        ),
-        'info'
-      );
-      return;
-    }
     setSavingSettings(true);
     try {
       await saveSiteSettings(siteSettings);
@@ -1057,16 +630,6 @@ export const AdminDashboardPage: React.FC = () => {
   // Authenticated attachment download helper (sends Bearer ID token for /api/files/*)
   const handleAdminDownloadAttachment = async (url?: string, fileName?: string) => {
     if (!url || url === '#') return;
-    if (isDemoSandbox) {
-      showToast(
-        t(
-          '[Demo Sandbox] Sign in as verified Admin to download protected client file artifacts.',
-          '[डेमो सैंडबॉक्स] सुरक्षित क्लाइंट फ़ाइल डाउनलोड करने के लिए सत्यापित एडमिन के रूप में साइन इन करें।'
-        ),
-        'info'
-      );
-      return;
-    }
     try {
       const res =
         currentUser && url.startsWith('/api/files/')
@@ -1096,43 +659,6 @@ export const AdminDashboardPage: React.FC = () => {
     const numericSubtotal = Number(invoiceForm.subtotal);
     if (!Number.isFinite(numericSubtotal) || numericSubtotal <= 0) {
       showToast(t('Enter a valid positive subtotal in INR.', 'कृपया INR में मान्य सकारात्मक राशि दर्ज करें।'), 'alert');
-      return;
-    }
-
-    if (isDemoSandbox) {
-      const gstAmount = Math.round(numericSubtotal * 0.18);
-      const demoInv: EnterpriseInvoice = {
-        id: `inv-demo-${Date.now()}`,
-        invoiceNumber: `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`,
-        projectId: 'proj-demo',
-        projectName: invoiceForm.projectName.trim(),
-        projectNameHi: invoiceForm.projectName.trim(),
-        clientId: 'demo-client',
-        clientName: invoiceForm.clientName.trim(),
-        clientEmail: invoiceForm.clientEmail.trim().toLowerCase(),
-        clientCompany: invoiceForm.clientCompany.trim(),
-        clientGstin: invoiceForm.clientGstin.trim() || '21AAACK0000A1Z0',
-        milestoneTitle: invoiceForm.milestoneTitle.trim(),
-        milestoneTitleHi: invoiceForm.milestoneTitle.trim(),
-        subtotal: numericSubtotal,
-        gstRate: 18,
-        gstAmount,
-        totalAmount: numericSubtotal + gstAmount,
-        currency: 'INR',
-        hsnSac: '998313',
-        status: 'issued',
-        issuedAt: new Date().toISOString(),
-        dueAt: new Date(Date.now() + 15 * 86400 * 1000).toISOString(),
-        verificationHash: 'demo_sandbox_preview_hash',
-      };
-      setInvoicesList((prev) => [demoInv, ...prev]);
-      showToast(
-        t(
-          `[Demo Sandbox] Invoice ${demoInv.invoiceNumber} previewed locally.`,
-          `[डेमो सैंडबॉक्स] चालान ${demoInv.invoiceNumber} स्थानीय रूप से तैयार किया गया।`
-        ),
-        'info'
-      );
       return;
     }
 
@@ -1217,14 +743,17 @@ export const AdminDashboardPage: React.FC = () => {
   }, [servicesList, searchTerm]);
 
   const filteredQuotes = useMemo(() => {
+    const qLower = searchTerm.toLowerCase();
     return quotationsList.filter(
       (q) =>
-        (q.clientName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.clientEmail || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (q.serviceType || '').toLowerCase().includes(searchTerm.toLowerCase())
+        (q.clientName || '').toLowerCase().includes(qLower) ||
+        (q.clientEmail || '').toLowerCase().includes(qLower) ||
+        (q.company || '').toLowerCase().includes(qLower) ||
+        (q.serviceType || '').toLowerCase().includes(qLower) ||
+        formatQuotationService(q.serviceType, language).toLowerCase().includes(qLower) ||
+        formatQuotationBudget(q.estimatedBudget, language).toLowerCase().includes(qLower)
     );
-  }, [quotationsList, searchTerm]);
+  }, [quotationsList, searchTerm, language]);
 
   const filteredBlogs = useMemo(() => {
     return blogList.filter(
@@ -1262,32 +791,6 @@ export const AdminDashboardPage: React.FC = () => {
     }
     const statusChange = adminReplyStatuses[ticketId] || 'in_progress';
     const author = currentUser?.displayName || 'Er. Bhanu Ram Bariha (Lead Architect)';
-
-    if (isDemoSandbox) {
-      const replyObj = {
-        id: `resp-${Date.now()}`,
-        author,
-        authorRole: 'Lead Platform Architect',
-        message: text,
-        timestamp: new Date().toISOString(),
-      };
-      setTicketsList((prev) =>
-        prev.map((t) =>
-          t.id === ticketId
-            ? { ...t, status: statusChange, responses: [...(t.responses || []), replyObj] }
-            : t
-        )
-      );
-      setAdminReplyTexts((prev) => ({ ...prev, [ticketId]: '' }));
-      showToast(
-        t(
-          `[Demo Sandbox] Reply simulated locally (${statusChange}).`,
-          `[डेमो सैंडबॉक्स] उत्तर केवल स्थानीय पूर्वावलोकन में दर्ज किया गया।`
-        ),
-        'info'
-      );
-      return;
-    }
 
     setSubmittingAdminReply((prev) => ({ ...prev, [ticketId]: true }));
     try {
@@ -1335,19 +838,6 @@ export const AdminDashboardPage: React.FC = () => {
   };
 
   const handleAdminChangeTicketStatus = async (ticketId: string, newStatus: 'open' | 'in_progress' | 'resolved') => {
-    if (isDemoSandbox) {
-      setTicketsList((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, status: newStatus } : t))
-      );
-      showToast(
-        t(
-          `[Demo Sandbox] Ticket status simulated as "${newStatus}".`,
-          `[डेमो सैंडबॉक्स] टिकट स्थिति "${newStatus}" के रूप में अनुकरण की गई।`
-        ),
-        'info'
-      );
-      return;
-    }
     try {
       await updateSupportTicketStatus(ticketId, newStatus);
       setTicketsList((prev) =>
@@ -1363,6 +853,38 @@ export const AdminDashboardPage: React.FC = () => {
       showToast(err.message || 'Failed to update ticket status', 'alert');
     }
   };
+
+  /* =========================================================================
+     VERIFICATION LOADER (WHILE CHECKING FIREBASE AUTH & FIRESTORE user_roles)
+     ========================================================================= */
+  if (!isAuthorizedAdmin && (!isAuthReady || (Boolean(currentUser) && isRoleChecking))) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-6 text-white">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl text-center space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-blue-900/40 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto">
+            <RefreshCw className="w-7 h-7 animate-spin text-blue-400" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-extrabold text-white tracking-tight">
+              {t('Verifying Administrator Privileges...', 'प्रशासक अधिकार सत्यापित हो रहे हैं...')}
+            </h1>
+            <p className="text-xs text-slate-400">
+              {t(
+                'Checking Firebase Authentication UID and Firestore user_roles collection.',
+                'Firebase Authentication UID और Firestore user_roles की जांच की जा रही है।'
+              )}
+            </p>
+          </div>
+          {currentUser && (
+            <div className="p-3 rounded-xl bg-slate-950/80 border border-slate-800 text-left text-xs font-mono text-slate-300 space-y-1">
+              <div className="truncate">Email: {currentUser.email || '—'}</div>
+              <div className="truncate text-slate-400">UID: {currentUser.uid}</div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   /* =========================================================================
      RESTRICTED ACCESS BARRIER (IF NOT AUTHORIZED & NOT IN DEMO MODE)
@@ -1390,49 +912,126 @@ export const AdminDashboardPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-left space-y-2 text-xs font-mono text-slate-300">
+          {/* Explicit RBAC Error Banner when signed in without Admin Role */}
+          {currentUser && (
+            <div
+              role="alert"
+              className="p-4 rounded-xl bg-rose-950/60 border border-rose-500/40 text-left space-y-1.5"
+            >
+              <div className="flex items-center gap-2 text-rose-300 font-bold text-xs sm:text-sm">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>
+                  {t(
+                    'Access Denied: Administrator Role Not Found',
+                    'प्रवेश अस्वीकृत: एडमिन रोल (Admin Role) सत्यापित नहीं हुआ'
+                  )}
+                </span>
+              </div>
+              <p className="text-xs text-rose-200/90 leading-relaxed">
+                {roleCheckError
+                  ? roleCheckError
+                  : t(
+                      `Account "${currentUser.email || currentUser.uid}" does not have role "admin" or "super_admin" in Firestore user_roles/${currentUser.uid}. Normal accounts cannot self-assign admin roles; create the role record via Firebase Console or secure server-side Super Admin bootstrap.`,
+                      `खाता "${currentUser.email || currentUser.uid}" के लिए Firestore user_roles/${currentUser.uid} में "admin" या "super_admin" भूमिका नहीं मिली। सामान्य यूज़र स्वयं अपना Admin Role नहीं बदल सकते — Admin Role केवल Firebase Console या सुरक्षित Server-Side Bootstrap से सेट किया जा सकता है।`
+                    )}
+              </p>
+            </div>
+          )}
+
+          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-left space-y-2.5 text-xs font-mono text-slate-300">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-slate-400">{t('Required Privilege:', 'आवश्यक अधिकार:')}</span>
               <span className="text-emerald-400 font-bold text-right">
-                {t('Firestore user_roles (admin)', 'Firestore user_roles (एडमिन)')}
+                {t('Firestore user_roles/{uid} (admin)', 'Firestore user_roles/{uid} (admin)')}
               </span>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-slate-400">{t('Security Policy:', 'सुरक्षा नीति:')}</span>
-              <span className="text-blue-400 font-bold text-right">Role-Based RBAC / Default Deny</span>
+              <span className="text-blue-400 font-bold text-right">Role-Based RBAC / Server-Only Grant</span>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-slate-400">{t('Current Session:', 'वर्तमान सत्र:')}</span>
-              <span className="text-amber-400 font-bold break-all text-right">
-                {currentUser ? currentUser.email : t('Unauthenticated Guest', 'अनाधिकृत आगंतुक')}
+              <span className="text-slate-400">{t('Firebase Email:', 'फायरबेस ईमेल:')}</span>
+              <span className="text-amber-300 font-bold break-all text-right">
+                {currentUser
+                  ? `${currentUser.email || '—'} (${currentUser.emailVerified ? t('Verified', 'सत्यापित') : t('Unverified', 'असत्यापित')})`
+                  : t('Unauthenticated Guest', 'अनाधिकृत आगंतुक')}
               </span>
             </div>
+            {currentUser && (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-slate-400">{t('Firebase UID:', 'फायरबेस UID:')}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-200 font-semibold break-all text-right">{currentUser.uid}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyUid}
+                      title={t('Copy UID', 'UID कॉपी करें')}
+                      aria-label={t('Copy Firebase UID', 'फायरबेस UID कॉपी करें')}
+                      className="p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded cursor-pointer transition-colors"
+                    >
+                      {copiedUid ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-slate-400">{t('Firestore Role Check:', 'Firestore रोल जांच:')}</span>
+                  <span className="text-rose-400 font-bold text-right">
+                    {roleDocExists
+                      ? t(`Found "${userRole}" (Admin required)`, `"${userRole}" मिला (Admin आवश्यक)`)
+                      : t('No user_roles document for UID', 'इस UID के लिए user_roles दस्तावेज़ नहीं मिला')}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-            <button
-              onClick={() => openAuthModal('login')}
-              type="button"
-              className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Lock className="w-4 h-4" />
-              <span>{t('Sign In as Administrator', 'प्रशासक के रूप में लॉगिन करें')}</span>
-            </button>
-
-            <button
-              onClick={() => handleToggleDemoMode(true)}
-              type="button"
-              className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
-            >
-              <Shield className="w-4 h-4 text-emerald-400" />
-              <span>{t('Enter Demo Admin Mode', 'डेमो एडमिन मोड में प्रवेश करें')}</span>
-            </button>
+          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2">
+            {!currentUser ? (
+              <button
+                onClick={() => openAuthModal('login')}
+                type="button"
+                className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Lock className="w-4 h-4" />
+                <span>{t('Sign In as Administrator', 'प्रशासक के रूप में लॉगिन करें')}</span>
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={handleRecheckAdminRole}
+                  disabled={checkingRoleManual || isRoleChecking}
+                  type="button"
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${checkingRoleManual || isRoleChecking ? 'animate-spin' : ''}`} />
+                  <span>{t('Recheck Admin Role', 'एडमिन रोल पुनः जांचें')}</span>
+                </button>
+                <button
+                  onClick={handleSwitchAdminAccount}
+                  type="button"
+                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Lock className="w-4 h-4 text-blue-400" />
+                  <span>{t('Switch Admin Account', 'अन्य एडमिन खाते से लॉगिन करें')}</span>
+                </button>
+                <button
+                  onClick={() => logout()}
+                  type="button"
+                  className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-rose-200 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-800/70 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>{t('Sign Out', 'लॉग आउट करें')}</span>
+                </button>
+              </>
+            )}
           </div>
 
           <div className="pt-2">
             <button
               onClick={() => navigate('home')}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1 mx-auto"
+              type="button"
+              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1 mx-auto cursor-pointer"
             >
               <span>{t('Return to Public Portal', 'सार्वजनिक पोर्टल पर वापस जाएं')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -1444,41 +1043,11 @@ export const AdminDashboardPage: React.FC = () => {
   }
 
   /* =========================================================================
-     AUTHORIZED ADMIN CONSOLE
+     AUTHORIZED ADMIN CONSOLE (STRICTLY VERIFIED FIREBASE ADMIN ONLY)
      ========================================================================= */
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Demo Sandbox Evaluation Notice Banner if unauthenticated */}
-        {isDemoSandbox && (
-          <div className="mb-6 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-900">
-            <div className="flex items-center gap-2 font-medium">
-              <Shield className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>
-                <strong>{t('LOCAL DEMO SANDBOX ACTIVE (UNAUTHENTICATED):', 'स्थानीय डेमो सैंडबॉक्स सक्रिय (अप्रमाणीकृत):')}</strong>{' '}
-                {t(
-                  'Modules display seeded sample data locally. Sign in with verified Administrator credentials for live Cloud Firestore & GST Invoice ledger writes.',
-                  'मॉड्यूल केवल स्थानीय नमूना डेटा दिखाते हैं। लाइव Cloud Firestore और GST चालान लेखन के लिए सत्यापित एडमिन खाते से साइन इन करें।'
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-              <button
-                onClick={() => openAuthModal('login')}
-                className="px-2.5 py-1 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded transition-colors cursor-pointer"
-              >
-                {t('Sign In Live', 'लाइव लॉगिन')}
-              </button>
-              <button
-                onClick={() => handleToggleDemoMode(false)}
-                className="px-2.5 py-1 text-xs font-bold text-amber-950 bg-amber-200/80 hover:bg-amber-300 rounded border border-amber-400/50 transition-colors cursor-pointer"
-              >
-                {t('Exit Demo Mode', 'डेमो बंद करें')}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Studio Admin Header Banner */}
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 sm:p-8 text-white shadow-md mb-8">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-800">
@@ -1488,13 +1057,13 @@ export const AdminDashboardPage: React.FC = () => {
                   {t('Studio Admin Console', 'स्टूडियो एडमिनिस्ट्रेशन कंसोल')}
                 </span>
                 <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800">
-                  {isRealAdmin
-                    ? t('Verified Firebase Admin Session', 'सत्यापित फायरबेस एडमिन सत्र')
-                    : t('Evaluation Sandbox (Local State)', 'मूल्यांकन सैंडबॉक्स (स्थानीय)')}
+                  {isSuperAdmin
+                    ? t('Verified Firebase Super Admin', 'सत्यापित फायरबेस सुपर एडमिन')
+                    : t('Verified Firebase Admin Session', 'सत्यापित फायरबेस एडमिन सत्र')}
                 </span>
                 {currentUser?.email && (
                   <span className="text-xs text-slate-400 font-mono hidden sm:inline">
-                    ({currentUser.email})
+                    ({currentUser.email} • UID: {currentUser.uid.slice(0, 8)}…)
                   </span>
                 )}
               </div>
@@ -1828,57 +1397,96 @@ export const AdminDashboardPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredUsers.map((user) => (
-                    <tr key={user.uid} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="font-bold text-slate-900">{user.displayName || 'Enterprise User'}</div>
-                        <div className="text-[11px] font-mono text-slate-500">{user.email}</div>
-                      </td>
-                      <td className="py-3 px-4 font-medium text-slate-700">
-                        {user.companyName || t('Independent Client', 'स्वतंत्र ग्राहक')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                            user.role === 'admin'
-                              ? 'bg-purple-50 text-purple-700 border-purple-200'
-                              : user.role === 'architect'
-                              ? 'bg-blue-50 text-blue-700 border-blue-200'
-                              : 'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}
-                        >
-                          {user.role || 'client'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 font-mono text-slate-500 text-[11px]">
-                        {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Recently active'}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <select
-                            value={user.role || 'client'}
-                            onChange={(e) => handleRoleChange(user.uid, e.target.value as any)}
-                            className="text-[11px] font-medium border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-blue-700 cursor-pointer"
+                  {filteredUsers.map((user) => {
+                    const isOwnerRow = user.role === 'owner' || user.isOwner === true;
+                    const nonOwnerRole =
+                      user.role === 'architect' || user.role === 'manager' ? user.role : 'client';
+                    return (
+                      <tr key={user.uid} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-bold text-slate-900">{user.displayName || 'Enterprise User'}</div>
+                          <div className="text-[11px] font-mono text-slate-500">{user.email}</div>
+                        </td>
+                        <td className="py-3 px-4 font-medium text-slate-700">
+                          {isOwnerRow
+                            ? user.companyName || t('Owner', 'मालिक')
+                            : user.companyName || t('Independent Client', 'स्वतंत्र ग्राहक')}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                              isOwnerRow
+                                ? 'bg-amber-50 text-amber-800 border-amber-300'
+                                : user.role === 'admin'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : user.role === 'architect'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : user.role === 'manager'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : 'bg-slate-100 text-slate-700 border-slate-200'
+                            }`}
                           >
-                            <option value="client">Client</option>
-                            <option value="architect">Architect</option>
-                            <option value="manager">Manager</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                          <button
-                            onClick={() => {
-                              setEditingCustomer(user);
-                              setCustomerModalOpen(true);
-                            }}
-                            className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors cursor-pointer"
-                            title={t('Edit Client Record', 'ग्राहक विवरण संपादित करें')}
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                            {isOwnerRow
+                              ? t('OWNER', 'मालिक / सुपर एडमिन')
+                              : user.role || 'client'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-mono text-slate-500 text-[11px]">
+                          {user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Recently active'}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isOwnerRow ? (
+                              <select
+                                value="owner"
+                                disabled
+                                aria-label={t('Owner role locked', 'मालिक भूमिका लॉक है')}
+                                className="text-[11px] font-medium border border-slate-200 rounded px-2 py-1 bg-slate-100 text-slate-500 cursor-not-allowed opacity-70"
+                              >
+                                <option value="owner">{t('OWNER', 'मालिक / सुपर एडमिन')}</option>
+                              </select>
+                            ) : (
+                              <select
+                                value={nonOwnerRole}
+                                onChange={(e) =>
+                                  handleRoleChange(
+                                    user.uid,
+                                    e.target.value as 'client' | 'architect' | 'manager'
+                                  )
+                                }
+                                className="text-[11px] font-medium border border-slate-200 rounded px-2 py-1 bg-white focus:outline-none focus:border-blue-700 cursor-pointer"
+                              >
+                                <option value="client">Client</option>
+                                <option value="architect">Architect</option>
+                                <option value="manager">Manager</option>
+                              </select>
+                            )}
+                            <button
+                              type="button"
+                              disabled={isOwnerRow}
+                              onClick={() => {
+                                if (isOwnerRow) return;
+                                setEditingCustomer(user);
+                                setCustomerModalOpen(true);
+                              }}
+                              className={`p-1.5 rounded transition-colors ${
+                                isOwnerRow
+                                  ? 'text-slate-300 cursor-not-allowed opacity-50'
+                                  : 'text-slate-600 hover:text-blue-700 hover:bg-blue-50 cursor-pointer'
+                              }`}
+                              title={
+                                isOwnerRow
+                                  ? t('Owner account cannot be edited', 'मालिक खाता संपादित नहीं किया जा सकता')
+                                  : t('Edit Client Record', 'ग्राहक विवरण संपादित करें')
+                              }
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1929,8 +1537,8 @@ export const AdminDashboardPage: React.FC = () => {
                     </div>
 
                     <div className="text-xs text-slate-600 flex flex-wrap gap-x-4 gap-y-1">
-                      <span><strong>{t('Service:', 'सेवा:')}</strong> {language === 'hi' ? lead.serviceHi : lead.service}</span>
-                      <span><strong>{t('Budget:', 'बजट:')}</strong> {lead.budget}</span>
+                      <span><strong>{t('Service:', 'सेवा:')}</strong> {formatQuotationService(lead.service, language)}</span>
+                      <span><strong>{t('Budget:', 'बजट:')}</strong> {formatQuotationBudget(lead.budget, language)}</span>
                       <span><strong>{t('Date:', 'दिनांक:')}</strong> {formatDate(lead.receivedDate)}</span>
                       <span><strong>{t('Email:', 'ईमेल:')}</strong> {lead.email}</span>
                       <span><strong>{t('Phone:', 'फ़ोन:')}</strong> {lead.phone}</span>
@@ -2341,7 +1949,7 @@ export const AdminDashboardPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4 font-medium text-slate-700">{q.company || '-'}</td>
                       <td className="py-3.5 px-4 text-slate-700">
-                        <div>{q.serviceType}</div>
+                        <div className="font-medium text-slate-800">{formatQuotationService(q.serviceType, language)}</div>
                         {(q.attachedFileName || q.attachment?.fileName) && (
                           <div className="pt-1">
                             <button
@@ -2361,7 +1969,9 @@ export const AdminDashboardPage: React.FC = () => {
                           </div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 font-bold font-mono text-blue-700">{q.estimatedBudget}</td>
+                      <td className="py-3.5 px-4 font-bold text-blue-700">
+                        {formatQuotationBudget(q.estimatedBudget, language)}
+                      </td>
                       <td className="py-3.5 px-4">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
@@ -3417,19 +3027,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
         onSuccess={() => {
-          if (isRealAdmin) {
-            fetchAllUsers().then((u) => u && setUsersList(u));
-          }
+          fetchAllUsers().then((u) => u && setUsersList(u));
         }}
         customer={editingCustomer}
-        isDemoSandbox={isDemoSandbox}
-        onSaveDemo={(saved) =>
-          setUsersList((prev) =>
-            prev.some((u) => u.uid === saved.uid)
-              ? prev.map((u) => (u.uid === saved.uid ? saved : u))
-              : [saved, ...prev]
-          )
-        }
       />
 
       {/* 3. Project Manager Modal */}
@@ -3437,20 +3037,10 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={projectModalOpen}
         onClose={() => setProjectModalOpen(false)}
         onSuccess={() => {
-          if (isRealAdmin) {
-            fetchAllProjects().then((p) => p && setProjectsList(p));
-          }
+          fetchAllProjects().then((p) => p && setProjectsList(p));
         }}
         project={editingProject}
         usersList={usersList}
-        isDemoSandbox={isDemoSandbox}
-        onSaveDemo={(saved) =>
-          setProjectsList((prev) =>
-            prev.some((p) => p.id === saved.id)
-              ? prev.map((p) => (p.id === saved.id ? saved : p))
-              : [saved, ...prev]
-          )
-        }
       />
 
       {/* 4. Service Manager Modal */}
@@ -3458,19 +3048,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={serviceModalOpen}
         onClose={() => setServiceModalOpen(false)}
         onSuccess={() => {
-          if (isRealAdmin) {
-            fetchServicesCatalog().then((s) => s && setServicesList(s));
-          }
+          fetchServicesCatalog().then((s) => s && setServicesList(s));
         }}
         service={editingService}
-        isDemoSandbox={isDemoSandbox}
-        onSaveDemo={(saved) =>
-          setServicesList((prev) =>
-            prev.some((s) => s.id === saved.id)
-              ? prev.map((s) => (s.id === saved.id ? saved : s))
-              : [...prev, saved]
-          )
-        }
       />
 
       {/* 5. Quotation Manager Modal */}
@@ -3478,19 +3058,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={quotationModalOpen}
         onClose={() => setQuotationModalOpen(false)}
         onSuccess={() => {
-          if (isRealAdmin) {
-            fetchAllQuotations().then((q) => q && setQuotationsList(q));
-          }
+          fetchAllQuotations().then((q) => q && setQuotationsList(q));
         }}
         quotation={editingQuotation}
-        isDemoSandbox={isDemoSandbox}
-        onSaveDemo={(saved) =>
-          setQuotationsList((prev) =>
-            prev.some((q) => q.id === saved.id)
-              ? prev.map((q) => (q.id === saved.id ? saved : q))
-              : [saved, ...prev]
-          )
-        }
       />
 
       {/* 6. Blog Manager Modal */}
@@ -3498,19 +3068,9 @@ export const AdminDashboardPage: React.FC = () => {
         isOpen={blogModalOpen}
         onClose={() => setBlogModalOpen(false)}
         onSuccess={() => {
-          if (isRealAdmin) {
-            fetchBlogPosts().then((b) => b && setBlogList(b));
-          }
+          fetchBlogPosts().then((b) => b && setBlogList(b));
         }}
         post={editingBlog}
-        isDemoSandbox={isDemoSandbox}
-        onSaveDemo={(saved) =>
-          setBlogList((prev) =>
-            prev.some((b) => b.id === saved.id)
-              ? prev.map((b) => (b.id === saved.id ? saved : b))
-              : [saved, ...prev]
-          )
-        }
       />
 
       {/* 7. In-App Delete Confirmation Modal (replaces native window.confirm) */}

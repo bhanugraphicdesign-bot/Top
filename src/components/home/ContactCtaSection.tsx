@@ -12,6 +12,11 @@ import {
   validateFormAntiBot,
   computeFillDurationMs,
 } from '../../utils/formProtection';
+import {
+  QUOTE_SERVICE_OPTIONS,
+  QUOTE_BUDGET_OPTIONS,
+  getOptionLabel,
+} from '../../data/quotationOptions';
 
 export const ContactCtaSection: React.FC = () => {
   const { language, t, dict, showToast } = useLanguage();
@@ -396,12 +401,11 @@ export const ContactCtaSection: React.FC = () => {
                         onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
                       >
-                        <option value="enterprise-software">{t('Custom Enterprise Software', 'कस्टम एंटरप्राइज सॉफ्टवेयर')}</option>
-                        <option value="android-ecosystem">{t('Native Android Application', 'नेटिव एंड्रॉइड ऐप')}</option>
-                        <option value="ai-solutions">{t('Enterprise AI & Autonomous Agents', 'एंटरप्राइज एआई व एजेंट्स')}</option>
-                        <option value="web-platforms">{t('High-Performance Web Platform', 'उच्च प्रदर्शन वेब प्लेटफॉर्म')}</option>
-                        <option value="cloud-devops">{t('Cloud DevOps & Kubernetes', 'क्लाउड डेवऑप्स व कुबेरनेट्स')}</option>
-                        <option value="api-integration">{t('Secure API Gateway & Integration', 'सुरक्षित एपीआई गेटवे')}</option>
+                        {QUOTE_SERVICE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {getOptionLabel(opt, language)}
+                          </option>
+                        ))}
                       </select>
                     </div>
 
@@ -419,6 +423,23 @@ export const ContactCtaSection: React.FC = () => {
                         <option value="strategic">{t('Enterprise Program (6+ Months)', '6+ महीने')}</option>
                       </select>
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      {t('Estimated Budget', 'अनुमानित बजट')}
+                    </label>
+                    <select
+                      value={formData.budget}
+                      onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
+                    >
+                      {QUOTE_BUDGET_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {getOptionLabel(opt, language)}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>

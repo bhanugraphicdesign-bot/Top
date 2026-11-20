@@ -18,11 +18,15 @@
     },
     "UserRole": {
       "title": "UserRole",
-      "description": "System role assignment (admin, client, manager, architect)",
+      "description": "System role assignment (admin, super_admin, client, manager, architect)",
       "type": "object",
       "properties": {
         "uid": { "type": "string" },
-        "role": { "type": "string", "enum": ["admin", "client", "manager", "architect"] },
+        "role": { "type": "string", "enum": ["admin", "super_admin", "client", "manager", "architect"] },
+        "isSuperAdmin": { "type": "boolean" },
+        "tier": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "emailVerified": { "type": "boolean" },
         "assignedBy": { "type": "string" },
         "assignedAt": { "type": "string", "format": "date-time" }
       },

@@ -12,16 +12,24 @@ import {
 import { auth, googleProvider } from '../firebase/config';
 import {
   syncUserAccount,
-  fetchUserRole,
+  fetchUserRoleDetails,
   logAuditEvent,
   authenticatedFetch,
 } from '../firebase/services';
+
+type RoleSource = 'user_roles' | 'custom_claim' | 'owner_email' | 'client' | null;
 
 interface AuthContextType {
   currentUser: User | null;
   userRole: 'admin' | 'client';
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  roleDocExists: boolean;
+  roleSource: RoleSource;
+  roleCheckError: string | null;
   isAuthReady: boolean;
+  isRoleChecking: boolean;
+  refreshUserRole: () => Promise<boolean>;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
@@ -31,6 +39,9 @@ interface AuthContextType {
   authModalTab: 'login' | 'register' | 'forgot';
   openAuthModal: (tab?: 'login' | 'register' | 'forgot') => void;
   closeAuthModal: () => void;
+  isProfileModalOpen: boolean;
+  openProfileModal: () => void;
+  closeProfileModal: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,9 +49,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userRole, setUserRole] = useState<'admin' | 'client'>('client');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [roleDocExists, setRoleDocExists] = useState(false);
+  const [roleSource, setRoleSource] = useState<RoleSource>(null);
+  const [roleCheckError, setRoleCheckError] = useState<string | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
+  const [isRoleChecking, setIsRoleChecking] = useState(true);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const openAuthModal = (tab: 'login' | 'register' | 'forgot' = 'login') => {
     setAuthModalTab(tab);
@@ -51,12 +68,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsAuthModalOpen(false);
   };
 
-  // Listen to Firebase Auth state (admin derived strictly from user_roles/{uid} or custom claim)
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setCurrentUser(user);
-      if (user) {
-        let resolvedAdmin = false;
+  const openProfileModal = () => {
+    setIsProfileModalOpen(true);
+  };
+
+  const closeProfileModal = () => {
+    setIsProfileModalOpen(false);
+  };
+
+  const resolveUserRoleState = useCallback(
+    async (user: User, forceTokenRefresh = false): Promise<boolean> => {
+      setIsRoleChecking(true);
+      setRoleCheckError(null);
+      let resolvedAdmin = false;
+      let resolvedSuperAdmin = false;
+      let resolvedSource: RoleSource = 'client';
+      let collectedError: string | null = null;
+
+      try {
         try {
           await syncUserAccount({
             uid: user.uid,
@@ -64,52 +93,129 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             displayName: user.displayName,
             photoURL: user.photoURL,
           });
-
-          const role = await fetchUserRole(user.uid);
-          if (role === 'admin') {
-            resolvedAdmin = true;
-          }
-
-          if (!resolvedAdmin) {
-            try {
-              const tokenResult = await user.getIdTokenResult();
-              if (tokenResult?.claims?.admin === true || tokenResult?.claims?.role === 'admin') {
-                resolvedAdmin = true;
-              }
-            } catch {
-              // Ignore token claim read failure
-            }
-          }
-
-          if (!resolvedAdmin) {
-            try {
-              const statusRes = await authenticatedFetch('/api/auth/status', {}, { user });
-              if (statusRes.ok) {
-                const statusData = await statusRes.json();
-                resolvedAdmin = statusData?.isAdmin === true;
-              }
-            } catch {
-              // Offline fallback keeps client role strict
-            }
-          }
-
-          setUserRole(resolvedAdmin ? 'admin' : 'client');
-        } catch (err) {
-          console.warn('[Auth Sync Warning]', err);
-          setUserRole('client');
+        } catch (syncErr) {
+          console.warn('[Auth Account Sync Warning]', syncErr);
         }
+
+        // 1. Primary RBAC check: Firestore `user_roles/{uid}` by real Firebase UID
+        const details = await fetchUserRoleDetails(user.uid, forceTokenRefresh);
+        let resolvedDocExists = details.exists;
+        if (details.error) {
+          collectedError = details.error;
+        }
+        if (details.role === 'admin') {
+          resolvedAdmin = true;
+          resolvedSuperAdmin = details.isSuperAdmin;
+          resolvedSource = 'user_roles';
+        }
+
+        // 2. Check Firebase Auth custom claims (`admin: true`, `role: "admin"|"super_admin"`, `superAdmin: true`)
+        try {
+          const tokenResult = await user.getIdTokenResult(forceTokenRefresh);
+          if (tokenResult?.claims?.superAdmin === true || tokenResult?.claims?.role === 'super_admin') {
+            resolvedSuperAdmin = true;
+          }
+          if (
+            tokenResult?.claims?.admin === true ||
+            tokenResult?.claims?.superAdmin === true ||
+            tokenResult?.claims?.role === 'admin' ||
+            tokenResult?.claims?.role === 'super_admin'
+          ) {
+            resolvedAdmin = true;
+            if (resolvedSource !== 'user_roles') {
+              resolvedSource = 'custom_claim';
+            }
+          }
+        } catch {
+          // Ignore token claim read failure
+        }
+
+        // 3. Authoritative server RBAC verification (`user_roles/{uid}` + custom claims)
+        try {
+          const statusRes = await authenticatedFetch('/api/auth/status', {}, { user });
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (typeof statusData?.roleDocExists === 'boolean') {
+              resolvedDocExists = resolvedDocExists || statusData.roleDocExists;
+            }
+            if (statusData?.isSuperAdmin === true) {
+              resolvedSuperAdmin = true;
+            }
+            if (statusData?.isAdmin === true) {
+              resolvedAdmin = true;
+              if (resolvedSource === 'client' && statusData?.roleSource) {
+                resolvedSource = statusData.roleSource;
+              }
+            }
+          }
+        } catch {
+          // Offline fallback keeps strict client role
+        }
+
+        if (auth.currentUser && auth.currentUser.uid !== user.uid) {
+          return false;
+        }
+
+        setUserRole(resolvedAdmin ? 'admin' : 'client');
+        setIsSuperAdmin(resolvedAdmin && resolvedSuperAdmin);
+        setRoleDocExists(resolvedDocExists);
+        setRoleSource(resolvedAdmin ? resolvedSource : 'client');
+        setRoleCheckError(!resolvedAdmin ? collectedError : null);
+        return resolvedAdmin;
+      } catch (err: any) {
+        console.warn('[Auth Sync Warning]', err);
+        setUserRole('client');
+        setIsSuperAdmin(false);
+        setRoleDocExists(false);
+        setRoleSource('client');
+        setRoleCheckError(err instanceof Error ? err.message : 'Unable to verify administrator role.');
+        return false;
+      } finally {
+        setIsRoleChecking(false);
+      }
+    },
+    []
+  );
+
+  // Listen to Firebase Auth state (admin derived strictly from user_roles/{uid} or custom claim)
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        await resolveUserRoleState(user, false);
       } else {
         setUserRole('client');
+        setIsSuperAdmin(false);
+        setRoleDocExists(false);
+        setRoleSource(null);
+        setRoleCheckError(null);
+        setIsRoleChecking(false);
+        setIsProfileModalOpen(false);
       }
       setIsAuthReady(true);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [resolveUserRoleState]);
+
+  const refreshUserRole = useCallback(async (): Promise<boolean> => {
+    const activeUser = auth.currentUser;
+    if (!activeUser) {
+      setUserRole('client');
+      setIsSuperAdmin(false);
+      setRoleDocExists(false);
+      setRoleSource(null);
+      setIsRoleChecking(false);
+      return false;
+    }
+    return resolveUserRoleState(activeUser, true);
+  }, [resolveUserRoleState]);
 
   const loginWithGoogle = useCallback(async (): Promise<void> => {
     const result = await signInWithPopup(auth, googleProvider);
     if (result.user) {
+      setCurrentUser(result.user);
+      await resolveUserRoleState(result.user, true);
       await logAuditEvent(
         'AUTH_LOGIN_GOOGLE',
         `users/${result.user.uid}`,
@@ -117,16 +223,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
     closeAuthModal();
-  }, []);
+  }, [resolveUserRoleState]);
 
-  const loginWithEmail = useCallback(async (email: string, pass: string) => {
-    const cleanEmail = email.trim();
-    const result = await signInWithEmailAndPassword(auth, cleanEmail, pass);
-    if (result.user) {
-      await logAuditEvent('AUTH_LOGIN_EMAIL', `users/${result.user.uid}`, `Signed in with Email: ${cleanEmail}`);
-    }
-    closeAuthModal();
-  }, []);
+  const loginWithEmail = useCallback(
+    async (email: string, pass: string) => {
+      const cleanEmail = email.trim();
+      const result = await signInWithEmailAndPassword(auth, cleanEmail, pass);
+      if (result.user) {
+        setCurrentUser(result.user);
+        await resolveUserRoleState(result.user, true);
+        await logAuditEvent('AUTH_LOGIN_EMAIL', `users/${result.user.uid}`, `Signed in with Email: ${cleanEmail}`);
+      }
+      closeAuthModal();
+    },
+    [resolveUserRoleState]
+  );
 
   const registerWithEmail = useCallback(async (email: string, pass: string, name?: string) => {
     const cleanEmail = email.trim();
@@ -135,6 +246,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.user) {
       if (cleanName) {
         await updateProfile(result.user, { displayName: cleanName });
+        await result.user.reload();
+        if (auth.currentUser) {
+          setCurrentUser(auth.currentUser);
+        }
         await syncUserAccount({
           uid: result.user.uid,
           email: result.user.email,
@@ -151,6 +266,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser) {
       await logAuditEvent('AUTH_LOGOUT', `users/${currentUser.uid}`, `Logged out user: ${currentUser.email}`);
     }
+    setIsProfileModalOpen(false);
     await signOut(auth);
   }, [currentUser]);
 
@@ -166,7 +282,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         userRole,
         isAdmin: userRole === 'admin',
+        isSuperAdmin,
+        roleDocExists,
+        roleSource,
+        roleCheckError,
         isAuthReady,
+        isRoleChecking,
+        refreshUserRole,
         loginWithGoogle,
         loginWithEmail,
         registerWithEmail,
@@ -176,6 +298,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         authModalTab,
         openAuthModal,
         closeAuthModal,
+        isProfileModalOpen,
+        openProfileModal,
+        closeProfileModal,
       }}
     >
       {children}

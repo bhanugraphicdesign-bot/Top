@@ -7,7 +7,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import { initializeApp, getApps, cert, applicationDefault, type App } from 'firebase-admin/app';
+import { initializeApp, getApps, applicationDefault, type App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
@@ -72,11 +72,31 @@ if (!HAS_RECAPTCHA_SITE_KEY) {
 const SAFE_ID_REGEX = /^[a-zA-Z0-9_-]{1,128}$/;
 
 /* =========================================================================
-   FIREBASE ADMIN SDK INITIALIZATION (CREDENTIALED WHEN CONFIGURED)
+   ENVIRONMENT PROFILE SEPARATION (PREVIEW vs PRODUCTION)
+   ========================================================================= */
+type AppRuntimeEnv = 'preview' | 'production';
+
+function resolveAppRuntimeEnv(): AppRuntimeEnv {
+  const explicit = (process.env.APP_ENV || '').trim().toLowerCase();
+  if (explicit === 'production') return 'production';
+  if (explicit === 'preview') return 'preview';
+  const kService = (process.env.K_SERVICE || '').trim();
+  if (/^ais-(dev|pre|mob)-/i.test(kService)) {
+    return 'preview';
+  }
+  return process.env.NODE_ENV === 'production' ? 'production' : 'preview';
+}
+
+const APP_ENV: AppRuntimeEnv = resolveAppRuntimeEnv();
+const IS_PREVIEW_ENV = APP_ENV === 'preview';
+const IS_PRODUCTION_ENV = APP_ENV === 'production';
+
+/* =========================================================================
+   FIREBASE ADMIN SDK INITIALIZATION (ADC ONLY — ZERO PRIVATE KEYS)
    ========================================================================= */
 let adminApp: App | null = null;
 let adminHasCredentials = false;
-let adminInitMode: 'service_account_json' | 'gcp_adc' | 'public_cert_jwt' = 'public_cert_jwt';
+let adminInitMode: 'gcp_adc' | 'public_cert_jwt' = 'public_cert_jwt';
 
 function initializeFirebaseAdmin(): void {
   const existingApps = getApps();
@@ -85,24 +105,7 @@ function initializeFirebaseAdmin(): void {
     return;
   }
 
-  const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
-  if (rawServiceAccount) {
-    try {
-      const parsedCred = JSON.parse(rawServiceAccount);
-      adminApp = initializeApp({
-        credential: cert(parsedCred),
-        projectId: FIREBASE_CONFIG.projectId,
-        storageBucket: process.env.GCS_BUCKET?.trim() || FIREBASE_CONFIG.storageBucket,
-      });
-      adminHasCredentials = true;
-      adminInitMode = 'service_account_json';
-      console.log('[Firebase Admin] Initialized with explicit service account credential.');
-      return;
-    } catch {
-      console.warn('[Firebase Admin] Invalid FIREBASE_SERVICE_ACCOUNT_KEY JSON; using public RS256 verifier fallback.');
-    }
-  }
-
+  // Strictly use Google Cloud Application Default Credentials (ADC) — never private key JSON files
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE) {
     try {
       adminApp = initializeApp({
@@ -112,14 +115,16 @@ function initializeFirebaseAdmin(): void {
       });
       adminHasCredentials = true;
       adminInitMode = 'gcp_adc';
-      console.log('[Firebase Admin] Initialized with Google Cloud Application Default Credentials.');
+      console.log(
+        `[Firebase Admin] Initialized via Application Default Credentials (APP_ENV=${APP_ENV}).`
+      );
       return;
     } catch {
-      // fall through
+      // fall through to public certificate JWT verification
     }
   }
 
-  // Fallback: Initialize project-scoped app for token metadata without forged privileges
+  // Fallback: project-scoped app for token verification (verifyIdToken requires no IAM)
   try {
     adminApp = initializeApp({
       projectId: FIREBASE_CONFIG.projectId,
@@ -140,15 +145,15 @@ if (adminApp && adminHasCredentials) {
     FIRESTORE_DB_ID === '(default)'
       ? getFirestore(adminApp)
       : getFirestore(adminApp, FIRESTORE_DB_ID);
-  console.log(`[Firestore Admin] Connected to database "${FIRESTORE_DB_ID}".`);
+  console.log(`[Firestore Admin] Bound to database "${FIRESTORE_DB_ID}" (APP_ENV=${APP_ENV}).`);
 } else {
   console.warn(
-    '[Firestore Admin Notice] Credentials not configured (FIREBASE_SERVICE_ACCOUNT_KEY or GCP ADC). Server Firestore ledger routes will return HTTP 503 until configured.'
+    `[Firestore Admin Notice] GCP ADC not active (APP_ENV=${APP_ENV}). ID token verification remains active; privileged Admin SDK operations require Cloud Run ADC.`
   );
 }
 
 /* =========================================================================
-   CLOUD STORAGE PROVIDER (GCS ONLY — ZERO LOCAL DISK WRITES)
+   CLOUD STORAGE PROVIDER (GCS ONLY VIA ADC — ZERO LOCAL DISK WRITES)
    ========================================================================= */
 const EXPLICIT_GCS_BUCKET = (process.env.GCS_BUCKET || '').trim();
 let gcsStorageClient: Storage | null = null;
@@ -166,16 +171,7 @@ async function verifyGcsStorageAvailability(): Promise<void> {
     return;
   }
   try {
-    const rawServiceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY?.trim();
-    if (rawServiceAccount) {
-      const credentials = JSON.parse(rawServiceAccount);
-      gcsStorageClient = new Storage({
-        projectId: FIREBASE_CONFIG.projectId,
-        credentials,
-      });
-    } else {
-      gcsStorageClient = new Storage({ projectId: FIREBASE_CONFIG.projectId });
-    }
+    gcsStorageClient = new Storage({ projectId: FIREBASE_CONFIG.projectId });
     const [exists] = await gcsStorageClient.bucket(EXPLICIT_GCS_BUCKET).exists();
     if (exists) {
       gcsBucketVerified = true;
@@ -502,12 +498,20 @@ function toSafeFileDto(record: any) {
 /* =========================================================================
    CRYPTOGRAPHIC FIREBASE ID TOKEN VERIFICATION & RBAC
    ========================================================================= */
+const OWNER_EMAIL = 'powerusertopuser@gmail.com';
+
+function isVerifiedOwnerEmail(email: string | undefined | null, emailVerified: boolean): boolean {
+  return emailVerified === true && String(email || '').trim().toLowerCase() === OWNER_EMAIL;
+}
+
 interface VerifiedAuthUser {
   uid: string;
   email: string;
   emailVerified: boolean;
   isAdmin: boolean;
-  roleSource: 'user_roles' | 'custom_claim' | 'client';
+  isSuperAdmin: boolean;
+  roleDocExists: boolean;
+  roleSource: 'user_roles' | 'custom_claim' | 'owner_email' | 'client';
 }
 
 let certCache: { certs: Record<string, string>; expiresAt: number } = {
@@ -555,7 +559,7 @@ async function fetchFirestoreDocumentRest(
 ): Promise<any | null> {
   if (!SAFE_ID_REGEX.test(docId)) return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 2500);
+  const timeout = setTimeout(() => controller.abort(), 6000);
   try {
     const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
     const keySuffix = FIREBASE_CONFIG.apiKey
@@ -676,7 +680,15 @@ async function runFirestoreQueryRest(
     if (!Array.isArray(rows)) return [];
     return rows
       .filter((r) => r?.document?.fields)
-      .map((r) => fromFirestoreRestFields(r.document.fields));
+      .map((r) => {
+        const parsed = fromFirestoreRestFields(r.document.fields);
+        const docName = typeof r?.document?.name === 'string' ? r.document.name : '';
+        const docId = docName ? docName.split('/').pop() || '' : '';
+        if (docId && !parsed.id) {
+          parsed.id = docId;
+        }
+        return parsed;
+      });
   } catch {
     return null;
   } finally {
@@ -724,38 +736,167 @@ async function createFirestoreDocumentRest(
   }
 }
 
-async function checkFirestoreAdminRole(uid: string, idToken: string): Promise<boolean> {
+async function patchFirestoreDocumentRest(
+  collectionName: string,
+  docId: string,
+  data: Record<string, unknown>,
+  idToken: string
+): Promise<{ ok: boolean; status: number }> {
+  if (!SAFE_ID_REGEX.test(docId)) return { ok: false, status: 400 };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
+    const params = new URLSearchParams();
+    const fields: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (v !== undefined) {
+        fields[k] = toFirestoreRestValue(v);
+        params.append('updateMask.fieldPaths', k);
+      }
+    }
+    if (FIREBASE_CONFIG.apiKey) {
+      params.set('key', FIREBASE_CONFIG.apiKey);
+    }
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/${collectionName}/${encodeURIComponent(docId)}?${params.toString()}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ fields }),
+      signal: controller.signal,
+    });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    return { ok: false, status: 500 };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function deleteFirestoreDocumentRest(
+  collectionName: string,
+  docId: string,
+  idToken: string
+): Promise<{ ok: boolean; status: number }> {
+  if (!SAFE_ID_REGEX.test(docId)) return { ok: false, status: 400 };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const dbId = FIREBASE_CONFIG.firestoreDatabaseId || '(default)';
+    const keySuffix = FIREBASE_CONFIG.apiKey
+      ? `?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`
+      : '';
+    const url = `https://firestore.googleapis.com/v1/projects/${FIREBASE_CONFIG.projectId}/databases/${dbId}/documents/${collectionName}/${encodeURIComponent(docId)}${keySuffix}`;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+      signal: controller.signal,
+    });
+    return { ok: res.ok, status: res.status };
+  } catch {
+    return { ok: false, status: 500 };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+interface FirestoreAdminRoleCheck {
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  exists: boolean;
+}
+
+async function checkFirestoreAdminRole(uid: string, idToken: string): Promise<FirestoreAdminRoleCheck> {
   if (adminDb && SAFE_ID_REGEX.test(uid)) {
     try {
       const snap = await adminDb.collection('user_roles').doc(uid).get();
-      if (snap.exists && snap.data()?.role === 'admin') {
-        return true;
+      if (snap.exists) {
+        const data = snap.data();
+        const roleVal = typeof data?.role === 'string' ? data.role : '';
+        const isSuperAdmin = Boolean(data?.isSuperAdmin === true || data?.tier === 'super_admin' || roleVal === 'super_admin');
+        return {
+          isAdmin: roleVal === 'admin' || roleVal === 'super_admin',
+          isSuperAdmin,
+          exists: true,
+        };
       }
     } catch {
       // Fall back to REST API check below
     }
   }
   const doc = await fetchFirestoreDocumentRest('user_roles', uid, idToken);
-  return doc?.fields?.role?.stringValue === 'admin';
+  if (!doc || !doc.fields) {
+    return { isAdmin: false, isSuperAdmin: false, exists: false };
+  }
+  const restRole = doc.fields?.role?.stringValue || '';
+  const restIsSuper =
+    doc.fields?.isSuperAdmin?.booleanValue === true ||
+    doc.fields?.tier?.stringValue === 'super_admin' ||
+    restRole === 'super_admin';
+  return {
+    isAdmin: restRole === 'admin' || restRole === 'super_admin',
+    isSuperAdmin: restIsSuper,
+    exists: true,
+  };
 }
 
 async function resolveServerAdminStatus(params: {
   uid: string;
+  email: string;
+  emailVerified: boolean;
   idToken: string;
   hasCustomClaimAdmin: boolean;
-}): Promise<{ isAdmin: boolean; roleSource: VerifiedAuthUser['roleSource'] }> {
+  hasCustomClaimSuperAdmin?: boolean;
+}): Promise<{
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
+  roleDocExists: boolean;
+  roleSource: VerifiedAuthUser['roleSource'];
+}> {
+  const verifiedOwner = isVerifiedOwnerEmail(params.email, params.emailVerified);
+
   // 1. Primary RBAC source of truth: Firestore `user_roles/{uid}` document
-  const hasFirestoreRole = await checkFirestoreAdminRole(params.uid, params.idToken);
-  if (hasFirestoreRole) {
-    return { isAdmin: true, roleSource: 'user_roles' };
+  const firestoreRole = await checkFirestoreAdminRole(params.uid, params.idToken);
+  if (firestoreRole.isAdmin) {
+    return {
+      isAdmin: true,
+      isSuperAdmin: Boolean(firestoreRole.isSuperAdmin || params.hasCustomClaimSuperAdmin || verifiedOwner),
+      roleDocExists: firestoreRole.exists,
+      roleSource: 'user_roles',
+    };
   }
 
   // 2. Verified Firebase Auth custom claim (`admin: true` or `role: "admin"`)
   if (params.hasCustomClaimAdmin) {
-    return { isAdmin: true, roleSource: 'custom_claim' };
+    return {
+      isAdmin: true,
+      isSuperAdmin: Boolean(params.hasCustomClaimSuperAdmin || verifiedOwner),
+      roleDocExists: firestoreRole.exists,
+      roleSource: 'custom_claim',
+    };
   }
 
-  return { isAdmin: false, roleSource: 'client' };
+  // 3. Server-side verified OWNER_EMAIL check (grants Admin even before user_roles/{uid} exists)
+  if (verifiedOwner) {
+    return {
+      isAdmin: true,
+      isSuperAdmin: true,
+      roleDocExists: firestoreRole.exists,
+      roleSource: 'owner_email',
+    };
+  }
+
+  return {
+    isAdmin: false,
+    isSuperAdmin: false,
+    roleDocExists: firestoreRole.exists,
+    roleSource: 'client',
+  };
 }
 
 async function verifyProjectAuthorization(
@@ -800,10 +941,17 @@ async function verifyFirebaseBearerToken(
         const decoded = await getAuth(adminApp).verifyIdToken(token);
         const email = typeof decoded.email === 'string' ? decoded.email : '';
         const emailVerified = Boolean(decoded.email_verified);
-        const { isAdmin, roleSource } = await resolveServerAdminStatus({
+        const { isAdmin, isSuperAdmin, roleDocExists, roleSource } = await resolveServerAdminStatus({
           uid: decoded.uid,
+          email,
+          emailVerified,
           idToken: token,
-          hasCustomClaimAdmin: decoded.admin === true || decoded.role === 'admin',
+          hasCustomClaimAdmin:
+            decoded.admin === true ||
+            decoded.superAdmin === true ||
+            decoded.role === 'admin' ||
+            decoded.role === 'super_admin',
+          hasCustomClaimSuperAdmin: decoded.superAdmin === true || decoded.role === 'super_admin',
         });
 
         return {
@@ -813,6 +961,8 @@ async function verifyFirebaseBearerToken(
             email,
             emailVerified,
             isAdmin,
+            isSuperAdmin,
+            roleDocExists,
             roleSource,
           },
         };
@@ -865,10 +1015,17 @@ async function verifyFirebaseBearerToken(
 
     const email = typeof payload.email === 'string' ? payload.email : '';
     const emailVerified = Boolean(payload.email_verified);
-    const { isAdmin, roleSource } = await resolveServerAdminStatus({
+    const { isAdmin, isSuperAdmin, roleDocExists, roleSource } = await resolveServerAdminStatus({
       uid: payload.sub,
+      email,
+      emailVerified,
       idToken: token,
-      hasCustomClaimAdmin: payload.admin === true || payload.role === 'admin',
+      hasCustomClaimAdmin:
+        payload.admin === true ||
+        payload.superAdmin === true ||
+        payload.role === 'admin' ||
+        payload.role === 'super_admin',
+      hasCustomClaimSuperAdmin: payload.superAdmin === true || payload.role === 'super_admin',
     });
 
     return {
@@ -878,6 +1035,8 @@ async function verifyFirebaseBearerToken(
         email,
         emailVerified,
         isAdmin,
+        isSuperAdmin,
+        roleDocExists,
         roleSource,
       },
     };
@@ -1355,6 +1514,7 @@ function getProductionEnvironmentSummary() {
     : 'advisory_until_configured';
 
   return {
+    appEnv: APP_ENV,
     nodeEnv: process.env.NODE_ENV || 'development',
     strictMode: process.env.STRICT_PRODUCTION_ENV === 'true',
     siteUrlConfigured: HAS_PRODUCTION_SITE_URL,
@@ -1479,6 +1639,7 @@ app.get('/api/health', async (req, res) => {
     },
     environmentValidation: envSummary,
     deployment: {
+      appEnv: APP_ENV,
       platform: process.env.K_SERVICE ? 'Google Cloud Run' : 'Containerized Express + Node.js',
       serviceName: process.env.K_SERVICE || 'powerwebstudioai-service',
       revision: process.env.K_REVISION || 'rev-2026-phase1-sec',
@@ -1520,6 +1681,7 @@ app.get('/api/health/ready', async (_req, res) => {
 // 1b. Public Safe System Capabilities Endpoint (Exposes non-sensitive feature flags only)
 app.get('/api/system/capabilities', (_req, res) => {
   res.json({
+    appEnv: APP_ENV,
     fileUploadEnabled: isGcsConfiguredAndVerified(),
     storageMode: isGcsConfiguredAndVerified() ? 'google_cloud_storage' : 'storage_not_configured',
     gcsBucketVerified,
@@ -1540,17 +1702,864 @@ app.get('/api/system/capabilities', (_req, res) => {
   });
 });
 
-// 1c. Authenticated Caller Role Status Endpoint (Never leaks admin emails)
+// 1c. Authenticated Caller Role Status Endpoint (Never leaks other users' admin emails)
 app.get('/api/auth/status', requireAuth, (req: AuthenticatedRequest, res) => {
   const user = req.authUser!;
   res.json({
+    appEnv: APP_ENV,
+    verificationMode: IS_PRODUCTION_ENV && adminDb ? 'server_admin_sdk' : 'client_rules_and_token',
     uid: user.uid,
+    email: user.email || null,
     emailVerified: user.emailVerified,
     isAdmin: user.isAdmin,
+    isSuperAdmin: user.isSuperAdmin,
     role: user.isAdmin ? 'admin' : 'client',
     roleSource: user.roleSource,
+    roleDocExists: user.roleDocExists,
   });
 });
+
+// Helper: execute Admin Firestore merge write (Production Dedicated ADC or Preview Rules-Enforced Admin Token)
+async function adminMergeFirestoreDoc(
+  collectionName: string,
+  docId: string,
+  data: Record<string, unknown>,
+  adminIdToken: string
+): Promise<{ ok: boolean; mode: 'admin_sdk_adc' | 'preview_rules_enforced'; status: number }> {
+  if (adminDb) {
+    try {
+      await adminDb.collection(collectionName).doc(docId).set(data, { merge: true });
+      return { ok: true, mode: 'admin_sdk_adc', status: 200 };
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      const isIamMissing =
+        err?.code === 7 || /PERMISSION_DENIED|Could not load the default credentials/i.test(msg);
+      if (!isIamMissing || IS_PRODUCTION_ENV) {
+        return { ok: false, mode: 'admin_sdk_adc', status: isIamMissing ? 503 : 500 };
+      }
+    }
+  }
+
+  if (IS_PREVIEW_ENV && adminIdToken) {
+    const restRes = await patchFirestoreDocumentRest(collectionName, docId, data, adminIdToken);
+    return {
+      ok: restRes.ok,
+      mode: 'preview_rules_enforced',
+      status: restRes.ok ? 200 : restRes.status,
+    };
+  }
+
+  return { ok: false, mode: 'admin_sdk_adc', status: 503 };
+}
+
+// Helper: execute Admin Firestore delete (Production Dedicated ADC or Preview Rules-Enforced Admin Token)
+async function adminDeleteFirestoreDoc(
+  collectionName: string,
+  docId: string,
+  adminIdToken: string
+): Promise<{ ok: boolean; mode: 'admin_sdk_adc' | 'preview_rules_enforced'; status: number }> {
+  if (adminDb) {
+    try {
+      await adminDb.collection(collectionName).doc(docId).delete();
+      return { ok: true, mode: 'admin_sdk_adc', status: 200 };
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      const isIamMissing =
+        err?.code === 7 || /PERMISSION_DENIED|Could not load the default credentials/i.test(msg);
+      if (!isIamMissing || IS_PRODUCTION_ENV) {
+        return { ok: false, mode: 'admin_sdk_adc', status: isIamMissing ? 503 : 500 };
+      }
+    }
+  }
+
+  if (IS_PREVIEW_ENV && adminIdToken) {
+    const restRes = await deleteFirestoreDocumentRest(collectionName, docId, adminIdToken);
+    return {
+      ok: restRes.ok,
+      mode: 'preview_rules_enforced',
+      status: restRes.ok ? 200 : restRes.status,
+    };
+  }
+
+  return { ok: false, mode: 'admin_sdk_adc', status: 503 };
+}
+
+// 1c-i-b. Server-Side Owner Admin Bootstrap (No secret/env required; strictly verified OWNER_EMAIL ONLY; ADC + same Firestore DB)
+app.post('/api/admin/bootstrap', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const caller = req.authUser!;
+
+  if (!isVerifiedOwnerEmail(caller.email, caller.emailVerified)) {
+    void appendServerAuditEvent({
+      action: 'ADMIN_BOOTSTRAP_DENIED',
+      actorUid: caller.uid,
+      actorEmail: caller.email || caller.uid,
+      resource: '/api/admin/bootstrap',
+      outcome: 'DENIED',
+      ip: getClientIp(req),
+      details: 'Non-owner or unverified account attempted POST /api/admin/bootstrap',
+    });
+    return res.status(403).json({
+      error: 'Forbidden: Only the verified owner account can bootstrap admin privileges.',
+    });
+  }
+
+  const nowIso = new Date().toISOString();
+  const roleDoc = {
+    uid: caller.uid,
+    email: caller.email,
+    role: 'admin',
+    isSuperAdmin: true,
+    tier: 'super_admin',
+    emailVerified: true,
+    assignedBy: 'server_bootstrap',
+    assignedAt: nowIso,
+  };
+
+  let persisted = false;
+  let mode: 'admin_sdk_adc' | 'firestore_rest_verified_owner' | 'owner_email_verified' =
+    'owner_email_verified';
+
+  // Primary write path: Firebase Admin SDK (ADC, zero private key) to the exact same Firestore DB used for quotations
+  if (adminDb) {
+    try {
+      await adminDb.collection('user_roles').doc(caller.uid).set(roleDoc, { merge: true });
+      persisted = true;
+      mode = 'admin_sdk_adc';
+    } catch (err) {
+      if (!isFirestoreAdminCredentialError(err)) {
+        console.error('[POST /api/admin/bootstrap Admin SDK Write Error]', err);
+      }
+    }
+  }
+
+  // Fallback when AI Studio Preview sandbox SA has no IAM: write to exact same DB using verified owner's Bearer ID token under firestore.rules
+  if (!persisted && req.authToken) {
+    const restWrite = await patchFirestoreDocumentRest('user_roles', caller.uid, roleDoc, req.authToken);
+    if (restWrite.ok) {
+      persisted = true;
+      mode = 'firestore_rest_verified_owner';
+    }
+  }
+
+  void appendServerAuditEvent({
+    action: 'OWNER_ADMIN_BOOTSTRAPPED',
+    actorUid: caller.uid,
+    actorEmail: caller.email,
+    resource: `user_roles/${caller.uid}`,
+    outcome: 'SUCCESS',
+    ip: getClientIp(req),
+    details: `Owner admin bootstrap completed (persisted=${persisted}, mode=${mode})`,
+  });
+
+  return res.json({
+    ok: true,
+    persisted,
+    mode,
+    ...roleDoc,
+  });
+});
+
+// 1c-ii. Strictly ONE-TIME Server-Side Super Admin Bootstrap (Production Dedicated ADC + Server Secret ONLY)
+app.post(
+  '/api/admin/super-admin/bootstrap',
+  requireAuth,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const caller = req.authUser!;
+
+    if (IS_PREVIEW_ENV) {
+      return res.status(403).json({
+        error:
+          'Forbidden: One-time Super Admin bootstrap is disabled in Preview mode and may only execute on the dedicated Production Cloud Run runtime.',
+        code: 'BOOTSTRAP_DISABLED_IN_PREVIEW',
+      });
+    }
+
+    const configuredSecret = (process.env.ADMIN_BOOTSTRAP_SECRET || '').trim();
+    const headerSecret = String(req.headers['x-admin-bootstrap-secret'] || '').trim();
+    const configuredOwnerEmail = (
+      process.env.SUPER_ADMIN_EMAIL || 'powerusertopuser@gmail.com'
+    )
+      .trim()
+      .toLowerCase();
+
+    const callerEmail = (caller.email || '').trim().toLowerCase();
+    const isTargetOwner =
+      caller.emailVerified === true &&
+      Boolean(callerEmail) &&
+      callerEmail === configuredOwnerEmail;
+
+    const secretIsNonPlaceholder =
+      configuredSecret.length >= 32 && !PAYMENT_SECRET_PLACEHOLDER_RE.test(configuredSecret);
+    let hasValidBootstrapSecret = false;
+    if (secretIsNonPlaceholder && headerSecret.length === configuredSecret.length) {
+      try {
+        hasValidBootstrapSecret = crypto.timingSafeEqual(
+          Buffer.from(headerSecret, 'utf8'),
+          Buffer.from(configuredSecret, 'utf8')
+        );
+      } catch {
+        hasValidBootstrapSecret = false;
+      }
+    }
+
+    if (!isTargetOwner || !hasValidBootstrapSecret) {
+      void appendServerAuditEvent({
+        action: 'SUPER_ADMIN_BOOTSTRAP_DENIED',
+        actorUid: caller.uid,
+        actorEmail: caller.email || caller.uid,
+        resource: '/api/admin/super-admin/bootstrap',
+        outcome: 'DENIED',
+        ip: getClientIp(req),
+        details: 'Unauthorized attempt to invoke one-time Super Admin bootstrap',
+      });
+      return res.status(403).json({
+        error:
+          'Forbidden: Verified owner email and valid high-entropy server bootstrap secret are required.',
+      });
+    }
+
+    if (!adminApp || !adminDb) {
+      return res.status(503).json({
+        error: 'Firebase Admin SDK (ADC) is not initialized on this server.',
+        code: 'ADMIN_SDK_CREDENTIALS_UNAVAILABLE',
+      });
+    }
+
+    try {
+      const lockRef = adminDb.collection('system_security').doc('super_admin_bootstrap');
+      const existingLock = await lockRef.get();
+      if (existingLock.exists && existingLock.data()?.completed === true) {
+        void appendServerAuditEvent({
+          action: 'SUPER_ADMIN_BOOTSTRAP_REPLAY_BLOCKED',
+          actorUid: caller.uid,
+          actorEmail: caller.email || caller.uid,
+          resource: 'system_security/super_admin_bootstrap',
+          outcome: 'DENIED',
+          ip: getClientIp(req),
+          details: 'Blocked repeat invocation of one-time Super Admin bootstrap',
+        });
+        return res.status(409).json({
+          error: 'Super Admin bootstrap has already been completed once and is permanently locked.',
+          code: 'BOOTSTRAP_ALREADY_COMPLETED',
+        });
+      }
+
+      const adminAuth = getAuth(adminApp);
+      const userRecord = await adminAuth.getUser(caller.uid);
+      if (!userRecord.emailVerified || (userRecord.email || '').toLowerCase() !== configuredOwnerEmail) {
+        return res.status(403).json({
+          error: 'Forbidden: Firebase Auth account must be verified and match the authorized owner email.',
+        });
+      }
+
+      const nowIso = new Date().toISOString();
+
+      // Atomic one-time lock creation (fails with ALREADY_EXISTS under concurrent requests)
+      try {
+        await lockRef.create({
+          completed: true,
+          bootstrappedUid: caller.uid,
+          bootstrappedEmail: userRecord.email || configuredOwnerEmail,
+          bootstrappedAt: nowIso,
+          method: 'server_bootstrap_adc',
+        });
+      } catch (lockErr: any) {
+        if (lockErr?.code === 6 || /ALREADY_EXISTS/i.test(String(lockErr?.message || ''))) {
+          return res.status(409).json({
+            error: 'Super Admin bootstrap has already been completed once and is permanently locked.',
+            code: 'BOOTSTRAP_ALREADY_COMPLETED',
+          });
+        }
+        throw lockErr;
+      }
+
+      const existingClaims = userRecord.customClaims || {};
+      await adminAuth.setCustomUserClaims(caller.uid, {
+        ...existingClaims,
+        admin: true,
+        role: 'admin',
+        superAdmin: true,
+      });
+
+      await adminDb
+        .collection('user_roles')
+        .doc(caller.uid)
+        .set(
+          {
+            uid: caller.uid,
+            role: 'admin',
+            isSuperAdmin: true,
+            tier: 'super_admin',
+            email: userRecord.email || configuredOwnerEmail,
+            emailVerified: true,
+            assignedBy: 'server_one_time_bootstrap',
+            assignedAt: nowIso,
+          },
+          { merge: true }
+        );
+
+      void appendServerAuditEvent({
+        action: 'SUPER_ADMIN_PROVISIONED',
+        actorUid: caller.uid,
+        actorEmail: userRecord.email || caller.uid,
+        resource: `user_roles/${caller.uid}`,
+        outcome: 'SUCCESS',
+        ip: getClientIp(req),
+        details: 'One-time Super Admin custom claims and Firestore user_roles document provisioned via ADC',
+      });
+
+      return res.json({
+        ok: true,
+        oneTimeLocked: true,
+        uid: caller.uid,
+        email: userRecord.email || configuredOwnerEmail,
+        role: 'admin',
+        isSuperAdmin: true,
+      });
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      const isIamMissing =
+        err?.code === 7 ||
+        /PERMISSION_DENIED|Could not load the default credentials|identitytoolkit|auth\/internal-error/i.test(msg);
+      return res.status(isIamMissing ? 503 : 500).json({
+        error: isIamMissing
+          ? 'Dedicated Cloud Run Service Account lacks required IAM permissions (roles/datastore.user, roles/firebaseauth.admin).'
+          : 'Failed to provision Super Admin via Firebase Admin SDK.',
+        code: isIamMissing ? 'ADMIN_SDK_CREDENTIALS_UNAVAILABLE' : 'PROVISION_FAILED',
+      });
+    }
+  }
+);
+
+// 1c-iii-a. Server-Authoritative Admin Users & Roles List (Computes "owner" strictly on server — OWNER_EMAIL never sent to client bundle)
+app.get('/api/admin/users', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  const caller = req.authUser!;
+
+  const enrichUsersWithRoles = async (
+    rawUsers: Record<string, any>[],
+    rawRoles: Record<string, any>[]
+  ) => {
+    const rolesByUid = new Map<string, Record<string, any>>();
+    for (const r of rawRoles) {
+      const uid = String(r.uid || r.id || '').trim();
+      if (uid) rolesByUid.set(uid, r);
+    }
+
+    const enriched = await Promise.all(
+      rawUsers.map(async (u) => {
+        const uid = String(u.uid || u.id || '').trim();
+        const emailLower = String(u.email || '').trim().toLowerCase();
+        const roleDoc = uid ? rolesByUid.get(uid) : undefined;
+        const roleFromDoc = typeof roleDoc?.role === 'string' ? roleDoc.role.trim().toLowerCase() : '';
+        const isSuperAdminFromDoc = Boolean(
+          roleDoc?.isSuperAdmin === true ||
+            roleDoc?.tier === 'super_admin' ||
+            roleFromDoc === 'super_admin' ||
+            roleFromDoc === 'owner'
+        );
+
+        let isVerifiedOwnerAccount = false;
+        if (emailLower === OWNER_EMAIL) {
+          if (uid && uid === caller.uid && caller.emailVerified) {
+            isVerifiedOwnerAccount = true;
+          } else if (roleDoc?.emailVerified === true) {
+            isVerifiedOwnerAccount = true;
+          } else if (adminApp && uid && SAFE_ID_REGEX.test(uid)) {
+            try {
+              const authUserRecord = await getAuth(adminApp).getUser(uid);
+              if (
+                authUserRecord.emailVerified === true &&
+                (authUserRecord.email || '').trim().toLowerCase() === OWNER_EMAIL
+              ) {
+                isVerifiedOwnerAccount = true;
+              }
+            } catch {
+              // Ignore IAM / lookup errors in Preview
+            }
+          }
+        }
+
+        const isOwner = isVerifiedOwnerAccount || isSuperAdminFromDoc;
+        const resolvedRole = isOwner ? 'owner' : roleFromDoc || 'client';
+
+        return {
+          ...u,
+          uid,
+          role: resolvedRole,
+          isOwner,
+          isSuperAdmin: isOwner,
+        };
+      })
+    );
+
+    return enriched;
+  };
+
+  if (adminDb) {
+    try {
+      const [usersSnap, rolesSnap] = await Promise.all([
+        adminDb.collection('users').get(),
+        adminDb.collection('user_roles').get(),
+      ]);
+      const rawUsers = usersSnap.docs.map((d) => ({ id: d.id, uid: d.id, ...d.data() }));
+      const rawRoles = rolesSnap.docs.map((d) => ({ id: d.id, uid: d.id, ...d.data() }));
+      const users = await enrichUsersWithRoles(rawUsers, rawRoles);
+      return res.json({ ok: true, count: users.length, users, mode: 'admin_sdk_adc' });
+    } catch (err) {
+      if (!isFirestoreAdminCredentialError(err)) {
+        console.error('[GET /api/admin/users Admin SDK Error]', err);
+      }
+    }
+  }
+
+  if (req.authToken) {
+    const [restUsers, restRoles] = await Promise.all([
+      runFirestoreQueryRest('users', [], req.authToken),
+      runFirestoreQueryRest('user_roles', [], req.authToken),
+    ]);
+    if (Array.isArray(restUsers)) {
+      const users = await enrichUsersWithRoles(restUsers, Array.isArray(restRoles) ? restRoles : []);
+      return res.json({
+        ok: true,
+        count: users.length,
+        users,
+        mode: 'firestore_rest_verified_admin',
+      });
+    }
+  }
+
+  return res.status(503).json({
+    error: 'Unable to fetch users from Firestore.',
+  });
+});
+
+// 1c-iii. Admin-Only Server-Side Role Assignment (Strictly Non-Privileged Roles Only: client | architect | manager; 403 on admin/super_admin/owner or owner target)
+app.post(
+  '/api/admin/roles/update',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const caller = req.authUser!;
+    const targetUid = typeof req.body?.uid === 'string' ? req.body.uid.trim() : '';
+    const requestedRoleRaw = typeof req.body?.role === 'string' ? req.body.role.trim() : '';
+    const requestedRole = requestedRoleRaw.toLowerCase();
+    const grantSuperAdmin = req.body?.isSuperAdmin === true;
+
+    if (!SAFE_ID_REGEX.test(targetUid)) {
+      return res.status(400).json({ error: 'Invalid target UID.' });
+    }
+    if (['admin', 'super_admin', 'owner'].includes(requestedRole) || grantSuperAdmin) {
+      void appendServerAuditEvent({
+        action: 'ADMIN_ROLE_ESCALATION_BLOCKED',
+        actorUid: caller.uid,
+        actorEmail: caller.email || caller.uid,
+        resource: `user_roles/${targetUid}`,
+        outcome: 'DENIED',
+        ip: getClientIp(req),
+        details: `Blocked attempt to assign privileged role "${requestedRole || 'super_admin'}" to ${targetUid}`,
+      });
+      return res.status(403).json({
+        error: 'Forbidden: Assigning admin, super_admin, or owner roles to other accounts is prohibited.',
+      });
+    }
+    if (!['client', 'architect', 'manager'].includes(requestedRole)) {
+      return res.status(400).json({ error: 'Invalid role specified. Allowed roles: client, architect, manager.' });
+    }
+    if (targetUid === caller.uid) {
+      return res.status(403).json({
+        error: 'Forbidden: Administrators cannot modify their own role or privilege level.',
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // Production path: Dedicated Service Account ADC updates Auth Custom Claims + Firestore user_roles
+    if (adminApp && adminDb) {
+      try {
+        const [existingRoleSnap, existingUserSnap] = await Promise.all([
+          adminDb.collection('user_roles').doc(targetUid).get(),
+          adminDb.collection('users').doc(targetUid).get(),
+        ]);
+        const existingRoleData = existingRoleSnap.exists ? existingRoleSnap.data() : null;
+        const existingUserData = existingUserSnap.exists ? existingUserSnap.data() : null;
+        const targetEmailFromDoc = String(existingUserData?.email || existingRoleData?.email || '')
+          .trim()
+          .toLowerCase();
+
+        if (
+          existingRoleData?.isSuperAdmin === true ||
+          existingRoleData?.role === 'super_admin' ||
+          existingRoleData?.role === 'owner' ||
+          targetEmailFromDoc === OWNER_EMAIL
+        ) {
+          return res.status(403).json({
+            error: 'Forbidden: The owner / super admin account role cannot be modified.',
+          });
+        }
+
+        const adminAuth = getAuth(adminApp);
+        const targetUser = await adminAuth.getUser(targetUid);
+        if ((targetUser.email || '').trim().toLowerCase() === OWNER_EMAIL) {
+          return res.status(403).json({
+            error: 'Forbidden: The owner account role cannot be modified.',
+          });
+        }
+
+        const existingClaims = targetUser.customClaims || {};
+        await adminAuth.setCustomUserClaims(targetUid, {
+          ...existingClaims,
+          admin: false,
+          role: requestedRole,
+          superAdmin: false,
+        });
+
+        await adminDb
+          .collection('user_roles')
+          .doc(targetUid)
+          .set(
+            {
+              uid: targetUid,
+              role: requestedRole,
+              isSuperAdmin: false,
+              email: targetUser.email || '',
+              assignedBy: caller.email || caller.uid,
+              assignedAt: nowIso,
+            },
+            { merge: true }
+          );
+
+        void appendServerAuditEvent({
+          action: 'ADMIN_ROLE_UPDATED',
+          actorUid: caller.uid,
+          actorEmail: caller.email || caller.uid,
+          resource: `user_roles/${targetUid}`,
+          outcome: 'SUCCESS',
+          ip: getClientIp(req),
+          details: `Updated role for ${targetUid} to ${requestedRole} (claimsSynced=true)`,
+        });
+
+        return res.json({
+          ok: true,
+          uid: targetUid,
+          role: requestedRole,
+          isSuperAdmin: false,
+          claimsSynced: true,
+          mode: 'admin_sdk_adc',
+        });
+      } catch (err: any) {
+        const msg = String(err?.message || err);
+        const isIamMissing =
+          err?.code === 7 ||
+          /PERMISSION_DENIED|Could not load the default credentials|identitytoolkit|auth\/internal-error/i.test(msg);
+        if (!isIamMissing || IS_PRODUCTION_ENV) {
+          return res.status(isIamMissing ? 503 : 500).json({
+            error: isIamMissing
+              ? 'Dedicated Cloud Run Service Account lacks required IAM permissions for role updates.'
+              : 'Failed to update user role via Firebase Admin SDK.',
+            code: isIamMissing ? 'ADMIN_SDK_CREDENTIALS_UNAVAILABLE' : 'ROLE_UPDATE_FAILED',
+          });
+        }
+      }
+    }
+
+    // Preview path (shared ais-sandbox intentionally has ZERO IAM):
+    // Server verifies Admin token and writes user_roles/{targetUid} via Firestore REST under firestore.rules (isAdmin())
+    if (IS_PREVIEW_ENV && req.authToken) {
+      const [existingRestRole, existingRestUser] = await Promise.all([
+        fetchFirestoreDocumentRest('user_roles', targetUid, req.authToken),
+        fetchFirestoreDocumentRest('users', targetUid, req.authToken),
+      ]);
+      const restRoleVal = String(existingRestRole?.fields?.role?.stringValue || '').toLowerCase();
+      const restUserEmail = String(
+        existingRestUser?.fields?.email?.stringValue ||
+          existingRestRole?.fields?.email?.stringValue ||
+          ''
+      )
+        .trim()
+        .toLowerCase();
+
+      if (
+        existingRestRole?.fields?.isSuperAdmin?.booleanValue === true ||
+        restRoleVal === 'super_admin' ||
+        restRoleVal === 'owner' ||
+        restUserEmail === OWNER_EMAIL
+      ) {
+        return res.status(403).json({
+          error: 'Forbidden: The owner / super admin account role cannot be modified.',
+        });
+      }
+
+      const restWrite = await patchFirestoreDocumentRest(
+        'user_roles',
+        targetUid,
+        {
+          uid: targetUid,
+          role: requestedRole,
+          isSuperAdmin: false,
+          assignedBy: caller.email || caller.uid,
+          assignedAt: nowIso,
+        },
+        req.authToken
+      );
+
+      if (!restWrite.ok) {
+        return res.status(restWrite.status === 403 ? 403 : 502).json({
+          error: 'Firestore security rules rejected role update.',
+        });
+      }
+
+      void appendServerAuditEvent({
+        action: 'ADMIN_ROLE_UPDATED',
+        actorUid: caller.uid,
+        actorEmail: caller.email || caller.uid,
+        resource: `user_roles/${targetUid}`,
+        outcome: 'SUCCESS',
+        ip: getClientIp(req),
+        details: `Updated role for ${targetUid} to ${requestedRole} (preview_rules_enforced)`,
+      });
+
+      return res.json({
+        ok: true,
+        uid: targetUid,
+        role: requestedRole,
+        isSuperAdmin: false,
+        claimsSynced: false,
+        mode: 'preview_rules_enforced',
+      });
+    }
+
+    return res.status(503).json({
+      error: 'Firebase Admin SDK (ADC) is unavailable in this runtime.',
+      code: 'ADMIN_SDK_CREDENTIALS_UNAVAILABLE',
+    });
+  }
+);
+
+// 1c-iv. Server-Side Admin Quotations List, Status Update & Deletion
+app.get('/api/admin/quotations', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (adminDb) {
+    try {
+      const snap = await adminDb.collection('quotations').get();
+      const quotations = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      return res.json({ ok: true, count: quotations.length, quotations, mode: 'admin_sdk_adc' });
+    } catch (err) {
+      if (!isFirestoreAdminCredentialError(err)) {
+        console.error('[GET /api/admin/quotations Admin SDK Error]', err);
+      }
+    }
+  }
+
+  if (req.authToken) {
+    const rows = await runFirestoreQueryRest('quotations', [], req.authToken);
+    if (Array.isArray(rows)) {
+      return res.json({
+        ok: true,
+        count: rows.length,
+        quotations: rows,
+        mode: 'firestore_rest_verified_admin',
+      });
+    }
+  }
+
+  return res.status(503).json({
+    error: 'Unable to fetch quotations from Firestore.',
+  });
+});
+
+const adminQuotationStatusSchema = z.object({
+  status: z.enum(['pending', 'under_review', 'reviewed', 'approved', 'rejected']),
+});
+
+app.patch(
+  '/api/admin/quotations/:quotationId/status',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const quotationId = String(req.params.quotationId || '').trim();
+    if (!SAFE_ID_REGEX.test(quotationId)) {
+      return res.status(400).json({ error: 'Invalid quotation ID.' });
+    }
+    const parsed = adminQuotationStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid quotation status value.' });
+    }
+    const caller = req.authUser!;
+    const nowIso = new Date().toISOString();
+    const writeRes = await adminMergeFirestoreDoc(
+      'quotations',
+      quotationId,
+      {
+        status: parsed.data.status,
+        updatedAt: nowIso,
+        updatedBy: caller.uid,
+      },
+      req.authToken || ''
+    );
+    if (!writeRes.ok) {
+      return res.status(writeRes.status).json({ error: 'Unable to update quotation status.' });
+    }
+    void appendServerAuditEvent({
+      action: 'QUOTATION_STATUS_CHANGE',
+      actorUid: caller.uid,
+      actorEmail: caller.email || caller.uid,
+      resource: `quotations/${quotationId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Status updated to ${parsed.data.status} (${writeRes.mode})`,
+    });
+    return res.json({ ok: true, id: quotationId, status: parsed.data.status, mode: writeRes.mode });
+  }
+);
+
+app.delete(
+  '/api/admin/quotations/:quotationId',
+  requireAdmin,
+  async (req: AuthenticatedRequest, res) => {
+    const quotationId = String(req.params.quotationId || '').trim();
+    if (!SAFE_ID_REGEX.test(quotationId)) {
+      return res.status(400).json({ error: 'Invalid quotation ID.' });
+    }
+    const caller = req.authUser!;
+    const delRes = await adminDeleteFirestoreDoc('quotations', quotationId, req.authToken || '');
+    if (!delRes.ok) {
+      return res.status(delRes.status).json({ error: 'Unable to delete quotation.' });
+    }
+    void appendServerAuditEvent({
+      action: 'QUOTATION_DELETED',
+      actorUid: caller.uid,
+      actorEmail: caller.email || caller.uid,
+      resource: `quotations/${quotationId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Deleted quotation ${quotationId} (${delRes.mode})`,
+    });
+    return res.json({ ok: true, id: quotationId, mode: delRes.mode });
+  }
+);
+
+// 1c-v. Server-Side Admin Support Ticket Status Update
+const adminTicketStatusSchema = z.object({
+  status: z.enum(['open', 'in_progress', 'resolved']),
+});
+
+app.patch(
+  '/api/admin/support-tickets/:ticketId/status',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const ticketId = String(req.params.ticketId || '').trim();
+    if (!SAFE_ID_REGEX.test(ticketId)) {
+      return res.status(400).json({ error: 'Invalid ticket ID.' });
+    }
+    const parsed = adminTicketStatusSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid ticket status value.' });
+    }
+    const caller = req.authUser!;
+    const nowIso = new Date().toISOString();
+    const writeRes = await adminMergeFirestoreDoc(
+      'support_tickets',
+      ticketId,
+      {
+        status: parsed.data.status,
+        updatedAt: nowIso,
+      },
+      req.authToken || ''
+    );
+    if (!writeRes.ok) {
+      return res.status(writeRes.status).json({ error: 'Unable to update ticket status.' });
+    }
+    void appendServerAuditEvent({
+      action: 'TICKET_STATUS_UPDATED',
+      actorUid: caller.uid,
+      actorEmail: caller.email || caller.uid,
+      resource: `support_tickets/${ticketId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Ticket status changed to ${parsed.data.status} (${writeRes.mode})`,
+    });
+    return res.json({ ok: true, id: ticketId, status: parsed.data.status, mode: writeRes.mode });
+  }
+);
+
+// 1c-vi. Server-Side Admin Site Settings Update
+const adminSiteSettingsSchema = z.object({
+  companyName: z.string().trim().min(1).max(160),
+  brandName: z.string().trim().min(1).max(120),
+  companyRegistration: z.string().trim().max(120).optional().default(''),
+  contactEmail: z.string().trim().email().max(160),
+  contactPhone: z.string().trim().max(40).optional().default(''),
+  maintenanceMode: z.boolean().optional().default(false),
+  slaTarget: z.string().trim().max(80).optional().default('SOW Scoped'),
+  headquarters: z.string().trim().max(300).optional().default(''),
+});
+
+app.put(
+  '/api/admin/site-settings',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const parsed = adminSiteSettingsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Invalid site settings payload.' });
+    }
+    const caller = req.authUser!;
+    const nowIso = new Date().toISOString();
+    const writeRes = await adminMergeFirestoreDoc(
+      'site_settings',
+      'global_config',
+      {
+        id: 'global_config',
+        ...parsed.data,
+        updatedAt: nowIso,
+        updatedBy: caller.uid,
+      },
+      req.authToken || ''
+    );
+    if (!writeRes.ok) {
+      return res.status(writeRes.status).json({ error: 'Unable to persist site settings.' });
+    }
+    cachedPublicCatalog = null;
+    void appendServerAuditEvent({
+      action: 'SETTINGS_SAVED',
+      actorUid: caller.uid,
+      actorEmail: caller.email || caller.uid,
+      resource: 'site_settings/global_config',
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Updated platform site settings (${writeRes.mode})`,
+    });
+    return res.json({ ok: true, mode: writeRes.mode });
+  }
+);
+
+// 1c-vii. Server-Side Admin Project Deletion
+app.delete(
+  '/api/admin/projects/:projectId',
+  requireAdmin,
+  async (req: AuthenticatedRequest, res) => {
+    const projectId = String(req.params.projectId || '').trim();
+    if (!SAFE_ID_REGEX.test(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID.' });
+    }
+    const caller = req.authUser!;
+    const delRes = await adminDeleteFirestoreDoc('projects', projectId, req.authToken || '');
+    if (!delRes.ok) {
+      return res.status(delRes.status).json({ error: 'Unable to delete project.' });
+    }
+    void appendServerAuditEvent({
+      action: 'PROJECT_DELETED',
+      actorUid: caller.uid,
+      actorEmail: caller.email || caller.uid,
+      resource: `projects/${projectId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Deleted project ${projectId} (${delRes.mode})`,
+    });
+    return res.json({ ok: true, id: projectId, mode: delRes.mode });
+  }
+);
 
 // 1d. Public Read-Only Catalog Endpoint (Strictly public collections only: apps, services, blog_posts, site_settings)
 interface PublicCatalogPayload {
@@ -2210,7 +3219,7 @@ app.get('/api/files/list', requireAuth, async (req: AuthenticatedRequest, res) =
   const user = req.authUser!;
   const { projectId } = req.query as { projectId?: string };
 
-  if (!adminDb) {
+  if (!adminDb && !req.authToken) {
     return res.status(503).json({
       code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
       error: 'Firestore Admin SDK is not configured to list stored files.',
@@ -2218,6 +3227,9 @@ app.get('/api/files/list', requireAuth, async (req: AuthenticatedRequest, res) =
   }
 
   try {
+    if (!adminDb) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
     const colRef = adminDb.collection('file_records');
     const snap = user.isAdmin
       ? await colRef.get()
@@ -2236,6 +3248,23 @@ app.get('/api/files/list', requireAuth, async (req: AuthenticatedRequest, res) =
       files: list.map(toSafeFileDto),
     });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && req.authToken) {
+      const filters = user.isAdmin ? [] : [{ field: 'ownerUid', value: user.uid }];
+      const restFiles = await runFirestoreQueryRest('file_records', filters, req.authToken);
+      if (restFiles !== null) {
+        let filtered = restFiles;
+        if (projectId && typeof projectId === 'string' && SAFE_ID_REGEX.test(projectId)) {
+          filtered = filtered.filter((f) => f.projectId === projectId);
+        }
+        filtered.sort(
+          (a: any, b: any) => new Date(b.uploadedAt || 0).getTime() - new Date(a.uploadedAt || 0).getTime()
+        );
+        return res.json({
+          count: filtered.length,
+          files: filtered.map(toSafeFileDto),
+        });
+      }
+    }
     console.error('[File List Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to retrieve stored file list.');
   }
@@ -2432,14 +3461,17 @@ app.post('/api/audit-events', requireAuth, requireJsonContentType, async (req: A
 });
 
 // Admin Server Audit Ledger Endpoint (Strict Admin Only — Reads from Firestore audit_logs)
-app.get('/api/audit-events', requireAdmin, async (_req: AuthenticatedRequest, res) => {
-  if (!adminDb) {
+app.get('/api/audit-events', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  if (!adminDb && !req.authToken) {
     return res.status(503).json({
       code: 'FIRESTORE_ADMIN_NOT_CONFIGURED',
       error: 'Firestore Admin SDK is not configured to read audit logs.',
     });
   }
   try {
+    if (!adminDb) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
     const snap = await adminDb
       .collection('audit_logs')
       .orderBy('timestamp', 'desc')
@@ -2448,6 +3480,19 @@ app.get('/api/audit-events', requireAdmin, async (_req: AuthenticatedRequest, re
     const events = snap.docs.map((d) => d.data());
     return res.json({ count: events.length, events });
   } catch (err) {
+    if (isFirestoreAdminCredentialError(err) && req.authToken) {
+      const restEvents = await runFirestoreQueryRest('audit_logs', [], req.authToken);
+      if (restEvents !== null) {
+        restEvents.sort(
+          (a: any, b: any) =>
+            new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+        );
+        return res.json({
+          count: Math.min(restEvents.length, 200),
+          events: restEvents.slice(0, 200),
+        });
+      }
+    }
     console.error('[Audit Events Read Error]', err);
     return sendFirestoreRouteError(res, err, 'Unable to read audit events.');
   }
@@ -3438,6 +4483,55 @@ function resolveRouteHtmlInfo(rawPath: string, origin: string): {
       description:
         appMeta?.description ||
         'Detailed mobile architecture, offline SQLite synchronization, performance benchmarks, and changelog for our enterprise Android platforms.',
+      canonicalUrl: pageUrl,
+      ogUrl: pageUrl,
+      robots: 'index, follow',
+      origin: safeBase,
+    };
+  }
+
+  if (/^\/demo\/[a-z0-9-]+$/i.test(cleanPath)) {
+    const slug = cleanPath.slice('/demo/'.length).toLowerCase();
+    const pageUrl = `${safeBase}/demo/${encodeURIComponent(slug)}`;
+    const isShopping = slug === 'shopping';
+    const isCoreEng = slug === 'core-engineering';
+    const isWebEco = slug === 'web-ecosystem';
+    const isMobileSys = slug === 'mobile-system';
+    const isAiDemo = slug === 'artificial-intelligence';
+    const isCloudEng = slug === 'cloud-engineering';
+    const isIntegrationSuite = slug === 'integration-suite';
+    return {
+      statusCode: 200,
+      title: isShopping
+        ? 'Desi Bazaar — Demo Website | POWER WEB STUDIO AI'
+        : isCoreEng
+        ? 'Core Engineering — Demo Website | POWER WEB STUDIO AI'
+        : isWebEco
+        ? 'Web Ecosystem — Demo Website | POWER WEB STUDIO AI'
+        : isMobileSys
+        ? 'Mobile System — Demo Website | POWER WEB STUDIO AI'
+        : isAiDemo
+        ? 'Artificial Intelligence — Demo Website | POWER WEB STUDIO AI'
+        : isCloudEng
+        ? 'Cloud Engineering — Demo Website | POWER WEB STUDIO AI'
+        : isIntegrationSuite
+        ? 'Integration Suite — Demo Website | POWER WEB STUDIO AI'
+        : 'Interactive Demo Website | POWER WEB STUDIO AI',
+      description: isShopping
+        ? 'Interactive Indian online shopping store demo by Power Web Studio AI. Sample only — no real orders or payments.'
+        : isCoreEng
+        ? 'Interactive engineering and construction company demo website by Power Web Studio AI. Sample only.'
+        : isWebEco
+        ? 'Interactive dark-theme digital agency and web ecosystem demo website by Power Web Studio AI. Sample only.'
+        : isMobileSys
+        ? 'Interactive native Android app development company demo website by Power Web Studio AI. Sample only.'
+        : isAiDemo
+        ? 'Interactive enterprise AI and autonomous agents demo website by Power Web Studio AI. Sample only.'
+        : isCloudEng
+        ? 'Interactive cloud engineering and DevOps automation demo website by Power Web Studio AI. Sample only.'
+        : isIntegrationSuite
+        ? 'Interactive secure API gateway and data integration demo website by Power Web Studio AI. Sample only.'
+        : 'Interactive client preview demo website built by Power Web Studio AI.',
       canonicalUrl: pageUrl,
       ogUrl: pageUrl,
       robots: 'index, follow',

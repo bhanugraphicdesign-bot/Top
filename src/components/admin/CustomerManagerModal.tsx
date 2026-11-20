@@ -28,19 +28,21 @@ export const CustomerManagerModal: React.FC<CustomerModalProps> = ({
     displayName: '',
     companyName: '',
     phone: '',
-    role: 'client' as 'admin' | 'client',
+    role: 'client' as 'client' | 'architect' | 'manager',
   });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (customer) {
+      const normalizedRole: 'client' | 'architect' | 'manager' =
+        customer.role === 'architect' || customer.role === 'manager' ? customer.role : 'client';
       setFormData({
         uid: customer.uid || `user-${Date.now()}`,
         email: customer.email || '',
         displayName: customer.displayName || '',
         companyName: customer.companyName || '',
         phone: customer.phone || '',
-        role: customer.role === 'admin' ? 'admin' : 'client',
+        role: normalizedRole,
       });
     } else {
       setFormData({
@@ -215,11 +217,17 @@ export const CustomerManagerModal: React.FC<CustomerModalProps> = ({
               </label>
               <select
                 value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'client' })}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    role: e.target.value as 'client' | 'architect' | 'manager',
+                  })
+                }
                 className="w-full px-3 py-2 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none bg-white"
               >
                 <option value="client">{t('Client (Standard Portal Access)', 'क्लाइंट (मानक पोर्टल एक्सेस)')}</option>
-                <option value="admin">{t('Administrator (Full Control Console)', 'एडमिनिस्ट्रेटर (पूर्ण नियंत्रण)')}</option>
+                <option value="architect">{t('Architect', 'आर्किटेक्ट')}</option>
+                <option value="manager">{t('Manager', 'मैनेजर')}</option>
               </select>
             </div>
 

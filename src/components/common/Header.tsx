@@ -19,8 +19,13 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { language, setLanguage, t } = useLanguage();
   const { currentRoute, navigate } = useNavigation();
-  const { currentUser, isAdmin, openAuthModal, logout } = useAuth();
+  const { currentUser, isAdmin, openAuthModal, openProfileModal, logout } = useAuth();
   const [scrolled, setScrolled] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [currentUser?.photoURL]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -33,6 +38,18 @@ export const Header: React.FC<HeaderProps> = ({
   const handleNavClick = (e: React.MouseEvent, route: PageRoute) => {
     e.preventDefault();
     navigate(route);
+  };
+
+  const handleDemoSectionClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    if (currentRoute !== 'home') {
+      navigate('home');
+      window.setTimeout(() => {
+        document.getElementById('demo-websites')?.scrollIntoView({ behavior: 'smooth' });
+      }, 120);
+    } else {
+      document.getElementById('demo-websites')?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const navItems: { route: PageRoute; labelEn: string; labelHi: string }[] = [
@@ -69,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Zone 2: Navigation Links (Desktop >= lg) */}
-          <nav className="hidden lg:flex items-center gap-5 text-sm font-semibold text-slate-600">
+          <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-sm font-semibold text-slate-600">
             {navItems.map((item) => (
               <a
                 key={item.route}
@@ -85,6 +102,13 @@ export const Header: React.FC<HeaderProps> = ({
                 {language === 'hi' ? item.labelHi : item.labelEn}
               </a>
             ))}
+            <a
+              href="/#demo-websites"
+              onClick={handleDemoSectionClick}
+              className="transition-colors whitespace-nowrap shrink-0 py-1 rounded-sm hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-blue-600"
+            >
+              {t('Demo Websites', 'डेमो वेबसाइट्स')}
+            </a>
           </nav>
 
           {/* Zone 3: Language Switcher + Notifications + Client Portal + Auth + Primary CTA + Mobile Trigger */}
@@ -142,26 +166,53 @@ export const Header: React.FC<HeaderProps> = ({
               <span>{t('Client Portal', 'क्लाइंट पोर्टल')}</span>
             </button>
 
-            {/* Authentication State / Action */}
+            {/* Authentication Account Card / Guest Login */}
             {currentUser ? (
-              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md px-1.5 sm:px-2.5 py-1 text-xs min-h-[38px] sm:min-h-0">
-                <div className="flex items-center gap-1 sm:gap-1.5 font-semibold text-slate-800">
-                  <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                  <span className="hidden min-[380px]:inline max-w-[46px] min-[430px]:max-w-[70px] sm:max-w-[140px] truncate">
-                    {currentUser.displayName || currentUser.email?.split('@')[0]}
-                  </span>
+              <div className="flex items-center gap-1 sm:gap-1.5 bg-slate-100/80 border border-slate-200 rounded-md p-0.5 sm:px-1.5 sm:py-1 text-xs min-h-[38px] sm:min-h-0">
+                <button
+                  type="button"
+                  onClick={openProfileModal}
+                  aria-label={t('View account profile details', 'अकाउंट प्रोफ़ाइल विवरण देखें')}
+                  title={
+                    currentUser.displayName && currentUser.email
+                      ? `${currentUser.displayName} (${currentUser.email})`
+                      : currentUser.email || currentUser.displayName || ''
+                  }
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-white/90 text-left transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                >
+                  {currentUser.photoURL && !avatarError ? (
+                    <img
+                      src={currentUser.photoURL}
+                      alt={currentUser.displayName || currentUser.email || 'Account'}
+                      referrerPolicy="no-referrer"
+                      onError={() => setAvatarError(true)}
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-full object-cover border border-slate-300 shrink-0"
+                    />
+                  ) : (
+                    <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                  )}
+                  <div className="hidden min-[380px]:flex flex-col leading-tight min-w-0">
+                    <span className="font-semibold text-slate-900 max-w-[68px] sm:max-w-[130px] truncate text-[11px] sm:text-xs">
+                      {currentUser.displayName || currentUser.email}
+                    </span>
+                    {currentUser.email && (
+                      <span className="hidden md:block text-[10px] font-normal text-slate-500 max-w-[130px] truncate">
+                        {currentUser.email}
+                      </span>
+                    )}
+                  </div>
                   {isAdmin && (
-                    <span className="hidden sm:inline text-[10px] font-black uppercase tracking-wider bg-blue-700 text-white px-1.5 py-0.2 rounded">
+                    <span className="hidden sm:inline text-[10px] font-black uppercase tracking-wider bg-blue-700 text-white px-1.5 py-0.2 rounded shrink-0">
                       Admin
                     </span>
                   )}
-                </div>
+                </button>
                 <button
                   onClick={logout}
                   type="button"
-                  aria-label={t('Sign Out', 'लॉग आउट')}
-                  title={t('Sign Out', 'लॉग आउट')}
-                  className="p-1.5 text-slate-600 hover:text-rose-600 rounded transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                  aria-label={t('Logout', 'लॉग आउट')}
+                  title={t('Logout', 'लॉग आउट')}
+                  className="p-1.5 text-slate-600 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 shrink-0"
                 >
                   <LogOut className="w-3.5 h-3.5" />
                 </button>
@@ -173,7 +224,8 @@ export const Header: React.FC<HeaderProps> = ({
                 className="inline-flex items-center justify-center gap-1 min-h-[38px] sm:min-h-0 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                <span>{t('Sign In', 'लॉगिन')}</span>
+                <span className="hidden sm:inline text-slate-500 font-medium">{t('Guest ·', 'गेस्ट ·')}</span>
+                <span>{t('Login', 'लॉगिन')}</span>
               </button>
             )}
 

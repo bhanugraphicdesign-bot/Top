@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
@@ -19,8 +19,13 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 }) => {
   const { language, setLanguage, t } = useLanguage();
   const { currentRoute, navigate } = useNavigation();
-  const { currentUser, isAdmin, openAuthModal, logout } = useAuth();
+  const { currentUser, isAdmin, openAuthModal, openProfileModal, logout } = useAuth();
   const siteContact = useSiteContact();
+  const [avatarError, setAvatarError] = useState(false);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [currentUser?.photoURL]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -38,6 +43,18 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
   const handleRouteClick = (route: PageRoute) => {
     onClose();
     navigate(route);
+  };
+
+  const handleDemoSectionClick = () => {
+    onClose();
+    if (currentRoute !== 'home') {
+      navigate('home');
+      window.setTimeout(() => {
+        document.getElementById('demo-websites')?.scrollIntoView({ behavior: 'smooth' });
+      }, 120);
+    } else {
+      document.getElementById('demo-websites')?.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const handleCtaClick = () => {
@@ -94,48 +111,79 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
 
         {/* Navigation Links */}
         <div className="p-6 pb-10 flex-1 flex flex-col gap-1">
-          {/* User Account State in Drawer */}
+          {/* User Account Card in Drawer */}
           <div className="mb-3 p-3 bg-slate-900 text-white rounded-lg">
             {currentUser ? (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-blue-700 flex items-center justify-center font-bold text-xs text-white">
-                    {currentUser.displayName ? currentUser.displayName[0].toUpperCase() : 'U'}
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold text-white truncate max-w-[150px]">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    openProfileModal();
+                  }}
+                  aria-label={t('Open profile details', 'प्रोफ़ाइल विवरण खोलें')}
+                  className="flex-1 min-w-0 flex items-center gap-2.5 text-left rounded-md p-1 hover:bg-slate-800/80 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-400"
+                >
+                  {currentUser.photoURL && !avatarError ? (
+                    <img
+                      src={currentUser.photoURL}
+                      alt={currentUser.displayName || currentUser.email || 'Account'}
+                      referrerPolicy="no-referrer"
+                      onError={() => setAvatarError(true)}
+                      className="w-9 h-9 rounded-full object-cover border border-slate-700 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-blue-700 flex items-center justify-center font-bold text-xs text-white shrink-0">
+                      {(currentUser.displayName || currentUser.email || '?').charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-white truncate">
                       {currentUser.displayName || currentUser.email}
                     </div>
-                    <div className="text-[10px] text-blue-300 font-mono flex items-center gap-1">
+                    {currentUser.email && (
+                      <div className="text-[11px] text-slate-300 truncate">
+                        {currentUser.email}
+                      </div>
+                    )}
+                    <div className="text-[10px] text-blue-300 font-mono flex items-center gap-1.5 mt-0.5">
                       <span>{isAdmin ? 'System Admin' : 'Client Account'}</span>
+                      <span aria-hidden="true">·</span>
+                      <span className="underline">{t('Profile', 'प्रोफ़ाइल')}</span>
                     </div>
                   </div>
-                </div>
+                </button>
                 <button
+                  type="button"
                   onClick={() => {
                     logout();
                     onClose();
                   }}
-                  className="p-1.5 text-slate-400 hover:text-rose-400 rounded transition-colors cursor-pointer"
-                  title="Sign Out"
+                  className="px-2.5 py-2 text-xs font-bold text-rose-300 hover:text-white hover:bg-rose-600/80 rounded-md transition-colors cursor-pointer shrink-0 flex items-center gap-1"
+                  aria-label={t('Logout', 'लॉग आउट')}
+                  title={t('Logout', 'लॉग आउट')}
                 >
                   <LogOut className="w-4 h-4" />
+                  <span className="text-[11px]">{t('Logout', 'लॉग आउट')}</span>
                 </button>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div className="text-xs">
-                  <div className="font-bold text-white">{t('Enterprise Access', 'एंटरप्राइज एक्सेस')}</div>
-                  <div className="text-[11px] text-slate-400">{t('Sign in to view private builds', 'निजी बिल्ड देखने हेतु लॉगिन करें')}</div>
+                  <div className="font-bold text-white">{t('Guest', 'गेस्ट')}</div>
+                  <div className="text-[11px] text-slate-400">
+                    {t('Sign in with Google or Email', 'Google या ईमेल से लॉगिन करें')}
+                  </div>
                 </div>
                 <button
+                  type="button"
                   onClick={() => {
                     onClose();
                     openAuthModal('login');
                   }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded transition-colors cursor-pointer"
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded transition-colors cursor-pointer shrink-0"
                 >
-                  {t('Sign In', 'लॉगिन')}
+                  {t('Login', 'लॉगिन')}
                 </button>
               </div>
             )}
@@ -198,6 +246,13 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                 {language === 'hi' ? p.labelHi : p.labelEn}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={handleDemoSectionClick}
+              className="w-full text-left py-2.5 px-3 rounded-md text-sm font-semibold transition-colors cursor-pointer text-slate-800 hover:bg-slate-50 hover:text-blue-700 focus-visible:outline-2 focus-visible:outline-blue-600"
+            >
+              {t('Demo Websites', 'डेमो वेबसाइट्स')}
+            </button>
           </div>
 
           {/* Direct CTA */}

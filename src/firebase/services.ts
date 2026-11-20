@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   updateDoc,
@@ -177,7 +178,12 @@ async function isCurrentUserVerifiedAdmin(): Promise<boolean> {
   // 2. Verified Firebase Auth custom claim
   try {
     const tokenResult = await currentUser.getIdTokenResult();
-    if (tokenResult?.claims?.admin === true || tokenResult?.claims?.role === 'admin') {
+    if (
+      tokenResult?.claims?.admin === true ||
+      tokenResult?.claims?.superAdmin === true ||
+      tokenResult?.claims?.role === 'admin' ||
+      tokenResult?.claims?.role === 'super_admin'
+    ) {
       return true;
     }
   } catch {
@@ -318,21 +324,72 @@ export async function syncUserAccount(user: {
   }
 }
 
-export async function fetchUserRole(uid: string): Promise<string> {
+export interface UserRoleDetails {
+  role: string;
+  exists: boolean;
+  isSuperAdmin: boolean;
+  error: string | null;
+}
+
+export async function fetchUserRoleDetails(
+  uid: string,
+  forceServer = false
+): Promise<UserRoleDetails> {
   const path = COLLECTIONS.USER_ROLES;
-  if (!auth.currentUser) return 'client';
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'client';
-  if (!(await ensureClientFirestoreOnline())) return 'client';
-  try {
-    const roleDoc = await getDoc(doc(db, path, uid));
-    if (roleDoc.exists()) {
-      return roleDoc.data().role || 'client';
-    }
-    return 'client';
-  } catch (error) {
-    console.warn('[fetchUserRole]', error);
-    return 'client';
+  if (!auth.currentUser || !uid) {
+    return { role: 'client', exists: false, isSuperAdmin: false, error: null };
   }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    return {
+      role: 'client',
+      exists: false,
+      isSuperAdmin: false,
+      error: 'Offline: Cannot verify Firestore user_roles while disconnected.',
+    };
+  }
+  if (!(await ensureClientFirestoreOnline())) {
+    return {
+      role: 'client',
+      exists: false,
+      isSuperAdmin: false,
+      error: 'Unable to reach Cloud Firestore to verify user_roles.',
+    };
+  }
+  try {
+    const roleRef = doc(db, path, uid);
+    const roleDoc = forceServer
+      ? await getDocFromServer(roleRef).catch(() => getDoc(roleRef))
+      : await getDoc(roleRef);
+    if (roleDoc.exists()) {
+      const data = roleDoc.data() || {};
+      const rawRole = typeof data.role === 'string' ? data.role : 'client';
+      const isSuperAdmin = Boolean(
+        data.isSuperAdmin === true || data.tier === 'super_admin' || rawRole === 'super_admin'
+      );
+      return {
+        role: rawRole === 'super_admin' ? 'admin' : rawRole,
+        exists: true,
+        isSuperAdmin,
+        error: null,
+      };
+    }
+    return { role: 'client', exists: false, isSuperAdmin: false, error: null };
+  } catch (error: any) {
+    console.warn('[fetchUserRoleDetails]', error);
+    const code = String(error?.code || '');
+    const msg = error instanceof Error ? error.message : String(error || 'Firestore role lookup error');
+    return {
+      role: 'client',
+      exists: false,
+      isSuperAdmin: false,
+      error: code ? `${code}: ${msg}` : msg,
+    };
+  }
+}
+
+export async function fetchUserRole(uid: string): Promise<string> {
+  const details = await fetchUserRoleDetails(uid);
+  return details.role;
 }
 
 /* =========================================================================
@@ -490,27 +547,49 @@ export async function submitQuotation(data: {
 export async function fetchAllQuotations() {
   const path = COLLECTIONS.QUOTATIONS;
   if (!(await isCurrentUserVerifiedAdmin())) return [];
+  const currentUser = auth.currentUser;
   try {
     const snap = await getDocs(collection(db, path));
-    return snap.docs.map((d) => d.data());
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
+    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (docs.length > 0) {
+      return docs;
+    }
+  } catch (clientErr) {
+    console.warn('[fetchAllQuotations client fallback]', clientErr);
   }
+  if (currentUser && typeof fetch !== 'undefined') {
+    try {
+      const res = await authenticatedFetch('/api/admin/quotations', {}, { user: currentUser });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.quotations)) {
+          return data.quotations;
+        }
+      }
+    } catch {
+      // Fall through cleanly
+    }
+  }
+  return [];
 }
 
 export async function updateQuotationStatus(quoteId: string, status: string) {
-  const path = COLLECTIONS.QUOTATIONS;
-  if (!(await isCurrentUserVerifiedAdmin())) {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !(await isCurrentUserVerifiedAdmin())) {
     throw new Error('Forbidden: Administrator privilege required.');
   }
-  try {
-    await updateDoc(doc(db, path, quoteId), {
-      status,
-      updatedAt: serverTimestamp(),
-    });
-    await logAuditEvent('QUOTATION_STATUS_CHANGE', `quotations/${quoteId}`, `Updated status to ${status}`);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `${path}/${quoteId}`);
+  const res = await authenticatedFetch(
+    `/api/admin/quotations/${encodeURIComponent(quoteId)}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    },
+    { user: currentUser }
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || `Failed to update quotation status (HTTP ${res.status})`);
   }
 }
 
@@ -651,21 +730,25 @@ export async function fetchSupportTickets(clientId?: string) {
 }
 
 export async function updateSupportTicketStatus(ticketId: string, status: 'open' | 'in_progress' | 'resolved') {
-  const path = COLLECTIONS.SUPPORT_TICKETS;
-  if (!auth.currentUser) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
     throw new Error('Authentication required.');
   }
   if (!(await isCurrentUserVerifiedAdmin())) {
     throw new Error('Forbidden: Administrator privilege required to directly update support ticket status.');
   }
-  try {
-    await updateDoc(doc(db, path, ticketId), {
-      status,
-      updatedAt: serverTimestamp(),
-    });
-    await logAuditEvent('TICKET_STATUS_UPDATED', `support_tickets/${ticketId}`, `Status changed to ${status}`);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `${path}/${ticketId}`);
+  const res = await authenticatedFetch(
+    `/api/admin/support-tickets/${encodeURIComponent(ticketId)}/status`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    },
+    { user: currentUser }
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || `Failed to update ticket status (HTTP ${res.status})`);
   }
 }
 
@@ -728,13 +811,34 @@ export async function seedInitialDatabaseIfEmpty() {
 export async function fetchAllUsers(): Promise<any[]> {
   const path = COLLECTIONS.USERS;
   if (!(await isCurrentUserVerifiedAdmin())) return [];
+  const currentUser = auth.currentUser;
+  if (currentUser && typeof fetch !== 'undefined') {
+    try {
+      const res = await authenticatedFetch('/api/admin/users', {}, { user: currentUser });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.users)) {
+          return data.users;
+        }
+      }
+    } catch (serverErr) {
+      console.warn('[fetchAllUsers server fallback]', serverErr);
+    }
+  }
   try {
     const snap = await getDocs(collection(db, path));
     return await Promise.all(
       snap.docs.map(async (d) => {
         const data = d.data();
-        const role = await fetchUserRole(d.id);
-        return { ...data, role };
+        const details = await fetchUserRoleDetails(d.id);
+        const isOwner = details.isSuperAdmin;
+        return {
+          ...data,
+          uid: data.uid || d.id,
+          role: isOwner ? 'owner' : details.role,
+          isOwner,
+          isSuperAdmin: isOwner,
+        };
       })
     );
   } catch (error) {
@@ -742,21 +846,23 @@ export async function fetchAllUsers(): Promise<any[]> {
   }
 }
 
-export async function updateUserRole(userId: string, newRole: 'admin' | 'client' | 'manager' | 'architect') {
-  const path = COLLECTIONS.USER_ROLES;
-  if (!(await isCurrentUserVerifiedAdmin())) {
+export async function updateUserRole(userId: string, newRole: 'client' | 'manager' | 'architect') {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !(await isCurrentUserVerifiedAdmin())) {
     throw new Error('Forbidden: Verified administrator privilege required to modify roles.');
   }
-  try {
-    await setDoc(doc(db, path, userId), {
-      uid: userId,
-      role: newRole,
-      assignedBy: auth.currentUser?.email || 'admin',
-      assignedAt: new Date().toISOString(),
-    }, { merge: true });
-    await logAuditEvent('USER_ROLE_UPDATED', `user_roles/${userId}`, `Role set to ${newRole}`);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${path}/${userId}`);
+  const res = await authenticatedFetch(
+    '/api/admin/roles/update',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uid: userId, role: newRole }),
+    },
+    { user: currentUser }
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || `Failed to update user role (HTTP ${res.status})`);
   }
 }
 
@@ -766,7 +872,7 @@ export async function saveClientRecord(userData: {
   displayName: string;
   companyName?: string;
   phone?: string;
-  role?: 'admin' | 'client';
+  role?: 'client' | 'manager' | 'architect';
   createdAt?: string;
 }) {
   const path = COLLECTIONS.USERS;
@@ -813,15 +919,18 @@ export async function saveProject(project: any) {
 }
 
 export async function deleteProject(projectId: string) {
-  const path = COLLECTIONS.PROJECTS;
-  if (!(await isCurrentUserVerifiedAdmin())) {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !(await isCurrentUserVerifiedAdmin())) {
     throw new Error('Forbidden: Administrator privilege required.');
   }
-  try {
-    await deleteDoc(doc(db, path, projectId));
-    await logAuditEvent('PROJECT_DELETED', `projects/${projectId}`, `Deleted project ${projectId}`);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${path}/${projectId}`);
+  const res = await authenticatedFetch(
+    `/api/admin/projects/${encodeURIComponent(projectId)}`,
+    { method: 'DELETE' },
+    { user: currentUser }
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || `Failed to delete project (HTTP ${res.status})`);
   }
 }
 
@@ -903,15 +1012,18 @@ export async function saveQuotation(quote: any) {
 }
 
 export async function deleteQuotation(quoteId: string) {
-  const path = COLLECTIONS.QUOTATIONS;
-  if (!(await isCurrentUserVerifiedAdmin())) {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !(await isCurrentUserVerifiedAdmin())) {
     throw new Error('Forbidden: Administrator privilege required.');
   }
-  try {
-    await deleteDoc(doc(db, path, quoteId));
-    await logAuditEvent('QUOTATION_DELETED', `quotations/${quoteId}`, `Deleted quote ${quoteId}`);
-  } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `${path}/${quoteId}`);
+  const res = await authenticatedFetch(
+    `/api/admin/quotations/${encodeURIComponent(quoteId)}`,
+    { method: 'DELETE' },
+    { user: currentUser }
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || `Failed to delete quotation (HTTP ${res.status})`);
   }
 }
 
@@ -998,22 +1110,26 @@ export async function fetchSiteSettings(): Promise<any> {
 }
 
 export async function saveSiteSettings(settings: any) {
-  const path = COLLECTIONS.SITE_SETTINGS;
-  if (!(await isCurrentUserVerifiedAdmin())) {
+  const currentUser = auth.currentUser;
+  if (!currentUser || !(await isCurrentUserVerifiedAdmin())) {
     throw new Error('Forbidden: Administrator privilege required.');
   }
-  try {
-    await setDoc(doc(db, path, 'global_config'), {
-      ...settings,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    invalidatePublicCatalogCache(true);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('pws-site-settings-updated', { detail: settings }));
-    }
-    await logAuditEvent('SETTINGS_SAVED', 'site_settings/global_config', 'Updated platform configuration');
-  } catch (error) {
-    handleFirestoreError(error, OperationType.WRITE, `${path}/global_config`);
+  const res = await authenticatedFetch(
+    '/api/admin/site-settings',
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    },
+    { user: currentUser }
+  );
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.error || `Failed to save site settings (HTTP ${res.status})`);
+  }
+  invalidatePublicCatalogCache(true);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('pws-site-settings-updated', { detail: settings }));
   }
 }
 

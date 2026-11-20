@@ -7,6 +7,7 @@ export type PageRoute =
   | 'ai-solutions'
   | 'android-portfolio'
   | 'app-detail'
+  | 'demo'
   | 'process'
   | 'contact'
   | 'blog'

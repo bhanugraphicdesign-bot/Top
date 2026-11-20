@@ -17,6 +17,7 @@ const VALID_ROUTES: PageRoute[] = [
   'ai-solutions',
   'android-portfolio',
   'app-detail',
+  'demo',
   'process',
   'contact',
   'blog',
@@ -33,6 +34,9 @@ export function getPathForRoute(route: PageRoute, queryParams?: Record<string, s
   if (route === 'app-detail' && cleanParams.id) {
     basePath = `/apps/${encodeURIComponent(cleanParams.id)}`;
     delete cleanParams.id;
+  } else if (route === 'demo' && cleanParams.slug) {
+    basePath = `/demo/${encodeURIComponent(cleanParams.slug)}`;
+    delete cleanParams.slug;
   } else if (route !== 'home') {
     basePath = `/${route}`;
   }
@@ -67,6 +71,15 @@ function parseRouteTarget(rawPath: string, rawSearch: string): { route: PageRout
       return { route: 'app-detail', params };
     }
     return { route: 'android-portfolio', params };
+  }
+
+  if (cleanPath.startsWith('demo/')) {
+    const demoSlug = decodeURIComponent(cleanPath.slice('demo/'.length)).split('/')[0]?.trim();
+    if (demoSlug) {
+      params.slug = demoSlug;
+      return { route: 'demo', params };
+    }
+    return { route: 'home', params };
   }
 
   const matchedRoute = VALID_ROUTES.find((r) => r === cleanPath);

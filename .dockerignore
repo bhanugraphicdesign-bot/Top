@@ -7,6 +7,7 @@ server.js
 .git
 .gitignore
 .aistudio
+.backups
 
 # Environment secrets & local service keys (never bake secrets into container layers)
 .env
