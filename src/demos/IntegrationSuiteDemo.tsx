@@ -33,6 +33,7 @@ import {
   Code2,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 
 interface IntegrationSuiteDemoProps {
   onBackToHome: () => void;
@@ -1100,6 +1101,9 @@ export const IntegrationSuiteDemo: React.FC<IntegrationSuiteDemoProps> = ({
             </div>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="integration-suite" />
 
         {/* Main Header Bar */}
         <header className="max-w-7xl mx-auto px-3 sm:px-6 h-14 flex items-center justify-between gap-4">

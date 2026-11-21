@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import {
@@ -16,6 +16,7 @@ import {
 
 export const AuthModal: React.FC = () => {
   const {
+    currentUser,
     isAuthModalOpen,
     closeAuthModal,
     authModalTab,
@@ -34,11 +35,18 @@ export const AuthModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [resetSent, setResetSent] = useState(false);
+  const googleClickLockRef = useRef(false);
 
   useEffect(() => {
     setErrorMsg('');
     setResetSent(false);
   }, [isAuthModalOpen, authModalTab]);
+
+  useEffect(() => {
+    if (isAuthModalOpen && currentUser) {
+      closeAuthModal();
+    }
+  }, [isAuthModalOpen, currentUser, closeAuthModal]);
 
   useEffect(() => {
     if (!isAuthModalOpen) return;
@@ -75,7 +83,11 @@ export const AuthModal: React.FC = () => {
         ? 'बहुत अधिक प्रयास। कृपया कुछ मिनट बाद पुनः प्रयास करें।'
         : 'Too many attempts. Please wait a few minutes and try again.';
     }
-    if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    if (
+      code === 'auth/popup-closed-by-user' ||
+      code === 'auth/cancelled-popup-request' ||
+      String(err?.message || '').includes('Pending promise was never set')
+    ) {
       return language === 'hi' ? 'Google साइन-इन विंडो बंद कर दी गई।' : 'Google sign-in popup was closed before completing.';
     }
     if (code === 'auth/popup-blocked') {
@@ -93,7 +105,27 @@ export const AuthModal: React.FC = () => {
 
   if (!isAuthModalOpen) return null;
 
+  const isExpectedAuthError = (err: any): boolean => {
+    const code = String(err?.code || '');
+    const msg = String(err?.message || '');
+    return (
+      code === 'auth/popup-closed-by-user' ||
+      code === 'auth/cancelled-popup-request' ||
+      code === 'auth/popup-blocked' ||
+      code === 'auth/invalid-credential' ||
+      code === 'auth/wrong-password' ||
+      code === 'auth/user-not-found' ||
+      code === 'auth/email-already-in-use' ||
+      code === 'auth/weak-password' ||
+      code === 'auth/invalid-email' ||
+      code === 'auth/too-many-requests' ||
+      msg.includes('Pending promise was never set')
+    );
+  };
+
   const handleGoogleSignIn = async () => {
+    if (googleClickLockRef.current || loading) return;
+    googleClickLockRef.current = true;
     try {
       setLoading(true);
       setErrorMsg('');
@@ -103,13 +135,16 @@ export const AuthModal: React.FC = () => {
         'success'
       );
     } catch (err: any) {
-      console.error(err);
+      if (!isExpectedAuthError(err)) {
+        console.error(err);
+      }
       const msg = mapAuthError(err);
       setErrorMsg(msg);
       if (err?.code === 'auth/popup-blocked') {
         showToast(msg, 'alert');
       }
     } finally {
+      googleClickLockRef.current = false;
       setLoading(false);
     }
   };
@@ -160,7 +195,9 @@ export const AuthModal: React.FC = () => {
         );
       }
     } catch (err: any) {
-      console.error(err);
+      if (!isExpectedAuthError(err)) {
+        console.error(err);
+      }
       setErrorMsg(mapAuthError(err));
     } finally {
       setLoading(false);

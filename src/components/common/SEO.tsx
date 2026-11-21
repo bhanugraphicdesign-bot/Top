@@ -364,6 +364,16 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     ogImage: DEFAULT_OG_IMAGE_PATH,
     canonicalPath: '/contact',
   },
+  pay: {
+    titleEn: 'UPI Payment | POWER WEB STUDIO AI',
+    titleHi: 'भुगतान करें (UPI) | POWER WEB STUDIO AI',
+    descriptionEn:
+      'Pay for services, quotations, or invoices directly via UPI to Bhanu Ram Bariha Digital Technologies.',
+    descriptionHi:
+      'भानु राम बरीहा डिजिटल टेक्नोलॉजीज को सेवाओं, कोटेशन या इनवॉइस का सीधा UPI भुगतान करें।',
+    ogImage: DEFAULT_OG_IMAGE_PATH,
+    canonicalPath: '/pay',
+  },
   blog: {
     titleEn: 'Engineering Blog & Research | POWER WEB STUDIO AI',
     titleHi: 'तकनीकी शोध और इंजीनियरिंग ब्लॉग | POWER WEB STUDIO AI',

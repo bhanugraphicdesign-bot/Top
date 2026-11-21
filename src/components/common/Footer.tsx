@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigation } from '../../context/NavigationContext';
+import { useAuth } from '../../context/AuthContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
 import { Phone, Mail, MapPin, Send, CheckCircle, ShieldCheck, Award, ArrowUp } from 'lucide-react';
 import { PageRoute } from '../../types';
@@ -11,6 +12,7 @@ import { authenticatedFetch } from '../../firebase/services';
 export const Footer: React.FC = () => {
   const { language, t, showToast } = useLanguage();
   const { navigate } = useNavigation();
+  const { currentUser, isAdmin } = useAuth();
   const siteContact = useSiteContact();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [honeypot, setHoneypot] = useState('');
@@ -230,14 +232,16 @@ export const Footer: React.FC = () => {
                   <span>{t('Client Portal (SLA & APKs)', 'क्लाइंट पोर्टल (SLA व बिल्ड)')}</span>
                 </button>
               </li>
-              <li>
-                <button
-                  onClick={(e) => handleRouteClick(e, 'admin-dashboard')}
-                  className="hover:text-blue-400 text-slate-400 transition-colors cursor-pointer text-left"
-                >
-                  <span>{t('Admin Console', 'एडमिन कंसोल')}</span>
-                </button>
-              </li>
+              {currentUser && isAdmin && (
+                <li>
+                  <button
+                    onClick={(e) => handleRouteClick(e, 'admin-dashboard')}
+                    className="hover:text-blue-400 text-slate-400 transition-colors cursor-pointer text-left"
+                  >
+                    <span>{t('Admin Console', 'एडमिन कंसोल')}</span>
+                  </button>
+                </li>
+              )}
             </ul>
           </div>
 

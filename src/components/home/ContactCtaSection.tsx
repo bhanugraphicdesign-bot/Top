@@ -1,10 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useNavigation } from '../../context/NavigationContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
-import { Phone, Mail, MapPin, Send, CheckCircle, Shield } from 'lucide-react';
+import { getDemoSiteBySlug } from '../../data/demoSites';
+import { Phone, Mail, MapPin, Send, CheckCircle, Shield, MessageCircle } from 'lucide-react';
 
-import { submitQuotation } from '../../firebase/services';
+import { submitLead } from '../../firebase/services';
 import { trackConsultationFormSubmit } from '../../firebase/analytics';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
@@ -20,6 +22,7 @@ import {
 
 export const ContactCtaSection: React.FC = () => {
   const { language, t, dict, showToast } = useLanguage();
+  const { currentRoute, params } = useNavigation();
   const { currentUser } = useAuth();
   const siteContact = useSiteContact();
 
@@ -30,9 +33,49 @@ export const ContactCtaSection: React.FC = () => {
     company: '',
     serviceType: 'enterprise-software',
     timeline: '3-6-months',
-    budget: 'mid-tier',
+    budget: '',
     projectBrief: '',
   });
+
+  useEffect(() => {
+    const demoSlug = params.demo?.trim().toLowerCase();
+    const inquiryParam = params.inquiry?.trim();
+    if (!demoSlug && !inquiryParam) return;
+
+    const demoSite = demoSlug ? getDemoSiteBySlug(demoSlug) : undefined;
+    const prefillBrief =
+      inquiryParam ||
+      (demoSite
+        ? language === 'hi'
+          ? `डेमो: ${demoSite.nameHi} जैसी वेबसाइट`
+          : `Demo: Website like ${demoSite.nameEn}`
+        : '');
+
+    const serviceBySlug: Record<string, string> = {
+      shopping: 'web-platforms',
+      'core-engineering': 'web-platforms',
+      'web-ecosystem': 'web-platforms',
+      'mobile-system': 'android-ecosystem',
+      'artificial-intelligence': 'ai-solutions',
+      'cloud-engineering': 'cloud-devops',
+      'integration-suite': 'api-integration',
+      'maha-bazaar': 'enterprise-software',
+    };
+    const matchedService = demoSlug ? serviceBySlug[demoSlug] : undefined;
+
+    setFormData((prev) => ({
+      ...prev,
+      serviceType: matchedService || prev.serviceType,
+      projectBrief: prefillBrief || prev.projectBrief,
+    }));
+
+    if (currentRoute === 'contact') {
+      window.setTimeout(() => {
+        const el = document.getElementById('contact');
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 120);
+    }
+  }, [params.demo, params.inquiry, currentRoute, language]);
 
   const [honeypot, setHoneypot] = useState('');
   const formOpenedAtRef = useRef<number>(Date.now());
@@ -57,6 +100,17 @@ export const ContactCtaSection: React.FC = () => {
     }));
   };
 
+  const whatsappHref = `https://wa.me/918305457717?text=${encodeURIComponent(
+    'नमस्ते, मुझे वेबसाइट/ऐप बनवानी है।'
+  )}`;
+
+  const normalizeMobileDigits = (raw: string) => {
+    const digits = raw.replace(/[^\d]/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+    return digits;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -76,36 +130,38 @@ export const ContactCtaSection: React.FC = () => {
       setErrorMsg(dict.validations.nameRequired);
       return;
     }
-    if (!formData.workEmail.trim()) {
-      setErrorMsg(dict.validations.emailRequired);
+
+    const cleanPhone = normalizeMobileDigits(formData.phone);
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      setErrorMsg(
+        t(
+          'Please enter a valid 10-digit mobile number.',
+          'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।'
+        )
+      );
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.workEmail)) {
+
+    const trimmedEmail = formData.workEmail.trim();
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setErrorMsg(dict.validations.emailInvalid);
       return;
     }
-    if (!currentUser) {
-      const loginMsg =
-        language === 'hi'
-          ? 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें।'
-          : 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें। (Please sign in first.)';
-      setErrorMsg(loginMsg);
-      showToast(loginMsg, 'alert');
-      return;
-    }
+
     setErrorMsg('');
     setSubmitting(true);
 
     try {
-      const quoteId = await submitQuotation({
+      const result = await submitLead({
         fullName: formData.fullName,
-        email: formData.workEmail,
-        phone: formData.phone,
+        email: trimmedEmail,
+        phone: cleanPhone,
         company: formData.company,
         serviceType: formData.serviceType,
         timeline: formData.timeline,
         budget: formData.budget,
         brief: formData.projectBrief,
+        source: currentRoute === 'contact' ? 'contact_page' : 'home_contact_form',
         language,
         user: currentUser,
         _hp: honeypot,
@@ -127,14 +183,14 @@ export const ContactCtaSection: React.FC = () => {
         timeline: formData.timeline,
         hasAttachment: Boolean(attachment),
       });
-      setSubmittedQuoteId(quoteId || '');
+      setSubmittedQuoteId(result.leadId || '');
       setSubmitted(true);
-      showToast(dict.notifications.consultationBooked, 'success');
+      showToast(language === 'hi' ? result.messageHi : result.messageEn, 'success');
     } catch (err: any) {
       const msg =
         err?.message ||
         t(
-          'Unable to save architectural inquiry right now. Please verify your inputs and retry.',
+          'Unable to submit your inquiry right now. Please verify your inputs and retry.',
           'अनुरोध सहेजने में समस्या हुई। कृपया अपने विवरण जांचें और पुनः प्रयास करें।'
         );
       setErrorMsg(msg);
@@ -276,12 +332,12 @@ export const ContactCtaSection: React.FC = () => {
                     <CheckCircle className="w-8 h-8" />
                   </div>
                   <h3 className="text-2xl font-bold text-slate-900">
-                    {t('Inquiry Confirmed', 'अनुरोध सफलतापूर्वक प्राप्त हुआ')}
+                    {t('Inquiry Received', 'पूछताछ प्राप्त हुई')}
                   </h3>
-                  <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+                  <p className="text-sm text-slate-700 max-w-md mx-auto leading-relaxed font-medium">
                     {t(
-                      `Thank you, ${formData.fullName}. Our Principal Engineering Architect will review your scope for ${formData.company || 'your organization'} and reply within 4 business hours.`,
-                      `धन्यवाद, ${formData.fullName}। हमारे मुख्य सॉफ्टवेयर आर्किटेक्ट आपके विवरण की समीक्षा करेंगे और 4 व्यावसायिक घंटों के भीतर संपर्क करेंगे।`
+                      'Thank you! We have received your inquiry and will contact you soon.',
+                      'धन्यवाद! आपकी पूछताछ मिल गई है, हम जल्द संपर्क करेंगे।'
                     )}
                   </p>
                   {submittedQuoteId && (
@@ -289,7 +345,7 @@ export const ContactCtaSection: React.FC = () => {
                       {t('Reference ID:', 'संदर्भ आईडी:')} <span className="font-bold text-slate-900">{submittedQuoteId}</span>
                     </div>
                   )}
-                  <div className="pt-4">
+                  <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
                     <button
                       type="button"
                       onClick={handleResetInquiry}
@@ -297,6 +353,15 @@ export const ContactCtaSection: React.FC = () => {
                     >
                       {t('Submit Another Inquiry', 'एक और अनुरोध भेजें')}
                     </button>
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                    >
+                      <MessageCircle className="w-4 h-4 shrink-0" />
+                      <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
+                    </a>
                   </div>
                 </div>
               ) : (
@@ -345,20 +410,22 @@ export const ContactCtaSection: React.FC = () => {
                         required
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                        placeholder="e.g. Bhanu Ram Bariha"
+                        placeholder={t('e.g. Rajesh Sharma', 'उदा. राजेश शर्मा')}
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                       />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        {t('Work Email *', 'कार्य ईमेल *')}
+                        {t('Mobile Number (10 digits) *', 'मोबाइल नंबर (10 अंक) *')}
                       </label>
                       <input
-                        type="email"
+                        type="tel"
                         required
-                        value={formData.workEmail}
-                        onChange={(e) => setFormData({ ...formData, workEmail: e.target.value })}
-                        placeholder="name@company.com"
+                        inputMode="numeric"
+                        maxLength={14}
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder="9800000000"
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                       />
                     </div>
@@ -367,13 +434,13 @@ export const ContactCtaSection: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        {t('Phone / WhatsApp', 'फ़ोन / व्हाट्सएप')}
+                        {t('Email (Optional)', 'ईमेल (वैकल्पिक)')}
                       </label>
                       <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="+91 98000 00000"
+                        type="email"
+                        value={formData.workEmail}
+                        onChange={(e) => setFormData({ ...formData, workEmail: e.target.value })}
+                        placeholder="name@company.com"
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                       />
                     </div>
@@ -427,13 +494,14 @@ export const ContactCtaSection: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      {t('Estimated Budget', 'अनुमानित बजट')}
+                      {t('Estimated Budget (Optional)', 'अनुमानित बजट (वैकल्पिक)')}
                     </label>
                     <select
                       value={formData.budget}
                       onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
                     >
+                      <option value="">{t('Select Budget (Optional)', 'बजट चुनें (वैकल्पिक)')}</option>
                       {QUOTE_BUDGET_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {getOptionLabel(opt, language)}
@@ -444,35 +512,37 @@ export const ContactCtaSection: React.FC = () => {
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      {t('Project Overview & Technical Requirements', 'प्रोजेक्ट विवरण व तकनीकी आवश्यकताएं')}
+                      {t('Message / Project Requirements', 'संदेश / प्रोजेक्ट विवरण')}
                     </label>
                     <textarea
                       rows={3}
                       value={formData.projectBrief}
                       onChange={(e) => setFormData({ ...formData, projectBrief: e.target.value })}
                       placeholder={t(
-                        'Provide details about your current architecture, user volume, or system integration needs...',
-                        'अपने मौजूदा सिस्टम, उपयोगकर्ता संख्या या तकनीकी आवश्यकताओं का विवरण दें...'
+                        'Provide details about your website, app, or technical requirements...',
+                        'अपनी वेबसाइट, ऐप या तकनीकी आवश्यकताओं का विवरण दें...'
                       )}
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                     />
                   </div>
 
-                  {/* Validated File Upload (RFP / Technical Architecture Brief) */}
-                  <ValidatedFileUploader
-                    key={uploaderKey}
-                    label="Attach RFP / Architecture Specification (Optional)"
-                    labelHi="RFP / तकनीकी विनिर्देश संलग्न करें (वैकल्पिक)"
-                    description="Upload PDF, PNG, JPG, or DOCX (up to 10 MB with SHA-256 validation)"
-                    descriptionHi="PDF, PNG, JPG, या DOCX अपलोड करें (10 MB तक SHA-256 सत्यापन के साथ)"
-                    category="rfp_attachment"
-                    onUploadSuccess={(file) => setAttachment(file)}
-                    onRemove={() => setAttachment(null)}
-                  />
+                  {/* Validated File Upload (RFP / Technical Architecture Brief) for signed-in users */}
+                  {currentUser && (
+                    <ValidatedFileUploader
+                      key={uploaderKey}
+                      label="Attach RFP / Architecture Specification (Optional)"
+                      labelHi="RFP / तकनीकी विनिर्देश संलग्न करें (वैकल्पिक)"
+                      description="Upload PDF, PNG, JPG, or DOCX (up to 10 MB with SHA-256 validation)"
+                      descriptionHi="PDF, PNG, JPG, या DOCX अपलोड करें (10 MB तक SHA-256 सत्यापन के साथ)"
+                      category="rfp_attachment"
+                      onUploadSuccess={(file) => setAttachment(file)}
+                      onRemove={() => setAttachment(null)}
+                    />
+                  )}
 
                   <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <span className="text-xs text-slate-500">
-                      {t('No marketing spam · Direct architect response', 'कोई स्पैम नहीं · सीधा आर्किटेक्ट जवाब')}
+                      {t('No login required · Direct architect response', 'बिना लॉगिन पूछताछ · सीधा आर्किटेक्ट जवाब')}
                     </span>
                     <button
                       type="submit"
@@ -480,8 +550,21 @@ export const ContactCtaSection: React.FC = () => {
                       className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
                       <Send className="w-3.5 h-3.5 shrink-0" />
-                      <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Request Architectural Scoping', 'आर्किटेक्चर स्कोप का अनुरोध करें')}</span>
+                      <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Submit Inquiry', 'पूछताछ भेजें')}</span>
                     </button>
+                  </div>
+
+                  {/* Direct WhatsApp CTA below form */}
+                  <div className="pt-3 border-t border-slate-100">
+                    <a
+                      href={whatsappHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                    >
+                      <MessageCircle className="w-4 h-4 shrink-0" />
+                      <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
+                    </a>
                   </div>
                 </form>
               )}

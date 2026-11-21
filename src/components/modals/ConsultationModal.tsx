@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSiteContact } from '../../hooks/useSiteContact';
-import { X, CheckCircle, Shield, Send } from 'lucide-react';
-import { submitQuotation } from '../../firebase/services';
+import { X, CheckCircle, Shield, Send, MessageCircle } from 'lucide-react';
+import { submitLead } from '../../firebase/services';
 import { trackConsultationFormOpen, trackConsultationFormSubmit } from '../../firebase/analytics';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
@@ -21,6 +21,7 @@ interface ConsultationModalProps {
   isOpen: boolean;
   onClose: () => void;
   preselectedService?: string;
+  prefillMessage?: string;
 }
 
 function normalizeServiceDomain(raw?: string): { domain: string; demoContext: string } {
@@ -57,6 +58,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   isOpen,
   onClose,
   preselectedService = 'enterprise-software',
+  prefillMessage = '',
 }) => {
   const { language, t, dict, showToast } = useLanguage();
   const { currentUser } = useAuth();
@@ -70,8 +72,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     company: '',
     service: initialNormalized.domain,
     timeline: '3-6-months',
-    budget: 'enterprise-custom',
-    brief: initialNormalized.demoContext ? `Requesting demo & walkthrough for: ${initialNormalized.demoContext}` : '',
+    budget: '',
+    brief: prefillMessage || (initialNormalized.demoContext ? `Requesting demo & walkthrough for: ${initialNormalized.demoContext}` : ''),
   });
 
   const [honeypot, setHoneypot] = useState('');
@@ -83,6 +85,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const whatsappHref = `https://wa.me/918305457717?text=${encodeURIComponent(
+    'नमस्ते, मुझे वेबसाइट/ऐप बनवानी है।'
+  )}`;
+
+  const normalizeMobileDigits = (raw: string) => {
+    const digits = raw.replace(/[^\d]/g, '');
+    if (digits.length === 12 && digits.startsWith('91')) return digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) return digits.slice(1);
+    return digits;
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     formOpenedAtRef.current = Date.now();
@@ -92,12 +105,17 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setErrorMessage('');
     setIsSubmitted(false);
     setSubmittedQuoteId('');
+    const nextBrief = prefillMessage
+      ? prefillMessage
+      : demoContext
+      ? `Requesting demo & walkthrough for: ${demoContext}`
+      : '';
     setFormData((prev) => ({
       ...prev,
       service: domain,
-      brief: demoContext ? `Requesting demo & walkthrough for: ${demoContext}` : prev.brief,
+      brief: nextBrief || prev.brief,
     }));
-  }, [isOpen, preselectedService]);
+  }, [isOpen, preselectedService, prefillMessage]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -116,7 +134,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             company: '',
             service: domain,
             timeline: '3-6-months',
-            budget: 'enterprise-custom',
+            budget: '',
             brief: '',
           });
           setAttachment(null);
@@ -154,36 +172,38 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       setErrorMessage(dict.validations.nameRequired);
       return;
     }
-    if (!formData.email.trim()) {
-      setErrorMessage(dict.validations.emailRequired);
+
+    const cleanPhone = normalizeMobileDigits(formData.phone);
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      setErrorMessage(
+        t(
+          'Please enter a valid 10-digit mobile number.',
+          'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।'
+        )
+      );
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+
+    const trimmedEmail = formData.email.trim();
+    if (trimmedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setErrorMessage(dict.validations.emailInvalid);
       return;
     }
-    if (!currentUser) {
-      const loginMsg =
-        language === 'hi'
-          ? 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें।'
-          : 'कृपया कोटेशन अनुरोध सबमिट करने के लिए पहले लॉगिन करें। (Please sign in first.)';
-      setErrorMessage(loginMsg);
-      showToast(loginMsg, 'alert');
-      return;
-    }
+
     setErrorMessage('');
     setSubmitting(true);
 
     try {
-      const quoteId = await submitQuotation({
+      const result = await submitLead({
         fullName: formData.fullName,
-        email: formData.email,
-        phone: formData.phone,
+        email: trimmedEmail,
+        phone: cleanPhone,
         company: formData.company,
         serviceType: formData.service,
         timeline: formData.timeline,
         budget: formData.budget,
         brief: formData.brief,
+        source: 'consultation_modal',
         language,
         user: currentUser,
         _hp: honeypot,
@@ -204,9 +224,9 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         timeline: formData.timeline,
         hasAttachment: Boolean(attachment),
       });
-      setSubmittedQuoteId(quoteId || '');
+      setSubmittedQuoteId(result.leadId || '');
       setIsSubmitted(true);
-      showToast(dict.notifications.consultationBooked, 'success');
+      showToast(language === 'hi' ? result.messageHi : result.messageEn, 'success');
     } catch (err: any) {
       const msg =
         err?.message ||
@@ -234,7 +254,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
       company: '',
       service: domain,
       timeline: '3-6-months',
-      budget: 'enterprise-custom',
+      budget: '',
       brief: '',
     });
     setAttachment(null);
@@ -285,12 +305,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <CheckCircle className="w-8 h-8" />
               </div>
               <h3 className="text-2xl font-bold text-slate-900">
-                {t('Architecture Consultation Requested', 'आर्किटेक्चर परामर्श अनुरोध प्राप्त हुआ')}
+                {t('Inquiry Received', 'पूछताछ प्राप्त हुई')}
               </h3>
-              <p className="text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+              <p className="text-sm text-slate-700 max-w-md mx-auto leading-relaxed font-medium">
                 {t(
-                  `Thank you, ${formData.fullName}. A Principal Solutions Architect from ${siteContact.name} will review your project requirements and connect via ${formData.email} within 4 business hours.`,
-                  `धन्यवाद, ${formData.fullName}। ${siteContact.name} के प्रमुख समाधान आर्किटेक्ट आपकी आवश्यकताओं की समीक्षा करेंगे और 4 व्यावसायिक घंटों के भीतर आपसे संपर्क करेंगे।`
+                  'Thank you! We have received your inquiry and will contact you soon.',
+                  'धन्यवाद! आपकी पूछताछ मिल गई है, हम जल्द संपर्क करेंगे।'
                 )}
               </p>
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 max-w-md mx-auto text-xs text-slate-600 text-left space-y-1.5">
@@ -301,17 +321,23 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <p>
                   <span className="font-bold text-slate-900">{t('Direct Line:', 'सीधा संपर्क:')}</span> {siteContact.phone}
                 </p>
-                <p>
-                  <span className="font-bold text-slate-900">{t('Confidentiality:', 'गोपनीयता:')}</span> {t('Protected under mutual NDA', 'सख्त एनडीए के तहत सुरक्षित')}
-                </p>
               </div>
-              <div className="pt-4">
+              <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
                 <button
                   onClick={handleReset}
                   className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs rounded-md transition-colors cursor-pointer"
                 >
                   {t('Return to Platform', 'प्लेटफ़ॉर्म पर वापस जाएं')}
                 </button>
+                <a
+                  href={whatsappHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                >
+                  <MessageCircle className="w-4 h-4 shrink-0" />
+                  <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
+                </a>
               </div>
             </div>
           ) : (
@@ -367,20 +393,22 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                       required
                       value={formData.fullName}
                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                      placeholder="e.g. Bhanu Ram Bariha"
+                      placeholder={t('e.g. Rajesh Sharma', 'उदा. राजेश शर्मा')}
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                     />
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      {t('Work Email *', 'कार्य ईमेल *')}
+                      {t('Mobile Number (10 digits) *', 'मोबाइल नंबर (10 अंक) *')}
                     </label>
                     <input
-                      type="email"
+                      type="tel"
                       required
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="name@enterprise.com"
+                      inputMode="numeric"
+                      maxLength={14}
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="9800000000"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                     />
                   </div>
@@ -389,13 +417,13 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      {t('Phone / WhatsApp', 'फ़ोन / व्हाट्सएप')}
+                      {t('Email (Optional)', 'ईमेल (वैकल्पिक)')}
                     </label>
                     <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+91 98000 00000"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="name@enterprise.com"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                     />
                   </div>
@@ -448,13 +476,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {t('Estimated Budget', 'अनुमानित बजट')}
+                    {t('Estimated Budget (Optional)', 'अनुमानित बजट (वैकल्पिक)')}
                   </label>
                   <select
                     value={formData.budget}
                     onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
                   >
+                    <option value="">{t('Select Budget (Optional)', 'बजट चुनें (वैकल्पिक)')}</option>
                     {QUOTE_BUDGET_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
                         {getOptionLabel(opt, language)}
@@ -465,45 +494,60 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    {t('Technical Objective / Scope Brief', 'तकनीकी उद्देश्य / संक्षिप्त विवरण')}
+                    {t('Message / Technical Requirements', 'संदेश / संक्षिप्त विवरण')}
                   </label>
                   <textarea
                     rows={3}
                     value={formData.brief}
                     onChange={(e) => setFormData({ ...formData, brief: e.target.value })}
                     placeholder={t(
-                      'Briefly describe your concurrency, platform requirements, or architectural challenges...',
-                      'अपनी समवर्ती क्षमता, प्लेटफॉर्म आवश्यकताओं या तकनीकी चुनौतियों का संक्षेप में वर्णन करें...'
+                      'Briefly describe your website, app, or technical requirements...',
+                      'अपनी वेबसाइट, ऐप या तकनीकी आवश्यकताओं का संक्षेप में वर्णन करें...'
                     )}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white"
                   />
                 </div>
 
-                {/* Validated File Uploader for RFP / Scope Document */}
-                <ValidatedFileUploader
-                  key={uploaderKey}
-                  label="Attach RFP / Scope Document (Optional)"
-                  labelHi="RFP / स्कोप दस्तावेज़ संलग्न करें (वैकल्पिक)"
-                  description="PDF, PNG, JPG, or DOCX (up to 10 MB with SHA-256 validation)"
-                  descriptionHi="PDF, PNG, JPG, या DOCX (10 MB तक SHA-256 सत्यापन के साथ)"
-                  category="consultation_rfp"
-                  onUploadSuccess={(file) => setAttachment(file)}
-                  onRemove={() => setAttachment(null)}
-                />
+                {/* Validated File Uploader for signed-in users */}
+                {currentUser && (
+                  <ValidatedFileUploader
+                    key={uploaderKey}
+                    label="Attach RFP / Scope Document (Optional)"
+                    labelHi="RFP / स्कोप दस्तावेज़ संलग्न करें (वैकल्पिक)"
+                    description="PDF, PNG, JPG, or DOCX (up to 10 MB with SHA-256 validation)"
+                    descriptionHi="PDF, PNG, JPG, या DOCX (10 MB तक SHA-256 सत्यापन के साथ)"
+                    category="consultation_rfp"
+                    onUploadSuccess={(file) => setAttachment(file)}
+                    onRemove={() => setAttachment(null)}
+                  />
+                )}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                   <div className="flex items-center gap-2 text-xs text-slate-600">
                     <Shield className="w-3.5 h-3.5 text-blue-700 shrink-0" />
-                    <span>{t('Strict NDA protected', 'सख्त एनडीए द्वारा सुरक्षित')}</span>
+                    <span>{t('No login required · Strict NDA protected', 'बिना लॉगिन पूछताछ · सुरक्षित गोपनीयता')}</span>
                   </div>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>{submitting ? t('Confirming...', 'पुष्टि हो रही है...') : t('Book Architecture Review', 'आर्किटेक्चर समीक्षा बुक करें')}</span>
+                    <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Book Consultation', 'परामर्श बुक करें')}</span>
                   </button>
+                </div>
+
+                {/* Direct WhatsApp CTA below form */}
+                <div className="pt-3 border-t border-slate-100">
+                  <a
+                    href={whatsappHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                  >
+                    <MessageCircle className="w-4 h-4 shrink-0" />
+                    <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
+                  </a>
                 </div>
               </form>
             </div>

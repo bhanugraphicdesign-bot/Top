@@ -155,6 +155,12 @@
       "properties": {
         "id": { "type": "string" },
         "invoiceNumber": { "type": "string" },
+        "documentType": { "type": "string", "enum": ["tax_invoice", "bill_of_supply"] },
+        "gstRegistered": { "type": "boolean" },
+        "supplierGstin": { "type": "string" },
+        "supplierLegalName": { "type": "string" },
+        "supplierStateCode": { "type": "string" },
+        "supplierStateName": { "type": "string" },
         "projectId": { "type": "string" },
         "projectName": { "type": "string" },
         "clientId": { "type": "string" },
@@ -162,10 +168,19 @@
         "clientEmail": { "type": "string", "format": "email" },
         "clientCompany": { "type": "string" },
         "clientGstin": { "type": "string" },
+        "clientStateCode": { "type": "string" },
+        "clientStateName": { "type": "string" },
         "milestoneTitle": { "type": "string" },
         "subtotal": { "type": "number" },
         "gstRate": { "type": "number" },
         "gstAmount": { "type": "number" },
+        "taxType": { "type": "string", "enum": ["none", "cgst_sgst", "igst"] },
+        "cgstRate": { "type": "number" },
+        "sgstRate": { "type": "number" },
+        "igstRate": { "type": "number" },
+        "cgstAmount": { "type": "number" },
+        "sgstAmount": { "type": "number" },
+        "igstAmount": { "type": "number" },
         "totalAmount": { "type": "number" },
         "amount": { "type": "number" },
         "taxAmount": { "type": "number" },
@@ -349,6 +364,58 @@
       },
       "required": ["orderId", "invoiceId", "amount", "uid", "used"]
     },
+    "PaymentSettings": {
+      "title": "PaymentSettings",
+      "description": "Server-only UPI payment and GST registration configuration managed exclusively by verified owner (payment_settings/upi and payment_settings/gst)",
+      "type": "object",
+      "properties": {
+        "upiId": { "type": "string", "maxLength": 193 },
+        "payeeName": { "type": "string", "maxLength": 120 },
+        "enabled": { "type": "boolean" },
+        "gstin": { "type": "string", "maxLength": 15 },
+        "legalName": { "type": "string", "maxLength": 160 },
+        "stateCode": { "type": "string", "pattern": "^[0-9]{2}$" },
+        "stateName": { "type": "string", "maxLength": 80 },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["updatedAt"]
+    },
+    "UpiPayment": {
+      "title": "UpiPayment",
+      "description": "Server-managed UPI payment record with manual owner verification",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referenceNumber": { "type": "string" },
+        "name": { "type": "string", "maxLength": 120 },
+        "mobile": { "type": "string", "pattern": "^[0-9]{10}$" },
+        "purpose": { "type": "string", "maxLength": 200 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "upiId": { "type": "string" },
+        "payeeName": { "type": "string" },
+        "utr": { "type": "string", "pattern": "^[0-9]{12}$" },
+        "status": { "type": "string", "enum": ["pending", "submitted", "paid", "rejected"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "verifiedAt": { "type": "string", "format": "date-time" },
+        "verifiedBy": { "type": "string" }
+      },
+      "required": ["id", "referenceNumber", "name", "mobile", "purpose", "amount", "status", "createdAt"]
+    },
+    "UpiPaymentCounter": {
+      "title": "UpiPaymentCounter",
+      "description": "Server-only daily atomic counter for PWS-YYYYMMDD-NNNN reference generation",
+      "type": "object",
+      "properties": {
+        "dateKey": { "type": "string" },
+        "seq": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["dateKey", "seq"]
+    },
     "TestDoc": {
       "title": "TestDoc",
       "description": "Restricted admin-only diagnostic probe document",
@@ -440,6 +507,18 @@
     "/payment_intents/{intentId}": {
       "schema": "PaymentIntent",
       "description": "Single-use server-tracked payment intents"
+    },
+    "/payment_settings/{settingId}": {
+      "schema": "PaymentSettings",
+      "description": "Server-only UPI payment configuration"
+    },
+    "/upi_payments/{paymentId}": {
+      "schema": "UpiPayment",
+      "description": "Server-managed real UPI payment records and UTR submissions"
+    },
+    "/upi_payment_counters/{counterId}": {
+      "schema": "UpiPaymentCounter",
+      "description": "Server-only daily sequential counters for UPI payment reference numbers"
     },
     "/test/{docId}": {
       "schema": "TestDoc",

@@ -38,6 +38,7 @@ const AndroidPortfolioPage = lazy(() => import('./pages/AndroidPortfolioPage').t
 const AppDetailPage = lazy(() => import('./pages/AppDetailPage').then((m) => ({ default: m.AppDetailPage })));
 const ProcessPage = lazy(() => import('./pages/ProcessPage').then((m) => ({ default: m.ProcessPage })));
 const ContactPage = lazy(() => import('./pages/ContactPage').then((m) => ({ default: m.ContactPage })));
+const PayPage = lazy(() => import('./pages/PayPage').then((m) => ({ default: m.PayPage })));
 const BlogPage = lazy(() => import('./pages/BlogPage').then((m) => ({ default: m.BlogPage })));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })));
 const TermsPage = lazy(() => import('./pages/TermsPage').then((m) => ({ default: m.TermsPage })));
@@ -68,6 +69,11 @@ const IntegrationSuiteDemo = lazy(() =>
     default: m.IntegrationSuiteDemo,
   }))
 );
+const MahaBazaarDemo = lazy(() =>
+  import('./demos/MahaBazaarDemo').then((m) => ({
+    default: m.MahaBazaarDemo,
+  }))
+);
 
 function MainApp() {
   const { currentRoute, params, navigate } = useNavigation();
@@ -76,6 +82,7 @@ function MainApp() {
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
   const [selectedApp, setSelectedApp] = useState<AndroidApp | null>(null);
   const [preselectedConsultService, setPreselectedConsultService] = useState('enterprise-software');
+  const [prefillConsultMessage, setPrefillConsultMessage] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const languageRef = useRef(language);
   languageRef.current = language;
@@ -86,22 +93,26 @@ function MainApp() {
 
   const handleOpenConsultation = (
     serviceType = 'enterprise-software',
-    ctaSource = 'schedule_consultation'
+    ctaSource = 'schedule_consultation',
+    prefillMsg = ''
   ) => {
     trackCtaClick(ctaSource, serviceType);
     setPreselectedConsultService(serviceType);
+    setPrefillConsultMessage(prefillMsg);
     setIsConsultationOpen(true);
   };
 
   const handleSelectServiceForConsult = (serviceId: string) => {
     trackCtaClick('service_detail_consultation', serviceId);
     setPreselectedConsultService(serviceId);
+    setPrefillConsultMessage('');
     setIsConsultationOpen(true);
   };
 
   const handleRequestApkDemo = (appId: string) => {
     trackCtaClick('android_apk_demo', `Android APK Demo (${appId})`);
     setPreselectedConsultService(`Android APK Demo (${appId})`);
+    setPrefillConsultMessage('');
     setIsConsultationOpen(true);
   };
 
@@ -156,6 +167,8 @@ function MainApp() {
         );
       case 'contact':
         return <ContactPage />;
+      case 'pay':
+        return <PayPage />;
       case 'blog':
         return <BlogPage />;
       case 'privacy':
@@ -168,12 +181,20 @@ function MainApp() {
         return <AdminDashboardPage />;
       case 'demo': {
         const slug = (params.slug || '').toLowerCase();
+        const buildDemoMsg = (hiName: string, enName: string) =>
+          language === 'hi'
+            ? `डेमो: ${hiName} जैसी वेबसाइट बनवानी है`
+            : `Demo: Interested in building a website like ${enName}`;
         if (slug === 'shopping') {
           return (
             <ShoppingDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('web-platforms', 'demo_shopping_build_website')
+                handleOpenConsultation(
+                  'web-platforms',
+                  'demo_shopping_build_website',
+                  buildDemoMsg('देसी बाज़ार', 'Desi Bazaar')
+                )
               }
             />
           );
@@ -183,7 +204,11 @@ function MainApp() {
             <CoreEngineeringDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('web-platforms', 'demo_core_engineering_build_website')
+                handleOpenConsultation(
+                  'web-platforms',
+                  'demo_core_engineering_build_website',
+                  buildDemoMsg('कोर इंजीनियरिंग', 'Core Engineering')
+                )
               }
             />
           );
@@ -193,7 +218,11 @@ function MainApp() {
             <WebEcosystemDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('web-platforms', 'demo_web_ecosystem_build_website')
+                handleOpenConsultation(
+                  'web-platforms',
+                  'demo_web_ecosystem_build_website',
+                  buildDemoMsg('वेब इकोसिस्टम', 'Web Ecosystem')
+                )
               }
             />
           );
@@ -203,7 +232,11 @@ function MainApp() {
             <MobileSystemDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('android-ecosystem', 'demo_mobile_system_build_website')
+                handleOpenConsultation(
+                  'android-ecosystem',
+                  'demo_mobile_system_build_website',
+                  buildDemoMsg('मोबाइल सिस्टम', 'Mobile System')
+                )
               }
             />
           );
@@ -213,7 +246,11 @@ function MainApp() {
             <ArtificialIntelligenceDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('ai-solutions', 'demo_ai_build_website')
+                handleOpenConsultation(
+                  'ai-solutions',
+                  'demo_ai_build_website',
+                  buildDemoMsg('आर्टिफिशियल इंटेलिजेंस', 'Artificial Intelligence')
+                )
               }
             />
           );
@@ -223,7 +260,11 @@ function MainApp() {
             <CloudEngineeringDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('enterprise-software', 'demo_cloud_engineering_build_website')
+                handleOpenConsultation(
+                  'cloud-devops',
+                  'demo_cloud_engineering_build_website',
+                  buildDemoMsg('क्लाउड इंजीनियरिंग', 'Cloud Engineering')
+                )
               }
             />
           );
@@ -233,7 +274,25 @@ function MainApp() {
             <IntegrationSuiteDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
-                handleOpenConsultation('enterprise-software', 'demo_integration_suite_build_website')
+                handleOpenConsultation(
+                  'api-integration',
+                  'demo_integration_suite_build_website',
+                  buildDemoMsg('इंटीग्रेशन सुइट', 'Integration Suite')
+                )
+              }
+            />
+          );
+        }
+        if (slug === 'maha-bazaar') {
+          return (
+            <MahaBazaarDemo
+              onBackToHome={() => navigate('home')}
+              onRequestQuote={() =>
+                handleOpenConsultation(
+                  'enterprise-software',
+                  'demo_maha_bazaar_build_platform',
+                  buildDemoMsg('महा बाज़ार प्लेटफ़ॉर्म', 'Maha Bazaar Platform')
+                )
               }
             />
           );
@@ -405,6 +464,7 @@ function MainApp() {
         isOpen={isConsultationOpen}
         onClose={() => setIsConsultationOpen(false)}
         preselectedService={preselectedConsultService}
+        prefillMessage={prefillConsultMessage}
       />
 
       <ServiceDetailModal

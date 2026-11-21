@@ -353,7 +353,7 @@ app.use(
     if (isAllowedCorsOrigin(reqOrigin, reqHost)) {
       callback(null, {
         origin: true,
-        methods: ['GET', 'POST', 'DELETE', 'OPTIONS'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization', 'X-Firebase-AppCheck', 'X-Payment-Gateway-Signature'],
         credentials: false,
         maxAge: 600,
@@ -1113,6 +1113,20 @@ const MAX_FORM_SUBMISSIONS_PER_WINDOW =
   Number.isFinite(parsedFormRateMax) && parsedFormRateMax > 0 ? parsedFormRateMax : 8;
 const MIN_FORM_FILL_TIME_MS = 1200; // 1.2 seconds minimum fill duration
 
+// Dedicated rate limit bucket for public lead submissions: max 5 requests per IP per 1 hour
+const leadRateMap = new Map<string, { count: number; resetTime: number }>();
+const LEAD_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_LEADS_PER_HOUR = 5;
+
+// Dedicated rate limit bucket for public UPI payment creation: max 10 requests per IP per 1 hour
+const paymentCreateRateMap = new Map<string, { count: number; resetTime: number }>();
+const PAYMENT_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const MAX_PAYMENTS_PER_HOUR = 10;
+
+// Dedicated rate limit bucket for public UPI UTR submission: max 20 requests per IP per 1 hour
+const paymentUtrRateMap = new Map<string, { count: number; resetTime: number }>();
+const MAX_PAYMENT_UTR_UPDATES_PER_HOUR = 20;
+
 function pruneExpiredRateBuckets(map: Map<string, { count: number; resetTime: number }>): void {
   const now = Date.now();
   for (const [key, entry] of map.entries()) {
@@ -1126,6 +1140,9 @@ setInterval(() => {
   pruneExpiredRateBuckets(rateLimitMap);
   pruneExpiredRateBuckets(uploadRateMap);
   pruneExpiredRateBuckets(formRateMap);
+  pruneExpiredRateBuckets(leadRateMap);
+  pruneExpiredRateBuckets(paymentCreateRateMap);
+  pruneExpiredRateBuckets(paymentUtrRateMap);
 }, 15 * 60 * 1000).unref();
 
 function getClientIp(req: express.Request): string {
@@ -1230,10 +1247,57 @@ function createFormRateLimiter(scope: 'validate' | 'quotation' | 'newsletter') {
   };
 }
 
+function createLeadRateLimiter() {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const clientIp = getClientIp(req);
+    const bucketKey = `lead:${clientIp}`;
+    const check = checkRateBucket(
+      leadRateMap,
+      bucketKey,
+      MAX_LEADS_PER_HOUR,
+      LEAD_RATE_LIMIT_WINDOW_MS
+    );
+
+    const retryAfterSeconds = Math.ceil(check.retryAfterMs / 1000);
+    res.setHeader('X-RateLimit-Limit', String(MAX_LEADS_PER_HOUR));
+    res.setHeader('X-RateLimit-Remaining', String(check.remaining));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil(check.resetTime / 1000)));
+
+    if (!check.allowed) {
+      const waitMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+      const errorEn = `Too many inquiries from your IP address (max 5 per hour). Please wait ${waitMinutes} minute(s) before trying again.`;
+      const errorHi = `एक घंटे में अधिकतम 5 पूछताछ की सीमा पूरी हो गई है। कृपया ${waitMinutes} मिनट बाद पुनः प्रयास करें।`;
+      const lang = resolveRequestedLanguage(req);
+
+      appendServerAuditEvent({
+        action: 'LEAD_RATE_LIMIT_EXCEEDED',
+        actorUid: 'anonymous',
+        actorEmail: typeof req.body?.email === 'string' ? req.body.email.trim().slice(0, 120) : 'guest',
+        resource: req.originalUrl,
+        outcome: 'DENIED',
+        ip: clientIp,
+        details: `Blocked lead submission: exceeded ${MAX_LEADS_PER_HOUR} requests per 1 hour window`,
+      });
+
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        code: 'RATE_LIMIT_EXCEEDED',
+        error: lang === 'hi' ? errorHi : lang === 'en' ? errorEn : `${errorEn} / ${errorHi}`,
+        errorEn,
+        errorHi,
+        retryAfterSeconds,
+        retryAfterMs: check.retryAfterMs,
+      });
+    }
+
+    return next();
+  };
+}
+
 function validateAntiBotFields(
   req: express.Request,
   res: express.Response,
-  scope: 'validate' | 'quotation' | 'newsletter'
+  scope: 'validate' | 'quotation' | 'newsletter' | 'lead' | 'payment'
 ): boolean {
   const { website, _hp, hpVerification, formOpenedAt, fillDurationMs } = req.body || {};
   const rawHoneypot = [website, _hp, hpVerification].find(
@@ -1414,6 +1478,43 @@ const attachmentSchema = z
   .optional()
   .nullable();
 
+function normalizeIndianPhone(raw: string): string {
+  const digits = String(raw || '').replace(/[^\d]/g, '');
+  if (digits.length === 12 && digits.startsWith('91')) {
+    return digits.slice(2);
+  }
+  if (digits.length === 11 && digits.startsWith('0')) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
+const leadInputSchema = z.object({
+  fullName: z.string().trim().min(1, 'REQUIRED_NAME').max(160, 'MAX_NAME'),
+  phone: z
+    .string()
+    .trim()
+    .min(1, 'REQUIRED_PHONE')
+    .max(40, 'INVALID_PHONE')
+    .transform(normalizeIndianPhone)
+    .refine((val) => /^\d{10}$/.test(val), 'INVALID_PHONE'),
+  email: z
+    .string()
+    .trim()
+    .max(160, 'MAX_EMAIL')
+    .optional()
+    .default('')
+    .refine((val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), 'INVALID_EMAIL'),
+  company: z.string().trim().max(160).optional().default(''),
+  serviceType: z.string().trim().min(1, 'REQUIRED_SERVICE').max(160, 'MAX_SERVICE'),
+  timeline: z.string().trim().max(64).optional().default('3-6-months'),
+  budget: z.string().trim().max(80).optional().default(''),
+  brief: z.string().trim().max(3000).optional().default(''),
+  source: z.string().trim().max(64).optional().default('contact_form'),
+  language: z.enum(['en', 'hi']).optional().default('hi'),
+  attachment: attachmentSchema,
+});
+
 const quotationInputSchema = z.object({
   fullName: z.string().trim().min(1, 'REQUIRED_NAME').max(160, 'MAX_NAME'),
   email: z.string().trim().email('INVALID_EMAIL').max(160, 'MAX_EMAIL'),
@@ -1461,9 +1562,12 @@ function mapFormZodError(
   if (firstCode === 'REQUIRED_NAME' || field === 'fullName') {
     errorEn = firstCode === 'MAX_NAME' ? 'Full name exceeds 160 characters.' : 'Full name is required and cannot be empty.';
     errorHi = firstCode === 'MAX_NAME' ? 'पूरा नाम 160 अक्षरों से अधिक नहीं हो सकता।' : 'पूरा नाम आवश्यक है और इसे खाली नहीं छोड़ा जा सकता।';
+  } else if (firstCode === 'REQUIRED_PHONE' || firstCode === 'INVALID_PHONE' || field === 'phone') {
+    errorEn = 'Please enter a valid 10-digit mobile number.';
+    errorHi = 'कृपया 10 अंकों का मान्य मोबाइल नंबर दर्ज करें।';
   } else if (firstCode === 'INVALID_EMAIL' || firstCode === 'MAX_EMAIL' || field === 'email') {
-    errorEn = 'Please enter a valid work email address.';
-    errorHi = 'कृपया एक मान्य कार्य ईमेल पता दर्ज करें।';
+    errorEn = 'Please enter a valid email address.';
+    errorHi = 'कृपया एक मान्य ईमेल पता दर्ज करें।';
   } else if (firstCode === 'REQUIRED_SERVICE' || firstCode === 'MAX_SERVICE' || field === 'serviceType') {
     errorEn = 'Please select a technical service domain.';
     errorHi = 'कृपया एक तकनीकी सेवा चुनें।';
@@ -2336,12 +2440,34 @@ app.post(
   }
 );
 
+// Preview-only in-memory leads buffer (used ONLY when IS_PREVIEW_ENV and Admin SDK ADC lacks IAM; never used in production)
+const previewLeadsStore = new Map<string, Record<string, any>>();
+const MAX_PREVIEW_LEADS = 500;
+
+function mergePreviewLeads(rows: Record<string, any>[]): Record<string, any>[] {
+  if (!IS_PREVIEW_ENV || previewLeadsStore.size === 0) {
+    return rows;
+  }
+  const merged = new Map<string, Record<string, any>>();
+  for (const row of rows) {
+    if (row?.id) merged.set(String(row.id), row);
+  }
+  for (const [id, lead] of previewLeadsStore.entries()) {
+    if (!merged.has(id)) {
+      merged.set(id, lead);
+    }
+  }
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+}
+
 // 1c-iv. Server-Side Admin Quotations List, Status Update & Deletion
 app.get('/api/admin/quotations', requireAdmin, async (req: AuthenticatedRequest, res) => {
   if (adminDb) {
     try {
       const snap = await adminDb.collection('quotations').get();
-      const quotations = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const quotations = mergePreviewLeads(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       return res.json({ ok: true, count: quotations.length, quotations, mode: 'admin_sdk_adc' });
     } catch (err) {
       if (!isFirestoreAdminCredentialError(err)) {
@@ -2353,13 +2479,24 @@ app.get('/api/admin/quotations', requireAdmin, async (req: AuthenticatedRequest,
   if (req.authToken) {
     const rows = await runFirestoreQueryRest('quotations', [], req.authToken);
     if (Array.isArray(rows)) {
+      const merged = mergePreviewLeads(rows);
       return res.json({
         ok: true,
-        count: rows.length,
-        quotations: rows,
+        count: merged.length,
+        quotations: merged,
         mode: 'firestore_rest_verified_admin',
       });
     }
+  }
+
+  if (IS_PREVIEW_ENV && previewLeadsStore.size > 0) {
+    const quotations = mergePreviewLeads([]);
+    return res.json({
+      ok: true,
+      count: quotations.length,
+      quotations,
+      mode: 'preview_memory',
+    });
   }
 
   return res.status(503).json({
@@ -2386,6 +2523,16 @@ app.patch(
     }
     const caller = req.authUser!;
     const nowIso = new Date().toISOString();
+    if (IS_PREVIEW_ENV && previewLeadsStore.has(quotationId)) {
+      const existing = previewLeadsStore.get(quotationId)!;
+      previewLeadsStore.set(quotationId, {
+        ...existing,
+        status: parsed.data.status,
+        updatedAt: nowIso,
+        updatedBy: caller.uid,
+      });
+      return res.json({ ok: true, id: quotationId, status: parsed.data.status, mode: 'preview_memory' });
+    }
     const writeRes = await adminMergeFirestoreDoc(
       'quotations',
       quotationId,
@@ -2421,6 +2568,10 @@ app.delete(
       return res.status(400).json({ error: 'Invalid quotation ID.' });
     }
     const caller = req.authUser!;
+    if (IS_PREVIEW_ENV && previewLeadsStore.has(quotationId)) {
+      previewLeadsStore.delete(quotationId);
+      return res.json({ ok: true, id: quotationId, mode: 'preview_memory' });
+    }
     const delRes = await adminDeleteFirestoreDoc('quotations', quotationId, req.authToken || '');
     if (!delRes.ok) {
       return res.status(delRes.status).json({ error: 'Unable to delete quotation.' });
@@ -2573,6 +2724,7 @@ interface PublicCatalogPayload {
 
 const PUBLIC_CATALOG_CACHE_TTL_MS = 10_000;
 let cachedPublicCatalog: { expiresAt: number; payload: PublicCatalogPayload } | null = null;
+let publicCatalogIamUnavailable = false;
 
 function serializeCatalogValue(value: unknown): unknown {
   if (value === null || value === undefined) return value;
@@ -2597,7 +2749,7 @@ function serializeCatalogValue(value: unknown): unknown {
 }
 
 app.get('/api/public/catalog', async (req, res) => {
-  if (!adminDb) {
+  if (!adminDb || publicCatalogIamUnavailable) {
     return res.json({
       configured: false,
       apps: [],
@@ -2641,7 +2793,11 @@ app.get('/api/public/catalog', async (req, res) => {
     res.setHeader('Cache-Control', 'public, max-age=10');
     return res.json(payload);
   } catch (err: any) {
-    console.warn('[Public Catalog Fallback]', err?.message || err);
+    if (isFirestoreAdminCredentialError(err)) {
+      publicCatalogIamUnavailable = true;
+    } else {
+      console.warn('[Public Catalog Fallback]', err?.message || err);
+    }
     return res.json({
       configured: false,
       apps: [],
@@ -2703,6 +2859,127 @@ app.post('/api/inquiries/validate', requireJsonContentType, createFormRateLimite
       receivedAt: new Date().toISOString(),
     },
   });
+});
+
+// 3a-0. Public Guest & Authenticated Lead Submission Endpoint (No login required; 5 req/IP/hour + Honeypot + App Check + Zod -> server-side Firestore)
+app.post('/api/leads', requireJsonContentType, createLeadRateLimiter(), async (req, res) => {
+  if (!validateAntiBotFields(req, res, 'lead')) {
+    return;
+  }
+  if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
+    return;
+  }
+
+  const lang = resolveRequestedLanguage(req);
+  const parsed = leadInputSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    const mapped = mapFormZodError(parsed.error, lang);
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      ...mapped,
+    });
+  }
+
+  // Optional authentication: attach verified Firebase UID if user is signed in
+  const verifiedAuth = await verifyFirebaseBearerToken(req);
+
+  const data = parsed.data;
+  const leadId = `lead-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+  const createdAt = new Date().toISOString();
+  const normalizedEmail = data.email ? data.email.toLowerCase() : '';
+  const payload = {
+    id: leadId,
+    uid: verifiedAuth?.user.uid || null,
+    clientName: data.fullName,
+    clientEmail: normalizedEmail,
+    phone: data.phone,
+    company: data.company,
+    serviceType: data.serviceType,
+    timeline: data.timeline,
+    estimatedBudget: data.budget,
+    brief: data.brief,
+    source: data.source,
+    attachment: data.attachment
+      ? {
+          fileUrl: data.attachment.fileUrl || '',
+          fileName: data.attachment.fileName || '',
+          sha256: data.attachment.sha256 || '',
+          fileSizeFormatted: data.attachment.fileSizeFormatted || '',
+        }
+      : null,
+    status: 'pending',
+    createdAt,
+  };
+
+  const msgHi = 'धन्यवाद! आपकी पूछताछ मिल गई है, हम जल्द संपर्क करेंगे।';
+  const msgEn = 'Thank you! We have received your inquiry and will contact you soon.';
+
+  try {
+    if (!adminDb) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
+    await adminDb.collection('quotations').doc(leadId).set(payload);
+
+    void appendServerAuditEvent({
+      action: 'LEAD_SUBMITTED',
+      actorUid: verifiedAuth?.user.uid || 'guest',
+      actorEmail: verifiedAuth?.user.email || normalizedEmail || `phone:${data.phone}`,
+      resource: `quotations/${leadId}`,
+      outcome: 'SUCCESS',
+      ip: getClientIp(req),
+      details: `Lead submitted (${data.serviceType}) by ${verifiedAuth ? 'authenticated user' : 'guest'}`,
+    });
+
+    return res.status(201).json({
+      success: true,
+      leadId,
+      quoteId: leadId,
+      storageMode: 'firestore_admin',
+      message: lang === 'en' ? msgEn : msgHi,
+      messageEn: msgEn,
+      messageHi: msgHi,
+    });
+  } catch (err) {
+    if (isFirestoreAdminCredentialError(err)) {
+      if (verifiedAuth?.rawToken && normalizedEmail) {
+        const restWrite = await createFirestoreDocumentRest(
+          'quotations',
+          leadId,
+          payload,
+          verifiedAuth.rawToken
+        );
+        if (restWrite.ok) {
+          return res.status(201).json({
+            success: true,
+            leadId,
+            quoteId: leadId,
+            storageMode: 'firestore_rest',
+            message: lang === 'en' ? msgEn : msgHi,
+            messageEn: msgEn,
+            messageHi: msgHi,
+          });
+        }
+      }
+      if (IS_PREVIEW_ENV) {
+        if (previewLeadsStore.size >= MAX_PREVIEW_LEADS) {
+          const oldestKey = previewLeadsStore.keys().next().value;
+          if (oldestKey) previewLeadsStore.delete(oldestKey);
+        }
+        previewLeadsStore.set(leadId, payload);
+        return res.status(201).json({
+          success: true,
+          leadId,
+          quoteId: leadId,
+          storageMode: 'preview_memory',
+          message: lang === 'en' ? msgEn : msgHi,
+          messageEn: msgEn,
+          messageHi: msgHi,
+        });
+      }
+    }
+    console.error('[Lead Submit Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to save inquiry right now.', lang);
+  }
 });
 
 // 3a. Authoritative Server-Side Quotation Submission Endpoint (Rate-limited + JSON CSRF guard + Honeypot + App Check + Zod -> firebase-admin)
@@ -3994,6 +4271,8 @@ app.post('/api/payments/verify', requireAuth, requireJsonContentType, async (req
 });
 
 // 12. Admin Invoice Generator (Strict Verified Admin Only -> Firestore `invoices`)
+// Automatically respects owner's saved GST settings: Bill of Supply (0% GST) when unregistered,
+// or Tax Invoice (CGST 9%+SGST 9% intra-state / IGST 18% inter-state, SAC 998313) when registered.
 app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (req: AuthenticatedRequest, res) => {
   if (!adminDb && !req.authToken) {
     return res.status(503).json({
@@ -4010,6 +4289,7 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
     clientEmail,
     clientCompany,
     clientGstin,
+    clientStateCode,
     milestoneTitle,
     subtotal,
   } = req.body || {};
@@ -4024,12 +4304,85 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
     return res.status(400).json({ error: 'A valid clientEmail is required' });
   }
 
-  const gstRate = 18;
-  const gstAmount = Math.round((numSubtotal * gstRate) / 100);
-  const totalAmount = numSubtotal + gstAmount;
+  const cleanedClientGstin =
+    typeof clientGstin === 'string' ? clientGstin.trim().toUpperCase() : '';
+  if (cleanedClientGstin && !GSTIN_REGEX.test(cleanedClientGstin)) {
+    return res.status(400).json({
+      code: 'INVALID_CLIENT_GSTIN',
+      error: 'अमान्य ग्राहक GSTIN। कृपया 15 अक्षरों का सही GSTIN दर्ज करें या खाली छोड़ दें।',
+    });
+  }
+
+  let gstSettings: StoredGstSettings;
+  try {
+    gstSettings = await readGstSettings();
+  } catch (err) {
+    console.error('[Invoice Generate GST Settings Read Error]', err);
+    gstSettings = { ...DEFAULT_GST_SETTINGS };
+  }
+
+  const gstRegistered = isStoredGstRegistered(gstSettings);
+  const supplierStateCode = gstSettings.stateCode || DEFAULT_GST_STATE_CODE;
+  const supplierStateName =
+    INDIAN_GST_STATE_MAP[supplierStateCode] || gstSettings.stateName || 'Chhattisgarh';
+  const supplierLegalName = gstSettings.legalName || DEFAULT_UPI_PAYEE_NAME;
+
+  let resolvedClientStateCode = supplierStateCode;
+  if (typeof clientStateCode === 'string' && INDIAN_GST_STATE_MAP[clientStateCode.trim()]) {
+    resolvedClientStateCode = clientStateCode.trim();
+  }
+  if (cleanedClientGstin) {
+    const gstinPrefix = cleanedClientGstin.slice(0, 2);
+    if (!INDIAN_GST_STATE_MAP[gstinPrefix]) {
+      return res.status(400).json({
+        code: 'INVALID_CLIENT_GSTIN_STATE',
+        error: 'ग्राहक GSTIN के पहले 2 अंक मान्य भारतीय राज्य कोड नहीं हैं।',
+      });
+    }
+    resolvedClientStateCode = gstinPrefix;
+  }
+  const resolvedClientStateName = INDIAN_GST_STATE_MAP[resolvedClientStateCode] || supplierStateName;
+
+  let documentType: 'tax_invoice' | 'bill_of_supply' = 'bill_of_supply';
+  let taxType: 'none' | 'cgst_sgst' | 'igst' = 'none';
+  let gstRate = 0;
+  let cgstRate = 0;
+  let sgstRate = 0;
+  let igstRate = 0;
+  let cgstAmount = 0;
+  let sgstAmount = 0;
+  let igstAmount = 0;
+  let gstAmount = 0;
+  let totalAmount = numSubtotal;
+  let hsnSac = '';
+  let supplierGstin = '';
+
+  if (gstRegistered) {
+    documentType = 'tax_invoice';
+    gstRate = 18;
+    hsnSac = '998313';
+    supplierGstin = gstSettings.gstin;
+    const isIntraState = resolvedClientStateCode === supplierStateCode;
+    if (isIntraState) {
+      taxType = 'cgst_sgst';
+      cgstRate = 9;
+      sgstRate = 9;
+      cgstAmount = Math.round((numSubtotal * 9) / 100);
+      sgstAmount = Math.round((numSubtotal * 9) / 100);
+      gstAmount = cgstAmount + sgstAmount;
+    } else {
+      taxType = 'igst';
+      igstRate = 18;
+      igstAmount = Math.round((numSubtotal * 18) / 100);
+      gstAmount = igstAmount;
+    }
+    totalAmount = numSubtotal + gstAmount;
+  }
+
   const randSuffix = String(1000 + (crypto.randomBytes(2).readUInt16BE(0) % 9000));
   const uniqueTag = crypto.randomBytes(2).toString('hex').toUpperCase();
-  const invoiceNumber = `INV-${new Date().getFullYear()}-${randSuffix}-${uniqueTag}`;
+  const docPrefix = documentType === 'tax_invoice' ? 'INV' : 'BOS';
+  const invoiceNumber = `${docPrefix}-${new Date().getFullYear()}-${randSuffix}-${uniqueTag}`;
   const invoiceId = `inv-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   const normalizedClientEmail = clientEmail.trim().toLowerCase();
 
@@ -4075,6 +4428,12 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
   const newInvoice = {
     id: invoiceId,
     invoiceNumber,
+    documentType,
+    gstRegistered,
+    supplierGstin,
+    supplierLegalName,
+    supplierStateCode,
+    supplierStateName,
     projectId: typeof projectId === 'string' && projectId.trim() ? projectId.trim() : 'proj-custom',
     projectName:
       typeof projectName === 'string' && projectName.trim()
@@ -4091,8 +4450,9 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
       typeof clientCompany === 'string' && clientCompany.trim()
         ? clientCompany.trim().substring(0, 160)
         : 'Enterprise Client Ltd.',
-    clientGstin:
-      typeof clientGstin === 'string' && clientGstin.trim() ? clientGstin.trim() : '21AAACK0000A1Z0',
+    clientGstin: cleanedClientGstin,
+    clientStateCode: resolvedClientStateCode,
+    clientStateName: resolvedClientStateName,
     milestoneTitle:
       typeof milestoneTitle === 'string' && milestoneTitle.trim()
         ? milestoneTitle.trim().substring(0, 200)
@@ -4101,15 +4461,27 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
     subtotal: numSubtotal,
     gstRate,
     gstAmount,
+    taxType,
+    cgstRate,
+    sgstRate,
+    igstRate,
+    cgstAmount,
+    sgstAmount,
+    igstAmount,
     totalAmount,
     currency: 'INR',
-    hsnSac: '998313',
+    hsnSac,
     status: 'issued',
     issuedAt: new Date().toISOString(),
     dueAt: new Date(Date.now() + 15 * 86400 * 1000).toISOString(),
     issuedByAdmin: req.authUser!.email,
     verificationHash,
   };
+
+  const successMessage =
+    documentType === 'tax_invoice'
+      ? 'Official GST Tax Invoice generated and committed to Cloud Firestore.'
+      : 'Bill of Supply (0% GST — unregistered) generated and committed to Cloud Firestore.';
 
   try {
     if (adminDb) {
@@ -4137,12 +4509,12 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
       resource: `invoices/${invoiceId}`,
       outcome: 'SUCCESS',
       ip: getClientIp(req),
-      details: `Generated ${invoiceNumber} for ${newInvoice.clientEmail} (INR ${totalAmount})`,
+      details: `Generated ${documentType} ${invoiceNumber} for ${newInvoice.clientEmail} (INR ${totalAmount}, GST ${gstRate}%)`,
     });
 
     return res.status(201).json({
       success: true,
-      message: 'Official GST tax invoice generated and committed to Cloud Firestore.',
+      message: successMessage,
       invoice: newInvoice,
     });
   } catch (err) {
@@ -4151,7 +4523,7 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
       if (restWrite.ok) {
         return res.status(201).json({
           success: true,
-          message: 'Official GST tax invoice generated and committed to Cloud Firestore.',
+          message: successMessage,
           invoice: newInvoice,
         });
       }
@@ -4160,6 +4532,1063 @@ app.post('/api/invoices/generate', requireAdmin, requireJsonContentType, async (
     return sendFirestoreRouteError(res, err, 'Unable to persist generated invoice to Firestore.');
   }
 });
+
+/* =========================================================================
+   13. REAL UPI PAYMENT SETTINGS & SERVER-TRACKED UPI PAYMENTS (NO HARDCODED UPI)
+   ========================================================================= */
+const DEFAULT_UPI_PAYEE_NAME = 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES';
+const UPI_ID_REGEX = /^[a-zA-Z0-9._-]{2,128}@[a-zA-Z][a-zA-Z0-9]{1,63}$/;
+const UPI_PAYMENT_SETTINGS_DOC_ID = 'upi';
+
+interface StoredUpiPaymentSettings {
+  upiId: string;
+  payeeName: string;
+  enabled: boolean;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+interface StoredUpiPaymentRecord {
+  id: string;
+  referenceNumber: string;
+  name: string;
+  mobile: string;
+  purpose: string;
+  amount: number;
+  currency: 'INR';
+  upiId: string;
+  payeeName: string;
+  utr: string;
+  status: 'pending' | 'submitted' | 'paid' | 'rejected';
+  createdAt: string;
+  updatedAt: string;
+  submittedAt: string | null;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
+  clientIp?: string;
+}
+
+// Preview-only fallback stores used strictly when running in AI Studio Preview without Cloud Run IAM on Admin SDK
+let previewUpiPaymentSettings: StoredUpiPaymentSettings = {
+  upiId: '',
+  payeeName: DEFAULT_UPI_PAYEE_NAME,
+  enabled: false,
+  updatedAt: null,
+  updatedBy: null,
+};
+const previewUpiPaymentsStore = new Map<string, StoredUpiPaymentRecord>();
+const previewUpiDailyCounters = new Map<string, number>();
+const MAX_PREVIEW_UPI_PAYMENTS = 500;
+
+function getIstDateStamp(): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find((p) => p.type === 'year')?.value || '2026';
+  const m = parts.find((p) => p.type === 'month')?.value || '01';
+  const d = parts.find((p) => p.type === 'day')?.value || '01';
+  return `${y}${m}${d}`;
+}
+
+function toSafePublicPaymentDto(rec: StoredUpiPaymentRecord) {
+  return {
+    id: rec.id,
+    referenceNumber: rec.referenceNumber,
+    name: rec.name,
+    mobile: rec.mobile,
+    purpose: rec.purpose,
+    amount: rec.amount,
+    currency: rec.currency,
+    upiId: rec.upiId,
+    payeeName: rec.payeeName,
+    utr: rec.utr,
+    status: rec.status,
+    createdAt: rec.createdAt,
+    updatedAt: rec.updatedAt,
+    submittedAt: rec.submittedAt,
+    verifiedAt: rec.verifiedAt,
+    verifiedBy: rec.verifiedBy,
+  };
+}
+
+async function readUpiPaymentSettings(): Promise<StoredUpiPaymentSettings> {
+  if (adminDb) {
+    try {
+      const snap = await adminDb
+        .collection('payment_settings')
+        .doc(UPI_PAYMENT_SETTINGS_DOC_ID)
+        .get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        return {
+          upiId: typeof data.upiId === 'string' ? data.upiId.trim() : '',
+          payeeName:
+            typeof data.payeeName === 'string' && data.payeeName.trim().length >= 2
+              ? data.payeeName.trim()
+              : DEFAULT_UPI_PAYEE_NAME,
+          enabled: Boolean(data.enabled),
+          updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+          updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null,
+        };
+      }
+      return {
+        upiId: '',
+        payeeName: DEFAULT_UPI_PAYEE_NAME,
+        enabled: false,
+        updatedAt: null,
+        updatedBy: null,
+      };
+    } catch (err) {
+      if (IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err)) {
+        return { ...previewUpiPaymentSettings };
+      }
+      throw err;
+    }
+  }
+  if (IS_PREVIEW_ENV) {
+    return { ...previewUpiPaymentSettings };
+  }
+  throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+}
+
+async function saveUpiPaymentSettings(
+  next: StoredUpiPaymentSettings
+): Promise<{ mode: 'firestore_admin' | 'preview_memory' }> {
+  if (adminDb) {
+    try {
+      await adminDb
+        .collection('payment_settings')
+        .doc(UPI_PAYMENT_SETTINGS_DOC_ID)
+        .set(next, { merge: false });
+      return { mode: 'firestore_admin' };
+    } catch (err) {
+      if (IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err)) {
+        previewUpiPaymentSettings = { ...next };
+        return { mode: 'preview_memory' };
+      }
+      throw err;
+    }
+  }
+  if (IS_PREVIEW_ENV) {
+    previewUpiPaymentSettings = { ...next };
+    return { mode: 'preview_memory' };
+  }
+  throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+}
+
+async function allocateUpiReferenceNumber(): Promise<{
+  referenceNumber: string;
+  dateStamp: string;
+  mode: 'firestore_admin' | 'preview_memory';
+}> {
+  const dateStamp = getIstDateStamp();
+  if (adminDb) {
+    try {
+      const counterRef = adminDb.collection('upi_payment_counters').doc(dateStamp);
+      const nextSeq = await adminDb.runTransaction(async (tx) => {
+        const snap = await tx.get(counterRef);
+        const current = snap.exists && typeof snap.data()?.seq === 'number' ? snap.data()!.seq : 0;
+        const incremented = current + 1;
+        tx.set(
+          counterRef,
+          { dateKey: dateStamp, seq: incremented, updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+        return incremented;
+      });
+      return {
+        referenceNumber: `PWS-${dateStamp}-${String(nextSeq).padStart(4, '0')}`,
+        dateStamp,
+        mode: 'firestore_admin',
+      };
+    } catch (err) {
+      if (!(IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err))) {
+        throw err;
+      }
+    }
+  }
+
+  if (IS_PREVIEW_ENV) {
+    const current = previewUpiDailyCounters.get(dateStamp) || 0;
+    const nextSeq = current + 1;
+    previewUpiDailyCounters.set(dateStamp, nextSeq);
+    return {
+      referenceNumber: `PWS-${dateStamp}-${String(nextSeq).padStart(4, '0')}`,
+      dateStamp,
+      mode: 'preview_memory',
+    };
+  }
+
+  throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+}
+
+function createUpiPaymentRateLimiter(kind: 'create' | 'utr') {
+  const map = kind === 'create' ? paymentCreateRateMap : paymentUtrRateMap;
+  const limit = kind === 'create' ? MAX_PAYMENTS_PER_HOUR : MAX_PAYMENT_UTR_UPDATES_PER_HOUR;
+
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const clientIp = getClientIp(req);
+    const check = checkRateBucket(map, `upi_${kind}:${clientIp}`, limit, PAYMENT_RATE_LIMIT_WINDOW_MS);
+    const retryAfterSeconds = Math.ceil(check.retryAfterMs / 1000);
+    res.setHeader('X-RateLimit-Limit', String(limit));
+    res.setHeader('X-RateLimit-Remaining', String(check.remaining));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil(check.resetTime / 1000)));
+
+    if (!check.allowed) {
+      const waitMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+      const errorHi = `एक घंटे में अधिकतम ${limit} भुगतान अनुरोधों की सीमा पूरी हो गई है। कृपया ${waitMinutes} मिनट बाद पुनः प्रयास करें।`;
+      const errorEn = `Too many payment requests from your IP (max ${limit} per hour). Please wait ${waitMinutes} minute(s).`;
+      const lang = resolveRequestedLanguage(req);
+      res.setHeader('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        code: 'RATE_LIMIT_EXCEEDED',
+        error: lang === 'en' ? errorEn : errorHi,
+        errorEn,
+        errorHi,
+        retryAfterSeconds,
+      });
+    }
+    return next();
+  };
+}
+
+const adminPaymentSettingsSchema = z
+  .object({
+    upiId: z
+      .string()
+      .trim()
+      .max(193, 'UPI ID बहुत लंबा है।')
+      .optional()
+      .default(''),
+    payeeName: z
+      .string()
+      .trim()
+      .max(120, 'पाने वाले का नाम अधिकतम 120 अक्षरों का हो सकता है।')
+      .optional()
+      .default(DEFAULT_UPI_PAYEE_NAME),
+    enabled: z.boolean(),
+  })
+  .superRefine((val, ctx) => {
+    const cleanedUpi = val.upiId.trim();
+    if (val.enabled && !cleanedUpi) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['upiId'],
+        message: 'भुगतान चालू करने के लिए मान्य UPI ID डालना आवश्यक है।',
+      });
+      return;
+    }
+    if (cleanedUpi && !UPI_ID_REGEX.test(cleanedUpi)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['upiId'],
+        message: 'मान्य UPI ID दर्ज करें (उदाहरण: name@okaxis या business@ybl)।',
+      });
+    }
+    if (val.payeeName && val.payeeName.trim().length > 0 && val.payeeName.trim().length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['payeeName'],
+        message: 'पाने वाले का नाम कम से कम 2 अक्षरों का होना चाहिए।',
+      });
+    }
+  });
+
+const createUpiPaymentSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, 'कृपया अपना पूरा नाम लिखें (कम से कम 2 अक्षर)।')
+    .max(120, 'नाम अधिकतम 120 अक्षरों का हो सकता है।'),
+  mobile: z
+    .string()
+    .trim()
+    .regex(/^\d{10}$/, 'कृपया 10 अंकों का सही मोबाइल नंबर दर्ज करें।'),
+  purpose: z
+    .string()
+    .trim()
+    .min(2, 'कृपया बताएं कि यह भुगतान किस काम/सेवा/इनवॉइस के लिए है।')
+    .max(200, 'विवरण अधिकतम 200 अक्षरों का हो सकता है।'),
+  amount: z.preprocess(
+    (v) => (typeof v === 'string' && v.trim() !== '' ? Number(v) : v),
+    z
+      .number({ message: 'कृपया सही रकम (₹) दर्ज करें।' })
+      .finite('कृपया सही रकम (₹) दर्ज करें।')
+      .min(1, 'न्यूनतम भुगतान राशि ₹1 होनी चाहिए।')
+      .max(10000000, 'अधिकतम एकल UPI भुगतान सीमा पार हो गई है।')
+  ),
+  language: z.enum(['hi', 'en']).optional(),
+});
+
+const submitUpiUtrSchema = z.object({
+  utr: z
+    .string()
+    .trim()
+    .regex(/^\d{12}$/, 'कृपया 12 अंकों का मान्य UTR / रेफ़रेंस नंबर दर्ज करें।'),
+});
+
+const adminUpiPaymentStatusSchema = z.object({
+  status: z.enum(['paid', 'rejected']),
+});
+
+// 13a. Public Payment Settings (returns ONLY enabled, upiId, payeeName; hides upiId when disabled)
+app.get('/api/payment-settings', async (_req, res) => {
+  try {
+    const settings = await readUpiPaymentSettings();
+    const isActive = Boolean(settings.enabled && settings.upiId && UPI_ID_REGEX.test(settings.upiId));
+    return res.json({
+      enabled: isActive,
+      upiId: isActive ? settings.upiId : '',
+      payeeName: settings.payeeName || DEFAULT_UPI_PAYEE_NAME,
+    });
+  } catch (err) {
+    if (isFirestoreAdminCredentialError(err)) {
+      return res.json({
+        enabled: false,
+        upiId: '',
+        payeeName: DEFAULT_UPI_PAYEE_NAME,
+      });
+    }
+    console.error('[GET /api/payment-settings Error]', err);
+    return res.status(500).json({ error: 'Unable to load payment settings.' });
+  }
+});
+
+// 13b. Owner/Admin Read Payment Settings (full stored values including when disabled)
+app.get('/api/admin/payment-settings', requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  try {
+    const settings = await readUpiPaymentSettings();
+    return res.json({
+      ok: true,
+      settings: {
+        upiId: settings.upiId,
+        payeeName: settings.payeeName || DEFAULT_UPI_PAYEE_NAME,
+        enabled: Boolean(settings.enabled),
+        updatedAt: settings.updatedAt,
+        updatedBy: settings.updatedBy,
+      },
+    });
+  } catch (err) {
+    console.error('[GET /api/admin/payment-settings Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to load payment settings.');
+  }
+});
+
+// 13c. Owner/Admin Save Payment Settings (PUT /api/admin/payment-settings)
+app.put(
+  '/api/admin/payment-settings',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const parsed = adminPaymentSettingsSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        error: firstIssue?.message || 'अमान्य भुगतान सेटिंग्स।',
+        field: firstIssue?.path?.[0] ? String(firstIssue.path[0]) : undefined,
+      });
+    }
+
+    const caller = req.authUser!;
+    const nowIso = new Date().toISOString();
+    const nextSettings: StoredUpiPaymentSettings = {
+      upiId: parsed.data.upiId.trim(),
+      payeeName: (parsed.data.payeeName || '').trim() || DEFAULT_UPI_PAYEE_NAME,
+      enabled: parsed.data.enabled,
+      updatedAt: nowIso,
+      updatedBy: caller.email || caller.uid,
+    };
+
+    try {
+      const saved = await saveUpiPaymentSettings(nextSettings);
+      void appendServerAuditEvent({
+        action: 'PAYMENT_SETTINGS_UPDATED',
+        actorUid: caller.uid,
+        actorEmail: caller.email || caller.uid,
+        resource: `payment_settings/${UPI_PAYMENT_SETTINGS_DOC_ID}`,
+        outcome: 'SUCCESS',
+        ip: getClientIp(req),
+        details: `UPI payments ${nextSettings.enabled ? 'ENABLED' : 'DISABLED'} (${saved.mode})`,
+      });
+
+      return res.json({
+        ok: true,
+        mode: saved.mode,
+        settings: nextSettings,
+      });
+    } catch (err) {
+      console.error('[PUT /api/admin/payment-settings Error]', err);
+      return sendFirestoreRouteError(res, err, 'Unable to save payment settings.');
+    }
+  }
+);
+
+/* =========================================================================
+   13B. CONDITIONAL GST SETTINGS (FIRESTORE payment_settings/gst — OWNER ONLY WRITE)
+   ========================================================================= */
+const GST_SETTINGS_DOC_ID = 'gst';
+const DEFAULT_GST_STATE_CODE = '22';
+const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+
+const INDIAN_GST_STATE_MAP: Record<string, string> = {
+  '01': 'Jammu and Kashmir',
+  '02': 'Himachal Pradesh',
+  '03': 'Punjab',
+  '04': 'Chandigarh',
+  '05': 'Uttarakhand',
+  '06': 'Haryana',
+  '07': 'Delhi',
+  '08': 'Rajasthan',
+  '09': 'Uttar Pradesh',
+  '10': 'Bihar',
+  '11': 'Sikkim',
+  '12': 'Arunachal Pradesh',
+  '13': 'Nagaland',
+  '14': 'Manipur',
+  '15': 'Mizoram',
+  '16': 'Tripura',
+  '17': 'Meghalaya',
+  '18': 'Assam',
+  '19': 'West Bengal',
+  '20': 'Jharkhand',
+  '21': 'Odisha',
+  '22': 'Chhattisgarh',
+  '23': 'Madhya Pradesh',
+  '24': 'Gujarat',
+  '26': 'Dadra and Nagar Haveli and Daman and Diu',
+  '27': 'Maharashtra',
+  '29': 'Karnataka',
+  '30': 'Goa',
+  '31': 'Lakshadweep',
+  '32': 'Kerala',
+  '33': 'Tamil Nadu',
+  '34': 'Puducherry',
+  '35': 'Andaman and Nicobar Islands',
+  '36': 'Telangana',
+  '37': 'Andhra Pradesh',
+  '38': 'Ladakh',
+};
+
+interface StoredGstSettings {
+  gstin: string;
+  legalName: string;
+  stateCode: string;
+  stateName: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+const DEFAULT_GST_SETTINGS: StoredGstSettings = {
+  gstin: '',
+  legalName: DEFAULT_UPI_PAYEE_NAME,
+  stateCode: DEFAULT_GST_STATE_CODE,
+  stateName: INDIAN_GST_STATE_MAP[DEFAULT_GST_STATE_CODE],
+  updatedAt: null,
+  updatedBy: null,
+};
+
+let previewGstSettings: StoredGstSettings = { ...DEFAULT_GST_SETTINGS };
+
+function isStoredGstRegistered(settings: StoredGstSettings): boolean {
+  const gstin = String(settings.gstin || '').trim().toUpperCase();
+  const stateCode = String(settings.stateCode || DEFAULT_GST_STATE_CODE).trim();
+  return Boolean(
+    gstin &&
+      GSTIN_REGEX.test(gstin) &&
+      Boolean(INDIAN_GST_STATE_MAP[stateCode]) &&
+      gstin.slice(0, 2) === stateCode
+  );
+}
+
+async function readGstSettings(): Promise<StoredGstSettings> {
+  if (adminDb) {
+    try {
+      const snap = await adminDb
+        .collection('payment_settings')
+        .doc(GST_SETTINGS_DOC_ID)
+        .get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        const rawCode =
+          typeof data.stateCode === 'string' && INDIAN_GST_STATE_MAP[data.stateCode.trim()]
+            ? data.stateCode.trim()
+            : DEFAULT_GST_STATE_CODE;
+        const rawGstin =
+          typeof data.gstin === 'string' ? data.gstin.trim().toUpperCase() : '';
+        return {
+          gstin: rawGstin,
+          legalName:
+            typeof data.legalName === 'string' && data.legalName.trim().length >= 2
+              ? data.legalName.trim()
+              : DEFAULT_UPI_PAYEE_NAME,
+          stateCode: rawCode,
+          stateName: INDIAN_GST_STATE_MAP[rawCode],
+          updatedAt: typeof data.updatedAt === 'string' ? data.updatedAt : null,
+          updatedBy: typeof data.updatedBy === 'string' ? data.updatedBy : null,
+        };
+      }
+      return { ...DEFAULT_GST_SETTINGS };
+    } catch (err) {
+      if (IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err)) {
+        return { ...previewGstSettings };
+      }
+      throw err;
+    }
+  }
+  if (IS_PREVIEW_ENV) {
+    return { ...previewGstSettings };
+  }
+  throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+}
+
+async function saveGstSettings(
+  next: StoredGstSettings
+): Promise<{ mode: 'firestore_admin' | 'preview_memory' }> {
+  if (adminDb) {
+    try {
+      await adminDb
+        .collection('payment_settings')
+        .doc(GST_SETTINGS_DOC_ID)
+        .set(next, { merge: false });
+      return { mode: 'firestore_admin' };
+    } catch (err) {
+      if (IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err)) {
+        previewGstSettings = { ...next };
+        return { mode: 'preview_memory' };
+      }
+      throw err;
+    }
+  }
+  if (IS_PREVIEW_ENV) {
+    previewGstSettings = { ...next };
+    return { mode: 'preview_memory' };
+  }
+  throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+}
+
+const adminGstSettingsSchema = z
+  .object({
+    gstin: z
+      .string()
+      .trim()
+      .max(15, 'GSTIN ठीक 15 अक्षरों का होना चाहिए।')
+      .optional()
+      .default(''),
+    legalName: z
+      .string()
+      .trim()
+      .max(160, 'कानूनी नाम अधिकतम 160 अक्षरों का हो सकता है।')
+      .optional()
+      .default(DEFAULT_UPI_PAYEE_NAME),
+    stateCode: z
+      .string()
+      .trim()
+      .regex(/^[0-9]{2}$/, 'कृपया मान्य 2 अंकों का राज्य कोड चुनें।')
+      .optional()
+      .default(DEFAULT_GST_STATE_CODE),
+  })
+  .superRefine((val, ctx) => {
+    const stateCode = val.stateCode || DEFAULT_GST_STATE_CODE;
+    if (!INDIAN_GST_STATE_MAP[stateCode]) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['stateCode'],
+        message: 'चुना गया भारतीय राज्य कोड मान्य नहीं है।',
+      });
+      return;
+    }
+    const cleanedGstin = val.gstin.trim().toUpperCase();
+    if (cleanedGstin) {
+      if (cleanedGstin.length !== 15 || !GSTIN_REGEX.test(cleanedGstin)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['gstin'],
+          message: 'अमान्य GSTIN। कृपया 15 अक्षरों का मान्य GSTIN दर्ज करें (फ़ॉर्मेट: 22AAAAA0000A1Z5)।',
+        });
+        return;
+      }
+      if (cleanedGstin.slice(0, 2) !== stateCode) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['gstin'],
+          message: `GSTIN के पहले 2 अंक (${cleanedGstin.slice(0, 2)}) चुने गए राज्य कोड (${stateCode} - ${INDIAN_GST_STATE_MAP[stateCode]}) से मेल नहीं खाते।`,
+        });
+      }
+    }
+    if (val.legalName && val.legalName.trim().length > 0 && val.legalName.trim().length < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['legalName'],
+        message: 'कानूनी नाम कम से कम 2 अक्षरों का होना चाहिए।',
+      });
+    }
+  });
+
+// Public GST registration status (used by MRP price bars & cards to display "+18% GST" vs "GST लागू नहीं")
+app.get('/api/gst-settings', async (_req, res) => {
+  try {
+    const settings = await readGstSettings();
+    const gstRegistered = isStoredGstRegistered(settings);
+    return res.json({
+      gstRegistered,
+      gstin: gstRegistered ? settings.gstin : '',
+      legalName: settings.legalName || DEFAULT_UPI_PAYEE_NAME,
+      stateCode: settings.stateCode || DEFAULT_GST_STATE_CODE,
+      stateName: settings.stateName || INDIAN_GST_STATE_MAP[DEFAULT_GST_STATE_CODE],
+    });
+  } catch (err) {
+    if (isFirestoreAdminCredentialError(err)) {
+      return res.json({
+        gstRegistered: false,
+        gstin: '',
+        legalName: DEFAULT_UPI_PAYEE_NAME,
+        stateCode: DEFAULT_GST_STATE_CODE,
+        stateName: INDIAN_GST_STATE_MAP[DEFAULT_GST_STATE_CODE],
+      });
+    }
+    console.error('[GET /api/gst-settings Error]', err);
+    return res.status(500).json({ error: 'Unable to load GST settings.' });
+  }
+});
+
+// Admin Read GST Settings (includes canEdit flag computed strictly on server via OWNER_EMAIL)
+app.get('/api/admin/gst-settings', requireAdmin, async (req: AuthenticatedRequest, res) => {
+  try {
+    const settings = await readGstSettings();
+    const gstRegistered = isStoredGstRegistered(settings);
+    const caller = req.authUser!;
+    const canEdit = isVerifiedOwnerEmail(caller.email, caller.emailVerified);
+    return res.json({
+      ok: true,
+      settings: {
+        ...settings,
+        gstRegistered,
+        canEdit,
+      },
+    });
+  } catch (err) {
+    console.error('[GET /api/admin/gst-settings Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to load GST settings.');
+  }
+});
+
+// Owner-Only Save GST Settings (strictly requires verified OWNER_EMAIL on server)
+app.put(
+  '/api/admin/gst-settings',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const caller = req.authUser!;
+    if (!isVerifiedOwnerEmail(caller.email, caller.emailVerified)) {
+      return res.status(403).json({
+        code: 'OWNER_ONLY_FORBIDDEN',
+        error: 'केवल वेबसाइट मालिक ही GST सेटिंग बदल सकते हैं।',
+      });
+    }
+
+    const parsed = adminGstSettingsSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        error: firstIssue?.message || 'अमान्य GST सेटिंग्स।',
+        field: firstIssue?.path?.[0] ? String(firstIssue.path[0]) : undefined,
+      });
+    }
+
+    const stateCode = parsed.data.stateCode || DEFAULT_GST_STATE_CODE;
+    const nowIso = new Date().toISOString();
+    const nextSettings: StoredGstSettings = {
+      gstin: parsed.data.gstin.trim().toUpperCase(),
+      legalName: (parsed.data.legalName || '').trim() || DEFAULT_UPI_PAYEE_NAME,
+      stateCode,
+      stateName: INDIAN_GST_STATE_MAP[stateCode],
+      updatedAt: nowIso,
+      updatedBy: caller.email || caller.uid,
+    };
+
+    try {
+      const saved = await saveGstSettings(nextSettings);
+      const gstRegistered = isStoredGstRegistered(nextSettings);
+      void appendServerAuditEvent({
+        action: 'GST_SETTINGS_UPDATED',
+        actorUid: caller.uid,
+        actorEmail: caller.email || caller.uid,
+        resource: `payment_settings/${GST_SETTINGS_DOC_ID}`,
+        outcome: 'SUCCESS',
+        ip: getClientIp(req),
+        details: `GST ${gstRegistered ? 'REGISTERED' : 'UNREGISTERED'} (State ${stateCode}, ${saved.mode})`,
+      });
+
+      return res.json({
+        ok: true,
+        mode: saved.mode,
+        settings: {
+          ...nextSettings,
+          gstRegistered,
+          canEdit: true,
+        },
+      });
+    } catch (err) {
+      console.error('[PUT /api/admin/gst-settings Error]', err);
+      return sendFirestoreRouteError(res, err, 'Unable to save GST settings.');
+    }
+  }
+);
+
+// 13d. Public Create UPI Payment Record (POST /api/payments — Zod + 10/hr IP limit + honeypot -> status "pending")
+app.post(
+  '/api/payments',
+  requireJsonContentType,
+  createUpiPaymentRateLimiter('create'),
+  async (req, res) => {
+    if (!validateAntiBotFields(req, res, 'payment')) {
+      return;
+    }
+
+    const lang = resolveRequestedLanguage(req);
+    const parsed = createUpiPaymentSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const firstIssue = parsed.error.issues[0];
+      const msg = firstIssue?.message || 'कृपया सभी विवरण सही-सही भरें।';
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        error: msg,
+        errorHi: msg,
+        errorEn: msg,
+        field: firstIssue?.path?.[0] ? String(firstIssue.path[0]) : undefined,
+      });
+    }
+
+    let settings: StoredUpiPaymentSettings;
+    try {
+      settings = await readUpiPaymentSettings();
+    } catch (err) {
+      return sendFirestoreRouteError(res, err, 'Unable to check payment availability.', lang);
+    }
+
+    if (!settings.enabled || !settings.upiId || !UPI_ID_REGEX.test(settings.upiId)) {
+      return res.status(503).json({
+        code: 'PAYMENTS_DISABLED',
+        error: 'ऑनलाइन भुगतान अभी उपलब्ध नहीं, कृपया संपर्क करें',
+        errorHi: 'ऑनलाइन भुगतान अभी उपलब्ध नहीं, कृपया संपर्क करें',
+        errorEn: 'Online payment is currently unavailable. Please contact us.',
+      });
+    }
+
+    const roundedAmount = Math.round(parsed.data.amount * 100) / 100;
+    const nowIso = new Date().toISOString();
+
+    try {
+      const refAlloc = await allocateUpiReferenceNumber();
+      const paymentId = `pay-${refAlloc.dateStamp}-${crypto.randomBytes(6).toString('hex')}`;
+      const record: StoredUpiPaymentRecord = {
+        id: paymentId,
+        referenceNumber: refAlloc.referenceNumber,
+        name: parsed.data.name,
+        mobile: parsed.data.mobile,
+        purpose: parsed.data.purpose,
+        amount: roundedAmount,
+        currency: 'INR',
+        upiId: settings.upiId,
+        payeeName: settings.payeeName || DEFAULT_UPI_PAYEE_NAME,
+        utr: '',
+        status: 'pending',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        submittedAt: null,
+        verifiedAt: null,
+        verifiedBy: null,
+        clientIp: getClientIp(req),
+      };
+
+      let storageMode: 'firestore_admin' | 'preview_memory' = 'firestore_admin';
+      if (adminDb && refAlloc.mode === 'firestore_admin') {
+        try {
+          await adminDb.collection('upi_payments').doc(paymentId).set(record);
+        } catch (err) {
+          if (IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err)) {
+            storageMode = 'preview_memory';
+          } else {
+            throw err;
+          }
+        }
+      } else if (IS_PREVIEW_ENV) {
+        storageMode = 'preview_memory';
+      } else {
+        throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+      }
+
+      if (storageMode === 'preview_memory') {
+        if (previewUpiPaymentsStore.size >= MAX_PREVIEW_UPI_PAYMENTS) {
+          const oldestKey = previewUpiPaymentsStore.keys().next().value;
+          if (oldestKey) previewUpiPaymentsStore.delete(oldestKey);
+        }
+        previewUpiPaymentsStore.set(paymentId, record);
+      }
+
+      void appendServerAuditEvent({
+        action: 'UPI_PAYMENT_INITIATED',
+        actorUid: 'guest',
+        actorEmail: `mobile:${record.mobile}`,
+        resource: `upi_payments/${paymentId}`,
+        outcome: 'SUCCESS',
+        ip: getClientIp(req),
+        details: `Created UPI payment ${record.referenceNumber} for INR ${record.amount} (${storageMode})`,
+      });
+
+      return res.status(201).json({
+        ok: true,
+        storageMode,
+        payment: toSafePublicPaymentDto(record),
+      });
+    } catch (err) {
+      console.error('[POST /api/payments Error]', err);
+      return sendFirestoreRouteError(res, err, 'भुगतान रिकॉर्ड बनाने में समस्या आई। कृपया पुनः प्रयास करें।', lang);
+    }
+  }
+);
+
+// 13e. Public Submit 12-Digit UTR Number (PATCH /api/payments/:id -> status "submitted")
+app.patch(
+  '/api/payments/:id',
+  requireJsonContentType,
+  createUpiPaymentRateLimiter('utr'),
+  async (req, res) => {
+    const paymentId = String(req.params.id || '').trim();
+    if (!SAFE_ID_REGEX.test(paymentId)) {
+      return res.status(400).json({ error: 'अमान्य भुगतान आईडी।' });
+    }
+
+    const parsed = submitUpiUtrSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const msg = parsed.error.issues[0]?.message || 'कृपया 12 अंकों का मान्य UTR नंबर दर्ज करें।';
+      return res.status(400).json({
+        code: 'VALIDATION_ERROR',
+        error: msg,
+        errorHi: msg,
+        errorEn: 'Please enter a valid 12-digit UTR / reference number.',
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const utr = parsed.data.utr;
+    const msgHi = 'धन्यवाद! हम आपका भुगतान जाँचकर पुष्टि करेंगे।';
+    const msgEn = 'Thank you! We will verify your payment and confirm shortly.';
+
+    try {
+      if (adminDb) {
+        try {
+          const docRef = adminDb.collection('upi_payments').doc(paymentId);
+          const snap = await docRef.get();
+          if (snap.exists) {
+            const existing = snap.data() as StoredUpiPaymentRecord;
+            if (existing.status === 'paid' || existing.status === 'rejected') {
+              return res.status(409).json({
+                code: 'PAYMENT_ALREADY_FINALIZED',
+                error: 'इस भुगतान की स्थिति पहले ही तय की जा चुकी है।',
+                errorHi: 'इस भुगतान की स्थिति पहले ही तय की जा चुकी है।',
+                errorEn: 'This payment status has already been finalized.',
+              });
+            }
+            const updates = {
+              utr,
+              status: 'submitted' as const,
+              submittedAt: nowIso,
+              updatedAt: nowIso,
+            };
+            await docRef.set(updates, { merge: true });
+            const updated: StoredUpiPaymentRecord = { ...existing, ...updates };
+
+            void appendServerAuditEvent({
+              action: 'UPI_PAYMENT_UTR_SUBMITTED',
+              actorUid: 'guest',
+              actorEmail: `mobile:${existing.mobile}`,
+              resource: `upi_payments/${paymentId}`,
+              outcome: 'SUCCESS',
+              ip: getClientIp(req),
+              details: `UTR submitted for ${existing.referenceNumber} (status=submitted)`,
+            });
+
+            return res.json({
+              ok: true,
+              payment: toSafePublicPaymentDto(updated),
+              message: msgHi,
+              messageHi: msgHi,
+              messageEn: msgEn,
+            });
+          }
+          if (!IS_PREVIEW_ENV) {
+            return res.status(404).json({ error: 'भुगतान रिकॉर्ड नहीं मिला।' });
+          }
+        } catch (err) {
+          if (!(IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err))) {
+            throw err;
+          }
+        }
+      }
+
+      if (IS_PREVIEW_ENV && previewUpiPaymentsStore.has(paymentId)) {
+        const existing = previewUpiPaymentsStore.get(paymentId)!;
+        if (existing.status === 'paid' || existing.status === 'rejected') {
+          return res.status(409).json({
+            code: 'PAYMENT_ALREADY_FINALIZED',
+            error: 'इस भुगतान की स्थिति पहले ही तय की जा चुकी है।',
+            errorHi: 'इस भुगतान की स्थिति पहले ही तय की जा चुकी है।',
+            errorEn: 'This payment status has already been finalized.',
+          });
+        }
+        const updated: StoredUpiPaymentRecord = {
+          ...existing,
+          utr,
+          status: 'submitted',
+          submittedAt: nowIso,
+          updatedAt: nowIso,
+        };
+        previewUpiPaymentsStore.set(paymentId, updated);
+        return res.json({
+          ok: true,
+          payment: toSafePublicPaymentDto(updated),
+          message: msgHi,
+          messageHi: msgHi,
+          messageEn: msgEn,
+        });
+      }
+
+      return res.status(404).json({ error: 'भुगतान रिकॉर्ड नहीं मिला।' });
+    } catch (err) {
+      console.error('[PATCH /api/payments/:id Error]', err);
+      return sendFirestoreRouteError(res, err, 'UTR दर्ज करने में समस्या आई। कृपया पुनः प्रयास करें।');
+    }
+  }
+);
+
+// 13f. Owner/Admin List All UPI Payments (GET /api/admin/payments)
+app.get('/api/admin/payments', requireAdmin, async (_req: AuthenticatedRequest, res) => {
+  try {
+    const merged = new Map<string, StoredUpiPaymentRecord>();
+
+    if (adminDb) {
+      try {
+        const snap = await adminDb.collection('upi_payments').get();
+        for (const docSnap of snap.docs) {
+          const data = docSnap.data() as StoredUpiPaymentRecord;
+          merged.set(docSnap.id, { ...data, id: data.id || docSnap.id });
+        }
+      } catch (err) {
+        if (!(IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err))) {
+          throw err;
+        }
+      }
+    } else if (!IS_PREVIEW_ENV) {
+      throw Object.assign(new Error('PERMISSION_DENIED'), { code: 7 });
+    }
+
+    if (IS_PREVIEW_ENV) {
+      for (const [id, rec] of previewUpiPaymentsStore.entries()) {
+        if (!merged.has(id)) {
+          merged.set(id, rec);
+        }
+      }
+    }
+
+    const payments = Array.from(merged.values())
+      .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      .map(toSafePublicPaymentDto);
+
+    return res.json({
+      ok: true,
+      count: payments.length,
+      payments,
+    });
+  } catch (err) {
+    console.error('[GET /api/admin/payments Error]', err);
+    return sendFirestoreRouteError(res, err, 'Unable to load UPI payments list.');
+  }
+});
+
+// 13g. Owner/Admin Confirm or Reject UPI Payment (PATCH /api/admin/payments/:id/status)
+app.patch(
+  '/api/admin/payments/:id/status',
+  requireAdmin,
+  requireJsonContentType,
+  async (req: AuthenticatedRequest, res) => {
+    const paymentId = String(req.params.id || '').trim();
+    if (!SAFE_ID_REGEX.test(paymentId)) {
+      return res.status(400).json({ error: 'Invalid payment ID.' });
+    }
+
+    const parsed = adminUpiPaymentStatusSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Status must be "paid" or "rejected".' });
+    }
+
+    const caller = req.authUser!;
+    const nowIso = new Date().toISOString();
+    const nextStatus = parsed.data.status;
+
+    try {
+      if (adminDb) {
+        try {
+          const docRef = adminDb.collection('upi_payments').doc(paymentId);
+          const snap = await docRef.get();
+          if (snap.exists) {
+            const existing = snap.data() as StoredUpiPaymentRecord;
+            const updates = {
+              status: nextStatus,
+              verifiedAt: nowIso,
+              verifiedBy: caller.email || caller.uid,
+              updatedAt: nowIso,
+            };
+            await docRef.set(updates, { merge: true });
+            const updated: StoredUpiPaymentRecord = { ...existing, ...updates };
+
+            void appendServerAuditEvent({
+              action: 'UPI_PAYMENT_STATUS_UPDATED',
+              actorUid: caller.uid,
+              actorEmail: caller.email || caller.uid,
+              resource: `upi_payments/${paymentId}`,
+              outcome: 'SUCCESS',
+              ip: getClientIp(req),
+              details: `Marked ${existing.referenceNumber} as ${nextStatus}`,
+            });
+
+            return res.json({ ok: true, payment: toSafePublicPaymentDto(updated) });
+          }
+          if (!IS_PREVIEW_ENV) {
+            return res.status(404).json({ error: 'Payment record not found.' });
+          }
+        } catch (err) {
+          if (!(IS_PREVIEW_ENV && isFirestoreAdminCredentialError(err))) {
+            throw err;
+          }
+        }
+      }
+
+      if (IS_PREVIEW_ENV && previewUpiPaymentsStore.has(paymentId)) {
+        const existing = previewUpiPaymentsStore.get(paymentId)!;
+        const updated: StoredUpiPaymentRecord = {
+          ...existing,
+          status: nextStatus,
+          verifiedAt: nowIso,
+          verifiedBy: caller.email || caller.uid,
+          updatedAt: nowIso,
+        };
+        previewUpiPaymentsStore.set(paymentId, updated);
+        return res.json({ ok: true, payment: toSafePublicPaymentDto(updated) });
+      }
+
+      return res.status(404).json({ error: 'Payment record not found.' });
+    } catch (err) {
+      console.error('[PATCH /api/admin/payments/:id/status Error]', err);
+      return sendFirestoreRouteError(res, err, 'Unable to update payment status.');
+    }
+  }
+);
 
 /* =========================================================================
    SEARCH ENGINE OPTIMIZATION & DISCOVERABILITY (SEO)
@@ -4346,6 +5775,11 @@ const STATIC_ROUTE_HTML_META: Record<
     description:
       'Schedule an engineering consultation or submit an RFP/RFQ with Bhanu Ram Bariha Digital Technologies in Chhattisgarh, India.',
   },
+  '/pay': {
+    title: 'UPI Payment | POWER WEB STUDIO AI',
+    description:
+      'Pay for services, quotations, or invoices directly via UPI to Bhanu Ram Bariha Digital Technologies.',
+  },
   '/blog': {
     title: 'Engineering Blog & Research | POWER WEB STUDIO AI',
     description:
@@ -4500,6 +5934,7 @@ function resolveRouteHtmlInfo(rawPath: string, origin: string): {
     const isAiDemo = slug === 'artificial-intelligence';
     const isCloudEng = slug === 'cloud-engineering';
     const isIntegrationSuite = slug === 'integration-suite';
+    const isMahaBazaar = slug === 'maha-bazaar';
     return {
       statusCode: 200,
       title: isShopping
@@ -4516,6 +5951,8 @@ function resolveRouteHtmlInfo(rawPath: string, origin: string): {
         ? 'Cloud Engineering — Demo Website | POWER WEB STUDIO AI'
         : isIntegrationSuite
         ? 'Integration Suite — Demo Website | POWER WEB STUDIO AI'
+        : isMahaBazaar
+        ? 'Maha Bazaar Platform — Flagship Marketplace Demo | POWER WEB STUDIO AI'
         : 'Interactive Demo Website | POWER WEB STUDIO AI',
       description: isShopping
         ? 'Interactive Indian online shopping store demo by Power Web Studio AI. Sample only — no real orders or payments.'
@@ -4531,6 +5968,8 @@ function resolveRouteHtmlInfo(rawPath: string, origin: string): {
         ? 'Interactive cloud engineering and DevOps automation demo website by Power Web Studio AI. Sample only.'
         : isIntegrationSuite
         ? 'Interactive secure API gateway and data integration demo website by Power Web Studio AI. Sample only.'
+        : isMahaBazaar
+        ? 'Flagship enterprise multi-vendor marketplace demo with Customer Storefront, Seller Panel, Delivery Tracking, and Admin Dashboard. Sample only.'
         : 'Interactive client preview demo website built by Power Web Studio AI.',
       canonicalUrl: pageUrl,
       ogUrl: pageUrl,

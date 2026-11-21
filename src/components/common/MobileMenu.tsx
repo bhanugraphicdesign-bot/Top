@@ -73,8 +73,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
     { route: 'blog', labelEn: 'Technical Blog & Research', labelHi: 'ब्लॉग एवं शोध' },
     { route: 'privacy', labelEn: 'Privacy Policy (DPDP Act)', labelHi: 'गोपनीयता नीति' },
     { route: 'terms', labelEn: 'Terms & Conditions (MSA)', labelHi: 'नियम और शर्तें' },
-    { route: 'client-dashboard', labelEn: 'Client Portal (SLA & Builds)', labelHi: 'क्लाइंट पोर्टल (SLA व APK)' },
-    { route: 'admin-dashboard', labelEn: 'Admin Console (Portfolio)', labelHi: 'एडमिन कंसोल (पोर्टफोलियो)' },
+    { route: 'client-dashboard', labelEn: 'Client Portal (SLA & Builds)', labelHi: 'क्लाइंट पोर्टल (SLA व बिल्ड)' },
+    ...(currentUser && isAdmin
+      ? [{ route: 'admin-dashboard' as PageRoute, labelEn: 'Admin Console (Portfolio)', labelHi: 'एडमिन कंसोल (पोर्टफोलियो)' }]
+      : []),
   ];
 
   return (
@@ -255,9 +257,23 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             </button>
           </div>
 
-          {/* Direct CTA */}
-          <div className="mt-4">
+          {/* Direct Pay & Consultation CTAs */}
+          <div className="mt-4 space-y-2.5">
             <button
+              type="button"
+              aria-current={currentRoute === 'pay' ? 'page' : undefined}
+              onClick={() => handleRouteClick('pay')}
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-md border transition-all cursor-pointer ${
+                currentRoute === 'pay'
+                  ? 'bg-emerald-700 text-white border-emerald-700'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+              }`}
+            >
+              <span>{t('Pay Now (UPI)', 'भुगतान करें')}</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
               onClick={handleCtaClick}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all shadow-xs cursor-pointer"
             >

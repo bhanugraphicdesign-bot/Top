@@ -544,33 +544,133 @@ export async function submitQuotation(data: {
   return payload?.quoteId as string;
 }
 
+export async function submitLead(data: {
+  fullName: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  serviceType: string;
+  timeline?: string;
+  budget?: string;
+  brief?: string;
+  source?: string;
+  language?: 'en' | 'hi';
+  user?: User | null;
+  _hp?: string;
+  formOpenedAt?: number;
+  fillDurationMs?: number;
+  attachment?: {
+    fileUrl?: string;
+    fileName?: string;
+    sha256?: string;
+    fileSizeFormatted?: string;
+  };
+}) {
+  const lang: 'en' | 'hi' = data.language === 'en' ? 'en' : 'hi';
+  const activeUser = auth.currentUser ?? data.user ?? null;
+
+  const response = await authenticatedFetch(
+    '/api/leads',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fullName: clampStr(data.fullName, 160),
+        phone: clampStr(data.phone, 40),
+        email: clampStr(data.email, 160).toLowerCase(),
+        company: clampStr(data.company, 160),
+        serviceType: clampStr(data.serviceType, 160),
+        timeline: clampStr(data.timeline || '3-6-months', 64),
+        budget: clampStr(data.budget || '', 80),
+        brief: clampStr(data.brief, 3000),
+        source: clampStr(data.source || 'contact_form', 64),
+        language: lang,
+        _hp: data._hp || '',
+        formOpenedAt: data.formOpenedAt,
+        fillDurationMs: data.fillDurationMs,
+        attachment: data.attachment
+          ? {
+              fileUrl: clampStr(data.attachment.fileUrl, 300),
+              fileName: clampStr(data.attachment.fileName, 200),
+              sha256: clampStr(data.attachment.sha256, 128),
+              fileSizeFormatted: clampStr(data.attachment.fileSizeFormatted, 40),
+            }
+          : undefined,
+      }),
+    },
+    { includeAppCheck: true, optionalAuth: true, user: activeUser }
+  );
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(
+      extractBilingualApiError(
+        response.status,
+        payload,
+        lang,
+        `Unable to submit inquiry (HTTP ${response.status}).`,
+        `पूछताछ सबमिट करने में असमर्थ (HTTP ${response.status})।`
+      )
+    );
+  }
+
+  if (auth.currentUser) {
+    void createNotification({
+      userId: auth.currentUser.uid,
+      title: `New Inquiry: ${clampStr(data.fullName, 160)}`,
+      titleHi: `नई पूछताछ: ${clampStr(data.fullName, 160)}`,
+      message: `${clampStr(data.serviceType, 160)} | ${clampStr(data.phone, 40)}`,
+      messageHi: `${clampStr(data.serviceType, 160)} | ${clampStr(data.phone, 40)}`,
+      type: 'quote',
+      linkRoute: 'client-dashboard',
+    });
+  }
+
+  return {
+    leadId: (payload?.leadId || payload?.quoteId || '') as string,
+    messageHi: (payload?.messageHi || 'धन्यवाद! आपकी पूछताछ मिल गई है, हम जल्द संपर्क करेंगे।') as string,
+    messageEn: (payload?.messageEn || 'Thank you! We have received your inquiry and will contact you soon.') as string,
+  };
+}
+
 export async function fetchAllQuotations() {
   const path = COLLECTIONS.QUOTATIONS;
   if (!(await isCurrentUserVerifiedAdmin())) return [];
   const currentUser = auth.currentUser;
+  const merged = new Map<string, any>();
+
   try {
     const snap = await getDocs(collection(db, path));
-    const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    if (docs.length > 0) {
-      return docs;
+    for (const d of snap.docs) {
+      merged.set(d.id, { id: d.id, ...d.data() });
     }
   } catch (clientErr) {
     console.warn('[fetchAllQuotations client fallback]', clientErr);
   }
+
   if (currentUser && typeof fetch !== 'undefined') {
     try {
       const res = await authenticatedFetch('/api/admin/quotations', {}, { user: currentUser });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data?.quotations)) {
-          return data.quotations;
+          for (const item of data.quotations) {
+            if (item?.id && !merged.has(String(item.id))) {
+              merged.set(String(item.id), item);
+            }
+          }
         }
       }
     } catch {
       // Fall through cleanly
     }
   }
-  return [];
+
+  return Array.from(merged.values()).sort(
+    (a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime()
+  );
 }
 
 export async function updateQuotationStatus(quoteId: string, status: string) {

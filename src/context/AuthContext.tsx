@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   User,
   onAuthStateChanged,
@@ -9,7 +9,7 @@ import {
   signOut,
   sendPasswordResetEmail,
 } from 'firebase/auth';
-import { auth, googleProvider } from '../firebase/config';
+import { auth, googleProvider, browserPopupRedirectResolver } from '../firebase/config';
 import {
   syncUserAccount,
   fetchUserRoleDetails,
@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const googleSignInInFlightRef = useRef<Promise<void> | null>(null);
 
   const openAuthModal = (tab: 'login' | 'register' | 'forgot' = 'login') => {
     setAuthModalTab(tab);
@@ -130,7 +131,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Ignore token claim read failure
         }
 
-        // 3. Authoritative server RBAC verification (`user_roles/{uid}` + custom claims)
+        // 3. Authoritative server RBAC verification (owner/admin verified on server)
         try {
           const statusRes = await authenticatedFetch('/api/auth/status', {}, { user });
           if (statusRes.ok) {
@@ -138,18 +139,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (typeof statusData?.roleDocExists === 'boolean') {
               resolvedDocExists = resolvedDocExists || statusData.roleDocExists;
             }
-            if (statusData?.isSuperAdmin === true) {
-              resolvedSuperAdmin = true;
-            }
-            if (statusData?.isAdmin === true) {
-              resolvedAdmin = true;
-              if (resolvedSource === 'client' && statusData?.roleSource) {
-                resolvedSource = statusData.roleSource;
-              }
-            }
+            resolvedSuperAdmin = statusData?.isSuperAdmin === true;
+            resolvedAdmin = statusData?.isAdmin === true;
+            resolvedSource = resolvedAdmin
+              ? (statusData?.roleSource || resolvedSource || 'user_roles')
+              : 'client';
           }
         } catch {
-          // Offline fallback keeps strict client role
+          // Offline fallback keeps previously checked client claims/role
         }
 
         if (auth.currentUser && auth.currentUser.uid !== user.uid) {
@@ -212,17 +209,62 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [resolveUserRoleState]);
 
   const loginWithGoogle = useCallback(async (): Promise<void> => {
-    const result = await signInWithPopup(auth, googleProvider);
-    if (result.user) {
-      setCurrentUser(result.user);
-      await resolveUserRoleState(result.user, true);
-      await logAuditEvent(
-        'AUTH_LOGIN_GOOGLE',
-        `users/${result.user.uid}`,
-        `Signed in with Google: ${result.user.email}`
-      );
+    if (googleSignInInFlightRef.current) {
+      return googleSignInInFlightRef.current;
     }
-    closeAuthModal();
+
+    const run = (async () => {
+      let signedInUser: User;
+      try {
+        const result = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
+        signedInUser = result.user;
+      } catch (err: any) {
+        const code = String(err?.code || '');
+        const msg = String(err?.message || '');
+        const isPopupCloseRace =
+          code === 'auth/popup-closed-by-user' ||
+          code === 'auth/cancelled-popup-request' ||
+          msg.includes('Pending promise was never set');
+
+        if (isPopupCloseRace) {
+          // Brief grace check: in iframe/COOP environments, auth state can settle right as the popup closes
+          await new Promise((resolve) => window.setTimeout(resolve, 180));
+          if (auth.currentUser) {
+            signedInUser = auth.currentUser;
+          } else if (msg.includes('Pending promise was never set')) {
+            const normalized = Object.assign(
+              new Error('Google sign-in popup was closed before completing.'),
+              { code: 'auth/popup-closed-by-user' }
+            );
+            throw normalized;
+          } else {
+            throw err;
+          }
+        } else {
+          throw err;
+        }
+      }
+
+      if (signedInUser) {
+        setCurrentUser(signedInUser);
+        await resolveUserRoleState(signedInUser, true);
+        await logAuditEvent(
+          'AUTH_LOGIN_GOOGLE',
+          `users/${signedInUser.uid}`,
+          `Signed in with Google: ${signedInUser.email}`
+        );
+      }
+      closeAuthModal();
+    })();
+
+    googleSignInInFlightRef.current = run;
+    try {
+      await run;
+    } finally {
+      if (googleSignInInFlightRef.current === run) {
+        googleSignInInFlightRef.current = null;
+      }
+    }
   }, [resolveUserRoleState]);
 
   const loginWithEmail = useCallback(

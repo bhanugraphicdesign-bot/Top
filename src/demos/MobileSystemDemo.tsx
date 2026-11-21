@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 
 interface MobileSystemDemoProps {
   onBackToHome: () => void;
@@ -884,6 +885,9 @@ export const MobileSystemDemo: React.FC<MobileSystemDemoProps> = ({
             </div>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="mobile-system" />
 
         {/* Agency Navigation Bar */}
         <header className="bg-[#0b1114]/90 backdrop-blur-xl border-b border-white/10">

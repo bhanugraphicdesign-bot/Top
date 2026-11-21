@@ -26,6 +26,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 
 interface ArtificialIntelligenceDemoProps {
   onBackToHome: () => void;
@@ -1044,6 +1045,9 @@ export const ArtificialIntelligenceDemo: React.FC<ArtificialIntelligenceDemoProp
             </div>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="artificial-intelligence" />
 
         {/* Navigation Header */}
         <header className="bg-[#040711]/88 backdrop-blur-xl border-b border-white/10">

@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, browserPopupRedirectResolver } from 'firebase/auth';
 import {
   initializeFirestore,
   getFirestore,
@@ -58,11 +58,26 @@ export const db = createFirestoreInstance();
 export const auth = getAuth(app);
 export const storage = getStorage(app);
 export const googleProvider = new GoogleAuthProvider();
+export { browserPopupRedirectResolver };
 
 // Configure Google Auth provider options
 googleProvider.setCustomParameters({
   prompt: 'select_account',
 });
+
+// Narrow guard for upstream @firebase/auth v13.x PopupOperation.onAuthEvent race:
+// When a Google Sign-In popup closes right as an auth event settles, Firebase Auth's
+// unawaited async onAuthEvent() can throw "INTERNAL ASSERTION FAILED: Pending promise was never set".
+if (typeof window !== 'undefined') {
+  const PENDING_PROMISE_ASSERTION = 'INTERNAL ASSERTION FAILED: Pending promise was never set';
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const msg = typeof reason === 'string' ? reason : reason?.message || '';
+    if (typeof msg === 'string' && msg.includes(PENDING_PROMISE_ASSERTION)) {
+      event.preventDefault();
+    }
+  });
+}
 
 export interface FirestoreConnectionHealth {
   connected: boolean;
@@ -97,18 +112,25 @@ async function probeFirestoreRestReachability(
   if (!projectId) return false;
 
   const querySuffix = apiKey ? `?key=${encodeURIComponent(apiKey)}` : '';
-  const probeUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/${encodeURIComponent(dbId)}/documents/test/connection${querySuffix}`;
+  const probeUrl = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(projectId)}/databases/${encodeURIComponent(dbId)}/documents:runQuery${querySuffix}`;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(probeUrl, {
-      method: 'GET',
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        structuredQuery: {
+          from: [{ collectionId: 'site_settings' }],
+          limit: 1,
+        },
+      }),
       cache: 'no-store',
       signal: controller.signal,
     });
-    // HTTP 200, 403 (Rules active), or 404 confirm live reachability to Cloud Firestore
-    return res.status > 0;
+    // Publicly allowed site_settings query returns HTTP 200 when Firestore is reachable
+    return res.ok;
   } catch {
     return false;
   } finally {
@@ -163,7 +185,7 @@ export async function validateFirestoreConnection(): Promise<boolean> {
     }, WEBCHANNEL_FAILSAFE_MS);
 
     try {
-      await getDocFromServer(doc(db, 'test', 'connection'));
+      await getDocFromServer(doc(db, 'site_settings', 'global_config'));
       clearTimeout(failsafeTimer);
       lastHealthCheckAtMs = Date.now();
       lastFirestoreHealth = {

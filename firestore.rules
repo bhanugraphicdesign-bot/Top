@@ -439,7 +439,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // 21. Test Collection (Strictly Admin-Only — Zero Public Read/Write Access)
+    // 21. UPI Payment Settings (Strictly Server-Only via PUT /api/admin/payment-settings & GET /api/payment-settings)
+    match /payment_settings/{settingId} {
+      allow read, write: if false;
+    }
+
+    // 22. Real UPI Payment Submissions (Strictly Server-Only via /api/payments & /api/admin/payments)
+    match /upi_payments/{paymentId} {
+      allow read, write: if false;
+    }
+
+    // 23. UPI Sequential Reference Counters (Strictly Server-Only via firebase-admin transactions)
+    match /upi_payment_counters/{counterId} {
+      allow read, write: if false;
+    }
+
+    // 24. Test Collection (Strictly Admin-Only — Zero Public Read/Write Access)
     match /test/{docId} {
       allow read, write: if isAdmin();
     }

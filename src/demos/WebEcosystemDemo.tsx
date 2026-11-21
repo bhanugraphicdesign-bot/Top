@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 
 interface WebEcosystemDemoProps {
   onBackToHome: () => void;
@@ -787,6 +788,9 @@ export const WebEcosystemDemo: React.FC<WebEcosystemDemoProps> = ({
             </div>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="web-ecosystem" />
 
         {/* Agency Navigation Bar */}
         <header className="bg-[#060913]/85 backdrop-blur-xl border-b border-white/10">

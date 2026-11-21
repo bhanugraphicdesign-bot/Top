@@ -10,7 +10,6 @@ const rawSiteKey = (import.meta.env?.VITE_RECAPTCHA_SITE_KEY as string | undefin
 export const RECAPTCHA_SITE_KEY = rawSiteKey.trim();
 
 let appCheckInstance: AppCheck | null = null;
-let warnedMissingSiteKey = false;
 
 export function initFirebaseAppCheck(app: FirebaseApp): AppCheck | null {
   if (typeof window === 'undefined') {
@@ -22,12 +21,6 @@ export function initFirebaseAppCheck(app: FirebaseApp): AppCheck | null {
   }
 
   if (!RECAPTCHA_SITE_KEY) {
-    if (!warnedMissingSiteKey) {
-      warnedMissingSiteKey = true;
-      console.warn(
-        '[AppCheck] VITE_RECAPTCHA_SITE_KEY is not configured; continuing without client App Check enforcement.'
-      );
-    }
     return null;
   }
 

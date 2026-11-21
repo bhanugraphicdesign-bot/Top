@@ -20,6 +20,7 @@ const VALID_ROUTES: PageRoute[] = [
   'demo',
   'process',
   'contact',
+  'pay',
   'blog',
   'privacy',
   'terms',

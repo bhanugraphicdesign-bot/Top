@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 import {
   ArrowLeft,
   ArrowRight,
@@ -705,6 +706,9 @@ export const ShoppingDemo: React.FC<ShoppingDemoProps> = ({
             </button>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="shopping" />
 
         {/* Real Storefront Header */}
         <header className="bg-white/98 backdrop-blur-md border-b border-neutral-200 shadow-2xs">

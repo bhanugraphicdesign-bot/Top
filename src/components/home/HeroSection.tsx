@@ -25,7 +25,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         {/* Editorial Subtitle / Trust Kicker (Natural unboxed text with separator) */}
-        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 mb-6">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500">
           <span className="text-blue-700 tracking-wider uppercase font-bold">
             {COMPANY_INFO.name}
           </span>
@@ -33,6 +33,172 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onOpenConsultation }) 
           <span>{t('Enterprise Technology Division', 'एंटरप्राइज टेक्नोलॉजी डिवीजन')}</span>
           <span aria-hidden="true" className="text-slate-300">·</span>
           <span>{t('Chhattisgarh, India & Global Delivery', 'छत्तीसगढ़, भारत व ग्लोबल डिलीवरी')}</span>
+        </div>
+
+        {/* Scoped Lightweight CSS Animations for Home Banner (transform & opacity only) */}
+        <style>{`
+          @keyframes pwsBannerEnter {
+            from {
+              opacity: 0;
+              transform: scale(0.96);
+            }
+            to {
+              opacity: 1;
+              transform: scale(1);
+            }
+          }
+          @keyframes pwsBannerZoom {
+            from {
+              transform: scale(1);
+            }
+            to {
+              transform: scale(1.04);
+            }
+          }
+          @keyframes pwsBannerShine {
+            0% {
+              transform: translateX(-160%) skewX(-22deg);
+              opacity: 0;
+            }
+            12% {
+              opacity: 0.3;
+            }
+            42% {
+              transform: translateX(340%) skewX(-22deg);
+              opacity: 0.3;
+            }
+            48%, 100% {
+              transform: translateX(340%) skewX(-22deg);
+              opacity: 0;
+            }
+          }
+          @keyframes pwsBannerGlow {
+            from {
+              opacity: 0.35;
+            }
+            to {
+              opacity: 1;
+            }
+          }
+          @keyframes pwsBannerFloat {
+            0% {
+              transform: translateY(0);
+              opacity: 0;
+            }
+            20% {
+              opacity: 0.9;
+            }
+            80% {
+              opacity: 0.75;
+            }
+            100% {
+              transform: translateY(-72px);
+              opacity: 0;
+            }
+          }
+          .pws-banner-enter {
+            animation: pwsBannerEnter 0.8s ease-out forwards;
+          }
+          .pws-banner-zoom {
+            animation: pwsBannerZoom 12s ease-in-out infinite alternate;
+            will-change: transform;
+          }
+          .pws-banner-shine {
+            animation: pwsBannerShine 4s ease-in-out infinite;
+            will-change: transform, opacity;
+          }
+          .pws-banner-glow {
+            box-shadow: 0 0 28px 4px rgba(37, 99, 235, 0.52), 0 10px 26px -6px rgba(14, 165, 233, 0.35);
+            animation: pwsBannerGlow 3s ease-in-out infinite alternate;
+            will-change: opacity;
+          }
+          .pws-banner-dot {
+            animation-name: pwsBannerFloat;
+            animation-timing-function: ease-in-out;
+            animation-iteration-count: infinite;
+            will-change: transform, opacity;
+          }
+          @media (prefers-reduced-motion: reduce) {
+            .pws-banner-enter,
+            .pws-banner-zoom,
+            .pws-banner-glow {
+              animation: none !important;
+              opacity: 1 !important;
+              transform: none !important;
+            }
+            .pws-banner-shine,
+            .pws-banner-dot {
+              animation: none !important;
+              opacity: 0 !important;
+            }
+          }
+        `}</style>
+
+        {/* Home Wide Banner (16px below kicker lines, 20px above hero heading) */}
+        <div className="w-full max-w-[1100px] mx-auto mt-4 mb-5 pws-banner-enter">
+          <div className="relative rounded-xl">
+            {/* Pulsing blue glow layer (opacity-only animation) */}
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 rounded-xl pointer-events-none pws-banner-glow"
+            />
+
+            {/* Clipped Banner Frame */}
+            <div className="relative overflow-hidden rounded-xl bg-blue-950">
+              <img
+                src="/home-banner.jpg"
+                alt="Power Web Studio AI बैनर"
+                loading="eager"
+                className="block w-full h-auto object-contain rounded-xl pws-banner-zoom"
+              />
+
+              {/* Diagonal Translucent White Shine Sweep (every 4s) */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 left-0 w-1/3 pws-banner-shine"
+                style={{
+                  background:
+                    'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)',
+                }}
+              />
+
+              {/* 8 Subtle Rising Glowing Dots on Outer Edges & Right Side Only */}
+              <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-sky-200"
+                  style={{ left: '1.5%', bottom: '8%', width: '3px', height: '3px', animationDuration: '5.5s', animationDelay: '0s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-white"
+                  style={{ left: '3.2%', bottom: '18%', width: '2px', height: '2px', animationDuration: '6.8s', animationDelay: '1.4s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-sky-100"
+                  style={{ right: '22%', bottom: '6%', width: '3px', height: '3px', animationDuration: '5.2s', animationDelay: '0.6s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-white"
+                  style={{ right: '17%', bottom: '14%', width: '4px', height: '4px', animationDuration: '6.4s', animationDelay: '2.1s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-sky-200"
+                  style={{ right: '12%', bottom: '5%', width: '2px', height: '2px', animationDuration: '4.9s', animationDelay: '0.9s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-white"
+                  style={{ right: '8%', bottom: '16%', width: '3px', height: '3px', animationDuration: '6.1s', animationDelay: '1.8s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-sky-100"
+                  style={{ right: '4.5%', bottom: '10%', width: '4px', height: '4px', animationDuration: '5.7s', animationDelay: '0.3s' }}
+                />
+                <span
+                  className="pws-banner-dot absolute rounded-full bg-white"
+                  style={{ right: '1.8%', bottom: '22%', width: '2px', height: '2px', animationDuration: '4.6s', animationDelay: '2.5s' }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* 2-Column Desktop Grid */}

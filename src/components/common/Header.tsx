@@ -109,6 +109,18 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {t('Demo Websites', 'डेमो वेबसाइट्स')}
             </a>
+            <a
+              href="/pay"
+              aria-current={currentRoute === 'pay' ? 'page' : undefined}
+              onClick={(e) => handleNavClick(e, 'pay')}
+              className={`transition-colors whitespace-nowrap shrink-0 py-1 rounded-sm focus-visible:outline-2 focus-visible:outline-blue-600 ${
+                currentRoute === 'pay'
+                  ? 'text-blue-700 font-bold'
+                  : 'text-emerald-700 hover:text-emerald-800 font-bold'
+              }`}
+            >
+              {t('Pay Now', 'भुगतान करें')}
+            </a>
           </nav>
 
           {/* Zone 3: Language Switcher + Notifications + Client Portal + Auth + Primary CTA + Mobile Trigger */}

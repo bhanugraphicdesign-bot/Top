@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 import {
   ArrowLeft,
   ArrowRight,
@@ -528,6 +529,9 @@ export const CoreEngineeringDemo: React.FC<CoreEngineeringDemoProps> = ({
             </button>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="core-engineering" />
 
         {/* Corporate Navigation Header */}
         <header className="bg-white/98 backdrop-blur-md border-b border-slate-200 shadow-2xs">

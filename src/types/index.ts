@@ -10,6 +10,7 @@ export type PageRoute =
   | 'demo'
   | 'process'
   | 'contact'
+  | 'pay'
   | 'blog'
   | 'privacy'
   | 'terms'
@@ -204,6 +205,12 @@ export interface UploadedFileRecord {
 export interface EnterpriseInvoice {
   id: string;
   invoiceNumber: string;
+  documentType?: 'tax_invoice' | 'bill_of_supply';
+  gstRegistered?: boolean;
+  supplierGstin?: string;
+  supplierLegalName?: string;
+  supplierStateCode?: string;
+  supplierStateName?: string;
   projectId: string;
   projectName: string;
   projectNameHi: string;
@@ -212,11 +219,20 @@ export interface EnterpriseInvoice {
   clientEmail: string;
   clientCompany: string;
   clientGstin?: string;
+  clientStateCode?: string;
+  clientStateName?: string;
   milestoneTitle: string;
   milestoneTitleHi: string;
   subtotal: number;
   gstRate: number;
   gstAmount: number;
+  taxType?: 'none' | 'cgst_sgst' | 'igst';
+  cgstRate?: number;
+  sgstRate?: number;
+  igstRate?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
   totalAmount: number;
   currency: 'INR';
   hsnSac: string;
@@ -243,4 +259,47 @@ export interface VerifiedPayment {
   checksum: string;
   timestamp: string;
   verifiedBy: string;
+}
+
+export interface UpiPaymentSettings {
+  upiId: string;
+  payeeName: string;
+  enabled: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface PublicGstStatus {
+  gstRegistered: boolean;
+  gstin: string;
+  legalName: string;
+  stateCode: string;
+  stateName: string;
+}
+
+export interface GstSettings extends PublicGstStatus {
+  canEdit?: boolean;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type UpiPaymentStatus = 'pending' | 'submitted' | 'paid' | 'rejected';
+
+export interface UpiPaymentRecord {
+  id: string;
+  referenceNumber: string;
+  name: string;
+  mobile: string;
+  purpose: string;
+  amount: number;
+  currency: 'INR';
+  upiId: string;
+  payeeName: string;
+  utr: string;
+  status: UpiPaymentStatus;
+  createdAt: string;
+  updatedAt?: string;
+  submittedAt?: string | null;
+  verifiedAt?: string | null;
+  verifiedBy?: string | null;
 }

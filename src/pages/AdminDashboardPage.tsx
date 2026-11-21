@@ -4,7 +4,24 @@ import { useApps } from '../context/AppsContext';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '../context/NavigationContext';
 import { notifySiteSettingsUpdated } from '../hooks/useSiteContact';
-import { AndroidApp, BlogPost, EnterpriseInvoice, ServiceItem } from '../types';
+import { notifyGstSettingsUpdated } from '../hooks/useGstStatus';
+import {
+  DEFAULT_GST_LEGAL_NAME,
+  DEFAULT_GST_STATE_CODE,
+  INDIAN_STATES,
+  getCurrentIndianFinancialYearInfo,
+  getIndianStateByCode,
+  validateGstinForState,
+} from '../data/indianStates';
+import {
+  AndroidApp,
+  BlogPost,
+  EnterpriseInvoice,
+  GstSettings,
+  ServiceItem,
+  UpiPaymentRecord,
+  UpiPaymentSettings,
+} from '../types';
 import { AdminAppManagerModal } from '../components/admin/AdminAppManagerModal';
 import { CustomerManagerModal } from '../components/admin/CustomerManagerModal';
 import { ProjectManagerModal } from '../components/admin/ProjectManagerModal';
@@ -49,14 +66,11 @@ import {
   ExternalLink,
   RotateCcw,
   RefreshCw,
-  Lock,
   FileText,
   Layers,
   BookOpen,
   Check,
   X,
-  ShieldAlert,
-  ArrowRight,
   LifeBuoy,
   MessageSquare,
   Send,
@@ -65,8 +79,8 @@ import {
   ShieldCheck,
   Receipt,
   AlertTriangle,
-  Copy,
-  LogOut,
+  IndianRupee,
+  Settings,
 } from 'lucide-react';
 
 interface InboundLead {
@@ -89,21 +103,13 @@ export const AdminDashboardPage: React.FC = () => {
   const { apps, deleteApp, resetToDefaults } = useApps();
   const {
     currentUser,
-    userRole,
     isAdmin,
     isSuperAdmin,
-    roleDocExists,
-    roleCheckError,
     isAuthReady,
     isRoleChecking,
-    refreshUserRole,
     openAuthModal,
-    logout,
   } = useAuth();
   const { navigate } = useNavigation();
-
-  const [checkingRoleManual, setCheckingRoleManual] = useState(false);
-  const [copiedUid, setCopiedUid] = useState(false);
 
   // Strict real Admin access gate: verified Firebase Auth UID + Firestore user_roles / custom claims ONLY
   useEffect(() => {
@@ -117,72 +123,37 @@ export const AdminDashboardPage: React.FC = () => {
   const isRealAdmin = Boolean(currentUser) && isAdmin;
   const isAuthorizedAdmin = isRealAdmin;
 
-  const handleRecheckAdminRole = async () => {
+  // Redirect non-owner / unauthenticated visitors who open /admin directly
+  useEffect(() => {
+    if (!isAuthReady || isRoleChecking || isAuthorizedAdmin) return;
     if (!currentUser) {
+      navigate('home');
       openAuthModal('login');
       return;
     }
-    setCheckingRoleManual(true);
-    try {
-      try {
-        await authenticatedFetch(
-          '/api/admin/bootstrap',
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          },
-          { user: currentUser }
-        );
-      } catch {
-        // Non-owner accounts receive 403; role verification below determines access
-      }
-      const verified = await refreshUserRole();
-      if (verified) {
-        showToast(
-          t(
-            'Administrator role verified in Firestore user_roles. Welcome!',
-            'Firestore user_roles में एडमिन रोल सत्यापित हो गया है।'
-          ),
-          'success'
-        );
-      } else {
-        showToast(
-          t(
-            `Access Denied: No Admin role found in Firestore user_roles/${currentUser.uid}.`,
-            `त्रुटि: Firestore user_roles/${currentUser.uid} में इस खाते के लिए Admin Role नहीं मिला।`
-          ),
-          'alert'
-        );
-      }
-    } finally {
-      setCheckingRoleManual(false);
-    }
-  };
-
-  const handleSwitchAdminAccount = async () => {
-    try {
-      await logout();
-    } catch {
-      // Ignore logout failure and still allow login
-    }
-    openAuthModal('login');
-  };
-
-  const handleCopyUid = async () => {
-    if (!currentUser?.uid || typeof navigator === 'undefined' || !navigator.clipboard) return;
-    try {
-      await navigator.clipboard.writeText(currentUser.uid);
-      setCopiedUid(true);
-      setTimeout(() => setCopiedUid(false), 2000);
-      showToast(t('Firebase UID copied to clipboard.', 'Firebase UID क्लिपबोर्ड पर कॉपी हो गया।'), 'info');
-    } catch {
-      // Ignore clipboard permission errors
-    }
-  };
+    showToast(
+      t(
+        'Access restricted to authorized administrators.',
+        'प्रवेश केवल अधिकृत एडमिन के लिए सीमित है।'
+      ),
+      'alert'
+    );
+    navigate('home');
+  }, [isAuthReady, isRoleChecking, isAuthorizedAdmin, currentUser, navigate, openAuthModal, showToast, t]);
 
   const [activeTab, setActiveTab] = useState<
-    'customers' | 'leads' | 'projects' | 'services' | 'portfolio' | 'quotations' | 'billing' | 'support' | 'content' | 'telemetry'
+    | 'customers'
+    | 'leads'
+    | 'projects'
+    | 'services'
+    | 'portfolio'
+    | 'quotations'
+    | 'billing'
+    | 'upi-payments'
+    | 'payment-settings'
+    | 'support'
+    | 'content'
+    | 'telemetry'
   >('customers');
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -200,10 +171,37 @@ export const AdminDashboardPage: React.FC = () => {
     clientEmail: '',
     clientCompany: '',
     clientGstin: '',
+    clientStateCode: DEFAULT_GST_STATE_CODE,
     projectName: '',
     milestoneTitle: '',
     subtotal: '',
   });
+
+  // Real UPI Payments & Owner Payment Settings state
+  const [upiPaymentsList, setUpiPaymentsList] = useState<UpiPaymentRecord[]>([]);
+  const [loadingUpiPayments, setLoadingUpiPayments] = useState(false);
+  const [updatingUpiPaymentId, setUpdatingUpiPaymentId] = useState<string | null>(null);
+  const [upiPaymentSettings, setUpiPaymentSettings] = useState<UpiPaymentSettings>({
+    upiId: '',
+    payeeName: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
+    enabled: false,
+  });
+  const [loadingUpiSettings, setLoadingUpiSettings] = useState(false);
+  const [savingUpiSettings, setSavingUpiSettings] = useState(false);
+  const [upiSettingsError, setUpiSettingsError] = useState('');
+
+  // Conditional GST Settings state (owner-only write, Firestore payment_settings/gst)
+  const [gstSettings, setGstSettings] = useState<GstSettings>({
+    gstRegistered: false,
+    gstin: '',
+    legalName: DEFAULT_GST_LEGAL_NAME,
+    stateCode: DEFAULT_GST_STATE_CODE,
+    stateName: 'Chhattisgarh',
+    canEdit: false,
+  });
+  const [loadingGstSettings, setLoadingGstSettings] = useState(false);
+  const [savingGstSettings, setSavingGstSettings] = useState(false);
+  const [gstSettingsError, setGstSettingsError] = useState('');
 
   // Modals state
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -356,6 +354,7 @@ export const AdminDashboardPage: React.FC = () => {
     if (!currentUser || !isRealAdmin) {
       setTelemetryData(null);
       setInvoicesList([]);
+      setUpiPaymentsList([]);
       setUsersList([]);
       setProjectsList([]);
       setQuotationsList([]);
@@ -368,6 +367,83 @@ export const AdminDashboardPage: React.FC = () => {
     }
 
     setLoadingInvoices(true);
+    setLoadingUpiPayments(true);
+    setLoadingUpiSettings(true);
+    setLoadingGstSettings(true);
+
+    authenticatedFetch('/api/admin/payment-settings', {}, { user: currentUser })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isCancelled && data?.settings) {
+          setUpiPaymentSettings({
+            upiId: typeof data.settings.upiId === 'string' ? data.settings.upiId : '',
+            payeeName:
+              typeof data.settings.payeeName === 'string' && data.settings.payeeName.trim()
+                ? data.settings.payeeName
+                : 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
+            enabled: Boolean(data.settings.enabled),
+            updatedAt: data.settings.updatedAt || undefined,
+            updatedBy: data.settings.updatedBy || undefined,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!isCancelled) setLoadingUpiSettings(false);
+      });
+
+    authenticatedFetch('/api/admin/gst-settings', {}, { user: currentUser })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isCancelled && data?.settings) {
+          const loaded: GstSettings = {
+            gstRegistered: Boolean(data.settings.gstRegistered),
+            gstin: typeof data.settings.gstin === 'string' ? data.settings.gstin : '',
+            legalName:
+              typeof data.settings.legalName === 'string' && data.settings.legalName.trim()
+                ? data.settings.legalName
+                : DEFAULT_GST_LEGAL_NAME,
+            stateCode:
+              typeof data.settings.stateCode === 'string' && data.settings.stateCode.trim()
+                ? data.settings.stateCode
+                : DEFAULT_GST_STATE_CODE,
+            stateName:
+              typeof data.settings.stateName === 'string' && data.settings.stateName.trim()
+                ? data.settings.stateName
+                : 'Chhattisgarh',
+            canEdit: Boolean(data.settings.canEdit),
+            updatedAt: data.settings.updatedAt || undefined,
+            updatedBy: data.settings.updatedBy || undefined,
+          };
+          setGstSettings(loaded);
+          notifyGstSettingsUpdated({
+            gstRegistered: loaded.gstRegistered,
+            gstin: loaded.gstRegistered ? loaded.gstin : '',
+            legalName: loaded.legalName,
+            stateCode: loaded.stateCode,
+            stateName: loaded.stateName,
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!isCancelled) setLoadingGstSettings(false);
+      });
+
+    authenticatedFetch('/api/admin/payments', {}, { user: currentUser })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isCancelled) {
+          setUpiPaymentsList(data && Array.isArray(data.payments) ? data.payments : []);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) setUpiPaymentsList([]);
+      })
+      .finally(() => {
+        if (!isCancelled) setLoadingUpiPayments(false);
+      });
+
     authenticatedFetch('/api/telemetry', {}, { user: currentUser })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -451,6 +527,230 @@ export const AdminDashboardPage: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [pendingDelete, deletingItem]);
+
+  const handleRefreshUpiPayments = async () => {
+    if (!currentUser || !isRealAdmin) return;
+    setLoadingUpiPayments(true);
+    try {
+      const res = await authenticatedFetch('/api/admin/payments', {}, { user: currentUser });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(data.payments)) {
+        setUpiPaymentsList(data.payments);
+      }
+    } finally {
+      setLoadingUpiPayments(false);
+    }
+  };
+
+  const handleSaveUpiSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !isRealAdmin) return;
+    setUpiSettingsError('');
+
+    const trimmedUpi = upiPaymentSettings.upiId.trim();
+    const trimmedPayee =
+      upiPaymentSettings.payeeName.trim() || 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES';
+    const upiRegex = /^[a-zA-Z0-9._-]{2,128}@[a-zA-Z][a-zA-Z0-9]{1,63}$/;
+
+    if (upiPaymentSettings.enabled && !trimmedUpi) {
+      setUpiSettingsError(
+        t(
+          'Please enter a valid UPI ID before enabling online payments.',
+          'भुगतान चालू करने से पहले मान्य UPI ID दर्ज करें।'
+        )
+      );
+      return;
+    }
+    if (trimmedUpi && !upiRegex.test(trimmedUpi)) {
+      setUpiSettingsError(
+        t(
+          'Invalid UPI ID format. Example: name@okaxis or business@ybl',
+          'अमान्य UPI ID। उदाहरण: name@okaxis या business@ybl'
+        )
+      );
+      return;
+    }
+
+    setSavingUpiSettings(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/payment-settings',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            upiId: trimmedUpi,
+            payeeName: trimmedPayee,
+            enabled: upiPaymentSettings.enabled,
+          }),
+        },
+        { user: currentUser }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.settings) {
+        const msg =
+          data?.error ||
+          t('Failed to save UPI payment settings.', 'भुगतान सेटिंग सेव करने में समस्या आई।');
+        setUpiSettingsError(msg);
+        showToast(msg, 'alert');
+        return;
+      }
+
+      setUpiPaymentSettings({
+        upiId: data.settings.upiId || '',
+        payeeName: data.settings.payeeName || 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
+        enabled: Boolean(data.settings.enabled),
+        updatedAt: data.settings.updatedAt || undefined,
+        updatedBy: data.settings.updatedBy || undefined,
+      });
+      showToast(
+        t(
+          'UPI payment settings saved securely on the server.',
+          'UPI भुगतान सेटिंग सर्वर पर सुरक्षित रूप से सेव हो गई है।'
+        ),
+        'success'
+      );
+    } catch {
+      const msg = t('Network error while saving settings.', 'नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।');
+      setUpiSettingsError(msg);
+      showToast(msg, 'alert');
+    } finally {
+      setSavingUpiSettings(false);
+    }
+  };
+
+  const handleSaveGstSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !isRealAdmin) return;
+    setGstSettingsError('');
+
+    if (!gstSettings.canEdit) {
+      const msg = t(
+        'Only the website owner can modify GST settings.',
+        'केवल वेबसाइट मालिक ही GST सेटिंग बदल सकते हैं।'
+      );
+      setGstSettingsError(msg);
+      showToast(msg, 'alert');
+      return;
+    }
+
+    const trimmedLegalName = gstSettings.legalName.trim() || DEFAULT_GST_LEGAL_NAME;
+    if (trimmedLegalName.length < 2) {
+      setGstSettingsError(
+        t('Legal name must be at least 2 characters.', 'कानूनी नाम कम से कम 2 अक्षरों का होना चाहिए।')
+      );
+      return;
+    }
+
+    const check = validateGstinForState(gstSettings.gstin, gstSettings.stateCode);
+    if (!check.valid) {
+      setGstSettingsError(language === 'hi' ? check.errorHi || '' : check.errorEn || '');
+      return;
+    }
+
+    setSavingGstSettings(true);
+    try {
+      const res = await authenticatedFetch(
+        '/api/admin/gst-settings',
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            gstin: check.normalized,
+            legalName: trimmedLegalName,
+            stateCode: gstSettings.stateCode,
+          }),
+        },
+        { user: currentUser }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.settings) {
+        const msg =
+          data?.error ||
+          t('Failed to save GST settings.', 'GST सेटिंग सेव करने में समस्या आई।');
+        setGstSettingsError(msg);
+        showToast(msg, 'alert');
+        return;
+      }
+
+      const updated: GstSettings = {
+        gstRegistered: Boolean(data.settings.gstRegistered),
+        gstin: data.settings.gstin || '',
+        legalName: data.settings.legalName || DEFAULT_GST_LEGAL_NAME,
+        stateCode: data.settings.stateCode || DEFAULT_GST_STATE_CODE,
+        stateName: data.settings.stateName || 'Chhattisgarh',
+        canEdit: Boolean(data.settings.canEdit),
+        updatedAt: data.settings.updatedAt || undefined,
+        updatedBy: data.settings.updatedBy || undefined,
+      };
+      setGstSettings(updated);
+      notifyGstSettingsUpdated({
+        gstRegistered: updated.gstRegistered,
+        gstin: updated.gstRegistered ? updated.gstin : '',
+        legalName: updated.legalName,
+        stateCode: updated.stateCode,
+        stateName: updated.stateName,
+      });
+      showToast(
+        updated.gstRegistered
+          ? t(
+              'GSTIN saved. Tax Invoices (18% GST) and MRP GST tags are now active.',
+              'GSTIN सेव हो गया है। अब नए बिल Tax Invoice (18% GST) के रूप में बनेंगे।'
+            )
+          : t(
+              'GST settings saved (Unregistered mode — new bills will be Bill of Supply with 0% GST).',
+              'GST सेटिंग सेव हो गई है (बिना GSTIN मोड — नए बिल पर GST नहीं लगेगा)।'
+            ),
+        'success'
+      );
+    } catch {
+      const msg = t('Network error while saving GST settings.', 'नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।');
+      setGstSettingsError(msg);
+      showToast(msg, 'alert');
+    } finally {
+      setSavingGstSettings(false);
+    }
+  };
+
+  const handleUpdateUpiPaymentStatus = async (
+    paymentId: string,
+    nextStatus: 'paid' | 'rejected'
+  ) => {
+    if (!currentUser || !isRealAdmin) return;
+    setUpdatingUpiPaymentId(paymentId);
+    try {
+      const res = await authenticatedFetch(
+        `/api/admin/payments/${encodeURIComponent(paymentId)}/status`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: nextStatus }),
+        },
+        { user: currentUser }
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.payment) {
+        showToast(
+          data?.error || t('Unable to update payment status.', 'भुगतान स्थिति अपडेट नहीं हो सकी।'),
+          'alert'
+        );
+        return;
+      }
+      setUpiPaymentsList((prev) =>
+        prev.map((item) => (item.id === paymentId ? (data.payment as UpiPaymentRecord) : item))
+      );
+      showToast(
+        nextStatus === 'paid'
+          ? t('Payment marked as Paid ✓', 'भुगतान "पैसे मिले ✓" के रूप में सत्यापित हुआ।')
+          : t('Payment marked as Rejected.', 'भुगतान रद्द (Rejected) चिह्नित किया गया।'),
+        nextStatus === 'paid' ? 'success' : 'info'
+      );
+    } catch {
+      showToast(t('Network error updating payment.', 'नेटवर्क त्रुटि।'), 'alert');
+    } finally {
+      setUpdatingUpiPaymentId(null);
+    }
+  };
 
   const handleSeedDatabase = async () => {
     try {
@@ -653,7 +953,7 @@ export const AdminDashboardPage: React.FC = () => {
     }
   };
 
-  // Issue Official GST Invoice (server calculates 18% GST and persists)
+  // Issue Official Bill of Supply (when unregistered) or GST Tax Invoice (when GSTIN saved)
   const handleGenerateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
     const numericSubtotal = Number(invoiceForm.subtotal);
@@ -679,6 +979,8 @@ export const AdminDashboardPage: React.FC = () => {
           body: JSON.stringify({
             ...invoiceForm,
             clientId: invoiceForm.clientId.trim() || undefined,
+            clientGstin: invoiceForm.clientGstin.trim().toUpperCase(),
+            clientStateCode: invoiceForm.clientStateCode || gstSettings.stateCode || DEFAULT_GST_STATE_CODE,
             subtotal: numericSubtotal,
           }),
         },
@@ -691,11 +993,18 @@ export const AdminDashboardPage: React.FC = () => {
       if (data.invoice) {
         setInvoicesList((prev) => [data.invoice, ...prev]);
       }
+      const isBillOfSupply =
+        data.invoice?.documentType === 'bill_of_supply' || Number(data.invoice?.gstRate || 0) === 0;
       showToast(
-        t(
-          `Official GST Invoice ${data.invoice?.invoiceNumber} issued (Total: INR ${data.invoice?.totalAmount?.toLocaleString('en-IN')}).`,
-          `आधिकारिक GST चालान ${data.invoice?.invoiceNumber} जारी किया गया।`
-        ),
+        isBillOfSupply
+          ? t(
+              `Bill of Supply ${data.invoice?.invoiceNumber} issued (Total: ₹${data.invoice?.totalAmount?.toLocaleString('en-IN')}, GST Not Applicable).`,
+              `Bill of Supply (बिल) ${data.invoice?.invoiceNumber} जारी किया गया (कुल: ₹${data.invoice?.totalAmount?.toLocaleString('en-IN')}, GST लागू नहीं)।`
+            )
+          : t(
+              `Official Tax Invoice ${data.invoice?.invoiceNumber} issued (Total: ₹${data.invoice?.totalAmount?.toLocaleString('en-IN')}).`,
+              `आधिकारिक Tax Invoice ${data.invoice?.invoiceNumber} जारी किया गया (कुल: ₹${data.invoice?.totalAmount?.toLocaleString('en-IN')})।`
+            ),
         'success'
       );
     } catch (err: any) {
@@ -704,6 +1013,87 @@ export const AdminDashboardPage: React.FC = () => {
       setCreatingInvoice(false);
     }
   };
+
+  // Current Indian Financial Year (April 1 IST onward) paid UPI turnover & ₹18L/₹20L GST threshold monitor
+  const fyUpiSummary = useMemo(() => {
+    const { fyLabel, fyStartMs } = getCurrentIndianFinancialYearInfo();
+    let paidTotal = 0;
+    let paidCount = 0;
+    for (const p of upiPaymentsList) {
+      if (p.status !== 'paid') continue;
+      const tsStr = p.verifiedAt || p.createdAt;
+      const tsMs = tsStr ? new Date(tsStr).getTime() : NaN;
+      if (Number.isFinite(tsMs) && tsMs >= fyStartMs) {
+        paidTotal += Number(p.amount || 0);
+        paidCount += 1;
+      }
+    }
+    const thresholdLimit = 2000000;
+    const warningTrigger = 1800000;
+    const pct = Math.min(100, Math.round((paidTotal / thresholdLimit) * 100));
+    return {
+      fyLabel,
+      paidTotal,
+      paidCount,
+      thresholdLimit,
+      warningTrigger,
+      exceedsWarning: paidTotal > warningTrigger,
+      pct,
+    };
+  }, [upiPaymentsList]);
+
+  // Live preview for Invoice / Bill of Supply creation form
+  const invoicePreview = useMemo(() => {
+    const subtotal = Math.max(0, Number(invoiceForm.subtotal || 0));
+    const supplierState = gstSettings.stateCode || DEFAULT_GST_STATE_CODE;
+    const trimmedClientGstin = invoiceForm.clientGstin.trim().toUpperCase();
+    const gstinPrefixState =
+      trimmedClientGstin.length >= 2 && getIndianStateByCode(trimmedClientGstin.slice(0, 2))
+        ? trimmedClientGstin.slice(0, 2)
+        : '';
+    const effectiveClientState = gstinPrefixState || invoiceForm.clientStateCode || supplierState;
+
+    if (!gstSettings.gstRegistered) {
+      return {
+        mode: 'bill_of_supply' as const,
+        subtotal,
+        cgst: 0,
+        sgst: 0,
+        igst: 0,
+        gstAmount: 0,
+        total: subtotal,
+        effectiveClientState,
+      };
+    }
+
+    const isIntraState = effectiveClientState === supplierState;
+    if (isIntraState) {
+      const cgst = Math.round((subtotal * 9) / 100);
+      const sgst = Math.round((subtotal * 9) / 100);
+      return {
+        mode: 'cgst_sgst' as const,
+        subtotal,
+        cgst,
+        sgst,
+        igst: 0,
+        gstAmount: cgst + sgst,
+        total: subtotal + cgst + sgst,
+        effectiveClientState,
+      };
+    }
+
+    const igst = Math.round((subtotal * 18) / 100);
+    return {
+      mode: 'igst' as const,
+      subtotal,
+      cgst: 0,
+      sgst: 0,
+      igst,
+      gstAmount: igst,
+      total: subtotal + igst,
+      effectiveClientState,
+    };
+  }, [invoiceForm.subtotal, invoiceForm.clientGstin, invoiceForm.clientStateCode, gstSettings.gstRegistered, gstSettings.stateCode]);
 
   // Filtered lists
   const filteredApps = useMemo(() => {
@@ -887,156 +1277,16 @@ export const AdminDashboardPage: React.FC = () => {
   }
 
   /* =========================================================================
-     RESTRICTED ACCESS BARRIER (IF NOT AUTHORIZED & NOT IN DEMO MODE)
+     REDIRECT NON-ADMIN VISITORS AWAY FROM DIRECT ADMIN URL
      ========================================================================= */
   if (!isAuthorizedAdmin) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 sm:p-6 text-white">
-        <div className="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl text-center space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-blue-900/40 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto shadow-inner">
-            <ShieldAlert className="w-8 h-8 text-blue-400" />
-          </div>
-
-          <div className="space-y-2">
-            <span className="px-3 py-1 text-xs font-bold uppercase tracking-widest text-blue-300 bg-blue-950 border border-blue-800 rounded-md">
-              {t('Secure Restricted Zone', 'संरक्षित प्रतिबंधित क्षेत्र')}
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              {t('Enterprise Administration Console', 'एंटरप्राइज प्रशासन कंसोल')}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
-              {t(
-                'Access to this terminal is strictly restricted to authenticated platform architects and executives of BHANU RAM BARIHA DIGITAL TECHNOLOGIES.',
-                'इस कंसोल तक पहुंच केवल भानु राम बरीहा डिजिटल टेक्नोलॉजीज के अधिकृत सिस्टम वास्तुकारों एवं प्रशासकों के लिए आरक्षित है।'
-              )}
-            </p>
-          </div>
-
-          {/* Explicit RBAC Error Banner when signed in without Admin Role */}
-          {currentUser && (
-            <div
-              role="alert"
-              className="p-4 rounded-xl bg-rose-950/60 border border-rose-500/40 text-left space-y-1.5"
-            >
-              <div className="flex items-center gap-2 text-rose-300 font-bold text-xs sm:text-sm">
-                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                <span>
-                  {t(
-                    'Access Denied: Administrator Role Not Found',
-                    'प्रवेश अस्वीकृत: एडमिन रोल (Admin Role) सत्यापित नहीं हुआ'
-                  )}
-                </span>
-              </div>
-              <p className="text-xs text-rose-200/90 leading-relaxed">
-                {roleCheckError
-                  ? roleCheckError
-                  : t(
-                      `Account "${currentUser.email || currentUser.uid}" does not have role "admin" or "super_admin" in Firestore user_roles/${currentUser.uid}. Normal accounts cannot self-assign admin roles; create the role record via Firebase Console or secure server-side Super Admin bootstrap.`,
-                      `खाता "${currentUser.email || currentUser.uid}" के लिए Firestore user_roles/${currentUser.uid} में "admin" या "super_admin" भूमिका नहीं मिली। सामान्य यूज़र स्वयं अपना Admin Role नहीं बदल सकते — Admin Role केवल Firebase Console या सुरक्षित Server-Side Bootstrap से सेट किया जा सकता है।`
-                    )}
-              </p>
-            </div>
-          )}
-
-          <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 text-left space-y-2.5 text-xs font-mono text-slate-300">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-slate-400">{t('Required Privilege:', 'आवश्यक अधिकार:')}</span>
-              <span className="text-emerald-400 font-bold text-right">
-                {t('Firestore user_roles/{uid} (admin)', 'Firestore user_roles/{uid} (admin)')}
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-slate-400">{t('Security Policy:', 'सुरक्षा नीति:')}</span>
-              <span className="text-blue-400 font-bold text-right">Role-Based RBAC / Server-Only Grant</span>
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-slate-400">{t('Firebase Email:', 'फायरबेस ईमेल:')}</span>
-              <span className="text-amber-300 font-bold break-all text-right">
-                {currentUser
-                  ? `${currentUser.email || '—'} (${currentUser.emailVerified ? t('Verified', 'सत्यापित') : t('Unverified', 'असत्यापित')})`
-                  : t('Unauthenticated Guest', 'अनाधिकृत आगंतुक')}
-              </span>
-            </div>
-            {currentUser && (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-slate-400">{t('Firebase UID:', 'फायरबेस UID:')}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-200 font-semibold break-all text-right">{currentUser.uid}</span>
-                    <button
-                      type="button"
-                      onClick={handleCopyUid}
-                      title={t('Copy UID', 'UID कॉपी करें')}
-                      aria-label={t('Copy Firebase UID', 'फायरबेस UID कॉपी करें')}
-                      className="p-1 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded cursor-pointer transition-colors"
-                    >
-                      {copiedUid ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    </button>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-slate-400">{t('Firestore Role Check:', 'Firestore रोल जांच:')}</span>
-                  <span className="text-rose-400 font-bold text-right">
-                    {roleDocExists
-                      ? t(`Found "${userRole}" (Admin required)`, `"${userRole}" मिला (Admin आवश्यक)`)
-                      : t('No user_roles document for UID', 'इस UID के लिए user_roles दस्तावेज़ नहीं मिला')}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 pt-2">
-            {!currentUser ? (
-              <button
-                onClick={() => openAuthModal('login')}
-                type="button"
-                className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
-              >
-                <Lock className="w-4 h-4" />
-                <span>{t('Sign In as Administrator', 'प्रशासक के रूप में लॉगिन करें')}</span>
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={handleRecheckAdminRole}
-                  disabled={checkingRoleManual || isRoleChecking}
-                  type="button"
-                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-50 rounded-lg shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className={`w-4 h-4 ${checkingRoleManual || isRoleChecking ? 'animate-spin' : ''}`} />
-                  <span>{t('Recheck Admin Role', 'एडमिन रोल पुनः जांचें')}</span>
-                </button>
-                <button
-                  onClick={handleSwitchAdminAccount}
-                  type="button"
-                  className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Lock className="w-4 h-4 text-blue-400" />
-                  <span>{t('Switch Admin Account', 'अन्य एडमिन खाते से लॉगिन करें')}</span>
-                </button>
-                <button
-                  onClick={() => logout()}
-                  type="button"
-                  className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-rose-200 bg-rose-950/60 hover:bg-rose-900/70 border border-rose-800/70 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <LogOut className="w-4 h-4" />
-                  <span>{t('Sign Out', 'लॉग आउट करें')}</span>
-                </button>
-              </>
-            )}
-          </div>
-
-          <div className="pt-2">
-            <button
-              onClick={() => navigate('home')}
-              type="button"
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1 mx-auto cursor-pointer"
-            >
-              <span>{t('Return to Public Portal', 'सार्वजनिक पोर्टल पर वापस जाएं')}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+        <div className="text-center space-y-3">
+          <RefreshCw className="w-6 h-6 text-blue-600 animate-spin mx-auto" />
+          <p className="text-sm font-medium text-slate-600">
+            {t('Redirecting...', 'रीडायरेक्ट किया जा रहा है...')}
+          </p>
         </div>
       </div>
     );
@@ -1292,6 +1542,47 @@ export const AdminDashboardPage: React.FC = () => {
             <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded font-bold tabular-nums">
               {invoicesList.length}
             </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'upi-payments'}
+            onClick={() => setActiveTab('upi-payments')}
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
+              activeTab === 'upi-payments'
+                ? 'border-blue-700 text-blue-700'
+                : 'border-transparent text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <IndianRupee className="w-4 h-4" />
+            <span>{t('Payments (UPI)', 'भुगतान')}</span>
+            <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-bold tabular-nums">
+              {upiPaymentsList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'payment-settings'}
+            onClick={() => setActiveTab('payment-settings')}
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
+              activeTab === 'payment-settings'
+                ? 'border-blue-700 text-blue-700'
+                : 'border-transparent text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>{t('Payment Settings', 'भुगतान सेटिंग')}</span>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                upiPaymentSettings.enabled && upiPaymentSettings.upiId
+                  ? 'bg-emerald-500'
+                  : 'bg-slate-300'
+              }`}
+              aria-hidden="true"
+            />
           </button>
 
           <button
@@ -1928,6 +2219,18 @@ export const AdminDashboardPage: React.FC = () => {
               </button>
             </div>
 
+            {!gstSettings.gstRegistered && (
+              <div className="px-3.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                <span>
+                  {t(
+                    'GST Not Applicable — GSTIN is not saved, so GST will not be added to quotations or proposals.',
+                    'GST लागू नहीं — GSTIN सेव नहीं है, इसलिए कोटेशन और प्रस्ताव में GST नहीं जोड़ा जाएगा।'
+                  )}
+                </span>
+              </div>
+            )}
+
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -2035,21 +2338,130 @@ export const AdminDashboardPage: React.FC = () => {
         )}
 
         {/* =====================================================================
-           TAB 6B: GST BILLING & TAX INVOICE LEDGER
+           TAB 6B: GST BILLING & TAX INVOICE / BILL OF SUPPLY LEDGER
            ===================================================================== */}
         {activeTab === 'billing' && (
           <div className="space-y-6">
+            {/* Unregistered Mode Yellow Warning Banner */}
+            {!gstSettings.gstRegistered && (
+              <div
+                role="status"
+                className="p-4 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div className="flex items-start gap-2.5 text-xs sm:text-sm font-semibold">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                  <div>
+                    <div>
+                      {t(
+                        'GSTIN is not saved, so GST will not be added to bills',
+                        'GSTIN सेव नहीं है, इसलिए बिल पर GST नहीं जुड़ेगा'
+                      )}
+                    </div>
+                    <div className="text-[11px] font-normal text-amber-800 mt-0.5">
+                      {t(
+                        'New bills will be generated as "Bill of Supply" (0% GST). Existing historical invoices remain unchanged.',
+                        'नए बिल "Bill of Supply (बिल)" के रूप में 0% GST के साथ बनेंगे। पुराने चालान वैसे ही सुरक्षित रहेंगे।'
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('payment-settings')}
+                  className="px-3 py-1.5 rounded-md bg-amber-200/80 hover:bg-amber-300 text-amber-950 text-xs font-bold transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+                >
+                  {t('Open GST Settings', 'GST सेटिंग खोलें')}
+                </button>
+              </div>
+            )}
+
+            {/* ₹20 Lakh GST Registration Threshold Red Alert (> ₹18 Lakh FY Paid UPI Total) */}
+            {fyUpiSummary.exceedsWarning && (
+              <div
+                role="alert"
+                className="p-4 rounded-xl bg-rose-50 border-2 border-rose-300 text-rose-950 flex items-start gap-2.5 text-xs sm:text-sm font-bold"
+              >
+                <AlertTriangle className="w-5 h-5 text-rose-700 shrink-0 mt-0.5" />
+                <div>
+                  <div>
+                    {t(
+                      'Approaching ₹20 Lakh threshold — apply for GST registration',
+                      '₹20 लाख सीमा पास है, GST रजिस्ट्रेशन कराएँ'
+                    )}
+                  </div>
+                  <div className="text-xs font-medium text-rose-800 mt-0.5 font-mono tabular-nums">
+                    {t(
+                      `FY ${fyUpiSummary.fyLabel} Verified Paid UPI Total: ₹${fyUpiSummary.paidTotal.toLocaleString('en-IN')} / ₹20,00,000`,
+                      `वित्तीय वर्ष ${fyUpiSummary.fyLabel} कुल प्राप्त (Paid) UPI भुगतान: ₹${fyUpiSummary.paidTotal.toLocaleString('en-IN')} / ₹20,00,000`
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* FY Paid UPI Turnover Monitor Card (April 1 onward) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs space-y-2.5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                    {t(
+                      `FY ${fyUpiSummary.fyLabel} Paid UPI Receipts (From April 1 — ₹20 Lakh GST Limit)`,
+                      `वित्तीय वर्ष ${fyUpiSummary.fyLabel} प्राप्त UPI भुगतान (1 अप्रैल से — ₹20 लाख GST सीमा)`
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-baseline gap-2 font-mono tabular-nums">
+                    <span
+                      className={`text-xl font-black ${
+                        fyUpiSummary.exceedsWarning ? 'text-rose-700' : 'text-slate-950'
+                      }`}
+                    >
+                      ₹{fyUpiSummary.paidTotal.toLocaleString('en-IN')}
+                    </span>
+                    <span className="text-xs text-slate-500">
+                      / ₹20,00,000 ({fyUpiSummary.paidCount}{' '}
+                      {t('paid UPI transactions', 'सत्यापित UPI भुगतान')})
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className={`self-start sm:self-auto px-2.5 py-1 rounded text-[11px] font-bold border ${
+                    gstSettings.gstRegistered
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : fyUpiSummary.exceedsWarning
+                      ? 'bg-rose-50 text-rose-800 border-rose-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                  }`}
+                >
+                  {gstSettings.gstRegistered
+                    ? t(`GST Registered · ${gstSettings.gstin}`, `GST पंजीकृत · ${gstSettings.gstin}`)
+                    : t('Unregistered · Bill of Supply Mode', 'बिना GSTIN · Bill of Supply मोड')}
+                </span>
+              </div>
+              <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    fyUpiSummary.exceedsWarning ? 'bg-rose-600' : 'bg-blue-700'
+                  }`}
+                  style={{ width: `${fyUpiSummary.pct}%` }}
+                />
+              </div>
+            </div>
+
             {/* Revenue & Tax Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
                 <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-                  {t('Total Billed Value (Incl. 18% GST)', 'कुल बिल राशि (18% GST सहित)')}
+                  {gstSettings.gstRegistered
+                    ? t('Total Billed Value (Tax Invoice Mode)', 'कुल बिल राशि (Tax Invoice मोड)')
+                    : t('Total Billed Value (Bill of Supply Mode)', 'कुल बिल राशि (Bill of Supply मोड)')}
                 </div>
                 <div className="mt-1.5 text-2xl font-black font-mono text-slate-950 tabular-nums">
                   ₹{invoicesList.reduce((acc, inv) => acc + (inv.totalAmount || 0), 0).toLocaleString('en-IN')}
                 </div>
                 <div className="mt-1 text-[11px] text-slate-500 font-mono">
-                  HSN/SAC 998313 · {invoicesList.length} {t('Invoices', 'चालान')}
+                  {gstSettings.gstRegistered
+                    ? `SAC 998313 · ${invoicesList.length} ${t('Bills/Invoices', 'बिल/चालान')}`
+                    : `${t('GST Not Applicable', 'GST लागू नहीं')} · ${invoicesList.length} ${t('Bills/Invoices', 'बिल/चालान')}`}
                 </div>
               </div>
 
@@ -2086,23 +2498,32 @@ export const AdminDashboardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Issue GST Invoice Form */}
+            {/* Issue Bill of Supply / GST Tax Invoice Form */}
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
                 <div>
                   <h3 className="text-base font-bold text-slate-950 flex items-center gap-2">
                     <Receipt className="w-4 h-4 text-blue-700" />
-                    <span>{t('Issue Authoritative GST Tax Invoice', 'आधिकारिक GST कर चालान जारी करें')}</span>
+                    <span>
+                      {gstSettings.gstRegistered
+                        ? t('Issue Official Tax Invoice (18% GST)', 'आधिकारिक Tax Invoice (कर चालान) जारी करें')
+                        : t('Issue Bill of Supply (0% GST)', 'Bill of Supply (बिल) जारी करें')}
+                    </span>
                   </h3>
                   <p className="text-xs text-slate-500">
-                    {t(
-                      'Server automatically computes 18% IGST/CGST+SGST, assigns HSN/SAC 998313, and commits cryptographic verification hash.',
-                      'सर्वर स्वतः 18% GST और HSN/SAC 998313 की गणना करता है और सत्यापन हैश दर्ज करता है।'
-                    )}
+                    {gstSettings.gstRegistered
+                      ? t(
+                          `Registered GSTIN ${gstSettings.gstin} (${gstSettings.stateName} - ${gstSettings.stateCode}). Same state applies CGST 9% + SGST 9%; other states apply IGST 18% (SAC 998313).`,
+                          `पंजीकृत GSTIN ${gstSettings.gstin} (${getIndianStateByCode(gstSettings.stateCode)?.nameHi || gstSettings.stateName} - ${gstSettings.stateCode})। समान राज्य में CGST 9% + SGST 9% और अन्य राज्य में IGST 18% (SAC 998313) लगेगा।`
+                        )
+                      : t(
+                          'GSTIN is not saved — server generates a Bill of Supply with base amount only (0% GST).',
+                          'GSTIN सेव नहीं है — सर्वर केवल मूल राशि (0% GST) के साथ Bill of Supply (बिल) जारी करेगा।'
+                        )}
                   </p>
                 </div>
-                <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                  POST /api/invoices/generate
+                <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded bg-slate-100 text-slate-700 border border-slate-200 self-start sm:self-auto">
+                  {gstSettings.gstRegistered ? 'Tax Invoice · SAC 998313' : 'Bill of Supply · 0% GST'}
                 </span>
               </div>
 
@@ -2181,12 +2602,43 @@ export const AdminDashboardPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">{t('Client GSTIN', 'ग्राहक GSTIN')}</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {t('Client State (Place of Supply)', 'ग्राहक का राज्य')}
+                  </label>
+                  <select
+                    value={invoiceForm.clientStateCode}
+                    onChange={(e) =>
+                      setInvoiceForm((prev) => ({ ...prev, clientStateCode: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white focus:border-blue-700 focus:outline-none"
+                  >
+                    {INDIAN_STATES.map((st) => (
+                      <option key={st.code} value={st.code}>
+                        {st.code} — {language === 'hi' ? `${st.nameHi} (${st.nameEn})` : st.nameEn}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {t('Client GSTIN (Optional)', 'ग्राहक GSTIN (वैकल्पिक)')}
+                  </label>
                   <input
                     type="text"
+                    maxLength={15}
+                    placeholder={t('Leave blank if unregistered', 'खाली छोड़ें यदि लागू न हो')}
                     value={invoiceForm.clientGstin}
-                    onChange={(e) => setInvoiceForm({ ...invoiceForm, clientGstin: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono"
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      const prefix = val.slice(0, 2);
+                      const matchedState = val.length >= 2 ? getIndianStateByCode(prefix) : undefined;
+                      setInvoiceForm((prev) => ({
+                        ...prev,
+                        clientGstin: val,
+                        clientStateCode: matchedState ? matchedState.code : prev.clientStateCode,
+                      }));
+                    }}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-mono uppercase"
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -2210,7 +2662,11 @@ export const AdminDashboardPage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block font-semibold text-slate-700 mb-1">{t('Base Amount (INR, Excl. GST)', 'मूल राशि (INR)')}</label>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    {gstSettings.gstRegistered
+                      ? t('Base Amount (INR, Excl. GST)', 'मूल राशि (INR, GST से पहले)')
+                      : t('Bill Amount (INR — No GST)', 'बिल राशि (INR — GST लागू नहीं)')}
+                  </label>
                   <input
                     type="number"
                     min={100}
@@ -2223,11 +2679,37 @@ export const AdminDashboardPage: React.FC = () => {
 
                 <div className="sm:col-span-2 lg:col-span-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
                   <div className="text-xs text-slate-600 font-mono tabular-nums">
-                    {t('Calculated Preview:', 'अनुमानित गणना:')} ₹{Number(invoiceForm.subtotal || 0).toLocaleString('en-IN')} + 18% GST (₹
-                    {Math.round(Number(invoiceForm.subtotal || 0) * 0.18).toLocaleString('en-IN')}) ={' '}
-                    <strong className="text-slate-950">
-                      ₹{Math.round(Number(invoiceForm.subtotal || 0) * 1.18).toLocaleString('en-IN')}
-                    </strong>
+                    {invoicePreview.mode === 'bill_of_supply' ? (
+                      <>
+                        {t('Bill of Supply Preview:', 'Bill of Supply (बिल) गणना:')} ₹
+                        {invoicePreview.subtotal.toLocaleString('en-IN')} + ₹0 GST (
+                        {t('GST Not Applicable', 'GST लागू नहीं')}) ={' '}
+                        <strong className="text-slate-950">
+                          ₹{invoicePreview.total.toLocaleString('en-IN')}
+                        </strong>
+                      </>
+                    ) : invoicePreview.mode === 'cgst_sgst' ? (
+                      <>
+                        {t('Tax Invoice Preview (Intra-State):', 'Tax Invoice गणना (समान राज्य):')} ₹
+                        {invoicePreview.subtotal.toLocaleString('en-IN')} + CGST 9% (₹
+                        {invoicePreview.cgst.toLocaleString('en-IN')}) + SGST 9% (₹
+                        {invoicePreview.sgst.toLocaleString('en-IN')}) ={' '}
+                        <strong className="text-slate-950">
+                          ₹{invoicePreview.total.toLocaleString('en-IN')}
+                        </strong>{' '}
+                        · SAC 998313
+                      </>
+                    ) : (
+                      <>
+                        {t('Tax Invoice Preview (Inter-State):', 'Tax Invoice गणना (अन्य राज्य):')} ₹
+                        {invoicePreview.subtotal.toLocaleString('en-IN')} + IGST 18% (₹
+                        {invoicePreview.igst.toLocaleString('en-IN')}) ={' '}
+                        <strong className="text-slate-950">
+                          ₹{invoicePreview.total.toLocaleString('en-IN')}
+                        </strong>{' '}
+                        · SAC 998313
+                      </>
+                    )}
                   </div>
                   <button
                     type="submit"
@@ -2235,7 +2717,13 @@ export const AdminDashboardPage: React.FC = () => {
                     className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-colors cursor-pointer inline-flex items-center gap-1.5 self-start sm:self-auto"
                   >
                     <Plus className="w-3.5 h-3.5" />
-                    <span>{creatingInvoice ? t('Issuing Invoice...', 'चालान जारी हो रहा है...') : t('Issue Official GST Invoice', 'आधिकारिक GST चालान जारी करें')}</span>
+                    <span>
+                      {creatingInvoice
+                        ? t('Issuing...', 'जारी हो रहा है...')
+                        : gstSettings.gstRegistered
+                        ? t('Issue Tax Invoice', 'Tax Invoice जारी करें')
+                        : t('Issue Bill of Supply', 'Bill of Supply (बिल) जारी करें')}
+                    </span>
                   </button>
                 </div>
               </form>
@@ -2245,7 +2733,7 @@ export const AdminDashboardPage: React.FC = () => {
             <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-slate-950">
-                  {t('Enterprise GST Tax Invoice Ledger', 'एंटरप्राइज GST कर चालान बहीखाता')}
+                  {t('Billing & Invoice Ledger', 'बिलिंग एवं चालान बहीखाता')}
                 </h3>
                 {loadingInvoices && (
                   <span className="text-xs text-slate-500 font-mono">{t('Syncing ledger...', 'सिंक हो रहा है...')}</span>
@@ -2263,52 +2751,109 @@ export const AdminDashboardPage: React.FC = () => {
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[11px]">
-                      <th className="py-3 px-3">{t('Invoice #', 'चालान #')}</th>
-                      <th className="py-3 px-3">{t('Client & GSTIN', 'ग्राहक एवं GSTIN')}</th>
+                      <th className="py-3 px-3">{t('Doc # & Type', 'बिल # एवं प्रकार')}</th>
+                      <th className="py-3 px-3">{t('Client & State/GSTIN', 'ग्राहक एवं राज्य/GSTIN')}</th>
                       <th className="py-3 px-3">{t('Project / Milestone', 'प्रोजेक्ट / माइलस्टोन')}</th>
-                      <th className="py-3 px-3 text-right">{t('Total (Incl. 18% GST)', 'कुल राशि (GST सहित)')}</th>
+                      <th className="py-3 px-3 text-right">{t('Total & Tax Breakdown', 'कुल राशि एवं कर विवरण')}</th>
                       <th className="py-3 px-3">{t('Status & Settlement', 'स्थिति एवं निपटान')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {invoicesList.map((inv) => (
-                      <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
-                          <div>{inv.invoiceNumber}</div>
-                          <div className="text-[10px] font-normal text-slate-500">{formatDate(inv.issuedAt)}</div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <div className="font-bold text-slate-900">{inv.clientCompany}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">
-                            {inv.clientEmail} · {inv.clientGstin || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="py-3 px-3 max-w-xs">
-                          <div className="font-semibold text-slate-800 truncate">{inv.projectName}</div>
-                          <div className="text-[11px] text-slate-500 truncate">{inv.milestoneTitle}</div>
-                        </td>
-                        <td className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap">
-                          <div className="font-black text-slate-950">₹{inv.totalAmount.toLocaleString('en-IN')}</div>
-                          <div className="text-[10px] text-slate-500">
-                            Base ₹{inv.subtotal.toLocaleString('en-IN')} + ₹{inv.gstAmount.toLocaleString('en-IN')} GST
-                          </div>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
-                              inv.status === 'paid'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-amber-50 text-amber-800 border-amber-200'
-                            }`}
-                          >
-                            {inv.status}
-                          </span>
-                          {inv.paymentTxnId && (
-                            <div className="text-[10px] font-mono text-slate-500 mt-1">{inv.paymentTxnId}</div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {invoicesList.map((inv) => {
+                      const isBillOfSupply =
+                        inv.documentType === 'bill_of_supply' || Number(inv.gstRate || 0) === 0;
+                      return (
+                        <tr key={inv.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 font-mono font-bold text-slate-900 whitespace-nowrap">
+                            <div>{inv.invoiceNumber}</div>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                              <span
+                                className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-sans font-bold border ${
+                                  isBillOfSupply
+                                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                    : 'bg-blue-50 text-blue-800 border-blue-200'
+                                }`}
+                              >
+                                {isBillOfSupply
+                                  ? t('Bill of Supply', 'Bill of Supply (बिल)')
+                                  : t('Tax Invoice', 'Tax Invoice')}
+                              </span>
+                              {!isBillOfSupply && inv.hsnSac && (
+                                <span className="text-[10px] font-normal text-slate-500">
+                                  SAC {inv.hsnSac}
+                                </span>
+                              )}
+                            </div>
+                            {!isBillOfSupply && inv.supplierGstin && (
+                              <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                                GSTIN: {inv.supplierGstin}
+                              </div>
+                            )}
+                            <div className="text-[10px] font-normal text-slate-500 mt-0.5">
+                              {formatDate(inv.issuedAt)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <div className="font-bold text-slate-900">{inv.clientCompany}</div>
+                            <div className="text-[11px] text-slate-500 font-mono">
+                              {inv.clientEmail}
+                              {inv.clientGstin ? ` · ${inv.clientGstin}` : ''}
+                            </div>
+                            {inv.clientStateName && (
+                              <div className="text-[10px] text-slate-500">
+                                {inv.clientStateName}
+                                {inv.clientStateCode ? ` (${inv.clientStateCode})` : ''}
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 px-3 max-w-xs">
+                            <div className="font-semibold text-slate-800 truncate">{inv.projectName}</div>
+                            <div className="text-[11px] text-slate-500 truncate">{inv.milestoneTitle}</div>
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono tabular-nums whitespace-nowrap">
+                            <div className="font-black text-slate-950">₹{inv.totalAmount.toLocaleString('en-IN')}</div>
+                            <div className="text-[10px] text-slate-500">
+                              {isBillOfSupply ? (
+                                <>
+                                  {t('Base', 'मूल')} ₹{inv.subtotal.toLocaleString('en-IN')} ·{' '}
+                                  {t('GST Not Applicable', 'GST लागू नहीं')}
+                                </>
+                              ) : inv.taxType === 'cgst_sgst' ? (
+                                <>
+                                  {t('Base', 'मूल')} ₹{inv.subtotal.toLocaleString('en-IN')} + CGST {inv.cgstRate ?? 9}% (₹
+                                  {(inv.cgstAmount ?? 0).toLocaleString('en-IN')}) + SGST {inv.sgstRate ?? 9}% (₹
+                                  {(inv.sgstAmount ?? 0).toLocaleString('en-IN')})
+                                </>
+                              ) : inv.taxType === 'igst' ? (
+                                <>
+                                  {t('Base', 'मूल')} ₹{inv.subtotal.toLocaleString('en-IN')} + IGST {inv.igstRate ?? 18}% (₹
+                                  {(inv.igstAmount ?? inv.gstAmount).toLocaleString('en-IN')})
+                                </>
+                              ) : (
+                                <>
+                                  {t('Base', 'मूल')} ₹{inv.subtotal.toLocaleString('en-IN')} + ₹
+                                  {inv.gstAmount.toLocaleString('en-IN')} GST ({inv.gstRate}%)
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${
+                                inv.status === 'paid'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200'
+                              }`}
+                            >
+                              {inv.status}
+                            </span>
+                            {inv.paymentTxnId && (
+                              <div className="text-[10px] font-mono text-slate-500 mt-1">{inv.paymentTxnId}</div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -3007,6 +3552,545 @@ export const AdminDashboardPage: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* =====================================================================
+           TAB 11: REAL UPI PAYMENTS LIST (OWNER VERIFICATION)
+           ===================================================================== */}
+        {activeTab === 'upi-payments' && (
+          <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-bold text-slate-950 flex items-center gap-2">
+                  <IndianRupee className="w-5 h-5 text-emerald-700" />
+                  <span>{t('UPI Payments Registry', 'भुगतान सूची (UPI)')}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {t(
+                    'Verify UTR numbers against your bank statement and confirm or reject customer UPI transfers.',
+                    'अपने बैंक स्टेटमेंट से UTR नंबर मिलाकर ग्राहक के UPI भुगतान की पुष्टि या रद्द करें।'
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('payment-settings')}
+                  className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>{t('Payment Settings', 'भुगतान सेटिंग')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRefreshUpiPayments}
+                  disabled={loadingUpiPayments}
+                  className="px-3 py-1.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-60 rounded-md transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingUpiPayments ? 'animate-spin' : ''}`} />
+                  <span>{t('Refresh', 'रीफ़्रेश')}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Summary KPI Strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-amber-800">
+                  {t('Awaiting Verification', 'जाँच लंबित (Submitted / Pending)')}
+                </div>
+                <div className="text-2xl font-extrabold text-amber-950 font-mono tabular-nums mt-1">
+                  {upiPaymentsList.filter((p) => p.status === 'submitted' || p.status === 'pending').length}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                  {t('Confirmed Paid', 'पैसे मिले (Paid)')}
+                </div>
+                <div className="text-2xl font-extrabold text-emerald-950 font-mono tabular-nums mt-1">
+                  ₹
+                  {upiPaymentsList
+                    .filter((p) => p.status === 'paid')
+                    .reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+                    .toLocaleString('en-IN')}
+                </div>
+              </div>
+              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  {t('Total Records', 'कुल भुगतान रिकॉर्ड')}
+                </div>
+                <div className="text-2xl font-extrabold text-slate-950 font-mono tabular-nums mt-1">
+                  {upiPaymentsList.length}
+                </div>
+              </div>
+            </div>
+
+            {loadingUpiPayments ? (
+              <div className="py-10 text-center text-xs text-slate-500">
+                {t('Loading UPI payments...', 'भुगतान सूची लोड हो रही है...')}
+              </div>
+            ) : upiPaymentsList.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+                {t(
+                  'No UPI payment submissions recorded yet.',
+                  'अभी तक कोई UPI भुगतान रिकॉर्ड दर्ज नहीं हुआ है।'
+                )}
+              </div>
+            ) : (
+              <div className="overflow-x-auto -mx-2 px-2">
+                <table className="w-full text-left border-collapse text-xs min-w-[820px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[11px] bg-slate-50">
+                      <th className="py-3 px-3">{t('Ref No.', 'क्रमांक')}</th>
+                      <th className="py-3 px-3">{t('Date', 'तारीख')}</th>
+                      <th className="py-3 px-3">{t('Name', 'नाम')}</th>
+                      <th className="py-3 px-3">{t('Mobile', 'मोबाइल')}</th>
+                      <th className="py-3 px-3">{t('Purpose', 'काम')}</th>
+                      <th className="py-3 px-3 text-right">{t('Amount', 'रकम')}</th>
+                      <th className="py-3 px-3">UTR</th>
+                      <th className="py-3 px-3">{t('Status', 'स्थिति')}</th>
+                      <th className="py-3 px-3 text-right">{t('Actions', 'कार्रवाई')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {upiPaymentsList.map((payment) => {
+                      const isUpdating = updatingUpiPaymentId === payment.id;
+                      const statusBadgeClass =
+                        payment.status === 'paid'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : payment.status === 'submitted'
+                          ? 'bg-blue-50 text-blue-800 border-blue-200'
+                          : payment.status === 'rejected'
+                          ? 'bg-rose-50 text-rose-800 border-rose-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200';
+                      const statusLabel =
+                        payment.status === 'paid'
+                          ? t('Paid', 'पैसे मिले')
+                          : payment.status === 'submitted'
+                          ? t('Submitted', 'UTR प्राप्त')
+                          : payment.status === 'rejected'
+                          ? t('Rejected', 'रद्द')
+                          : t('Pending', 'लंबित');
+
+                      return (
+                        <tr key={payment.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 font-mono font-bold text-slate-950 whitespace-nowrap">
+                            {payment.referenceNumber}
+                          </td>
+                          <td className="py-3 px-3 text-slate-600 whitespace-nowrap font-mono text-[11px]">
+                            {formatDate(payment.createdAt)}
+                          </td>
+                          <td className="py-3 px-3 font-semibold text-slate-900">
+                            {payment.name}
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-700 whitespace-nowrap">
+                            {payment.mobile}
+                          </td>
+                          <td className="py-3 px-3 text-slate-700 max-w-[200px] break-words">
+                            {payment.purpose}
+                          </td>
+                          <td className="py-3 px-3 text-right font-mono font-extrabold text-slate-950 whitespace-nowrap tabular-nums">
+                            ₹{Number(payment.amount || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 px-3 font-mono font-bold text-blue-800 whitespace-nowrap">
+                            {payment.utr || '—'}
+                          </td>
+                          <td className="py-3 px-3 whitespace-nowrap">
+                            <span
+                              className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold border ${statusBadgeClass}`}
+                            >
+                              {statusLabel}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={isUpdating || payment.status === 'paid'}
+                                onClick={() => handleUpdateUpiPaymentStatus(payment.id, 'paid')}
+                                className="px-2.5 py-1 rounded text-[11px] font-bold bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white transition-colors cursor-pointer"
+                              >
+                                {language === 'hi' ? 'पैसे मिले ✓' : 'Paid ✓'}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={isUpdating || payment.status === 'rejected'}
+                                onClick={() => handleUpdateUpiPaymentStatus(payment.id, 'rejected')}
+                                className="px-2.5 py-1 rounded text-[11px] font-bold bg-rose-50 hover:bg-rose-100 disabled:opacity-40 text-rose-700 border border-rose-200 transition-colors cursor-pointer"
+                              >
+                                {language === 'hi' ? 'रद्द' : 'Reject'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* =====================================================================
+           TAB 12: OWNER UPI PAYMENT SETTINGS & GST SETTINGS
+           ===================================================================== */}
+        {activeTab === 'payment-settings' && (
+          <div className="space-y-6 max-w-2xl">
+            <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-bold text-slate-950 flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-blue-700" />
+                    <span>{t('UPI Payment Settings', 'भुगतान सेटिंग (UPI)')}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {t(
+                      'Configure the official UPI ID and toggle live UPI payments on the /pay page. Saved server-side only.',
+                      'मुख्य साइट के /pay पेज के लिए अपनी आधिकारिक UPI ID और चालू/बंद स्थिति यहाँ से नियंत्रित करें।'
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('pay')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>{t('Open /pay Page', '/pay पेज देखें')}</span>
+                </button>
+              </div>
+
+              {loadingUpiSettings ? (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  {t('Loading payment settings...', 'भुगतान सेटिंग लोड हो रही है...')}
+                </div>
+              ) : (
+                <form onSubmit={handleSaveUpiSettings} className="space-y-5">
+                  {/* Status Banner */}
+                  <div
+                    className={`p-3.5 rounded-lg border text-xs flex items-center justify-between gap-3 ${
+                      upiPaymentSettings.enabled && upiPaymentSettings.upiId
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-amber-50 border-amber-200 text-amber-900'
+                    }`}
+                  >
+                    <div className="font-semibold">
+                      {upiPaymentSettings.enabled && upiPaymentSettings.upiId
+                        ? t(
+                            'Online UPI payments are ACTIVE on /pay',
+                            'ऑनलाइन UPI भुगतान /pay पेज पर चालू है'
+                          )
+                        : t(
+                            'Online UPI payments are OFF (visitors see WhatsApp contact notice)',
+                            'ऑनलाइन UPI भुगतान अभी बंद है (ग्राहकों को WhatsApp संपर्क संदेश दिखेगा)'
+                          )}
+                    </div>
+                    <span className="font-mono font-bold uppercase text-[10px] px-2 py-0.5 rounded bg-white/80 border border-current/20 shrink-0">
+                      {upiPaymentSettings.enabled ? t('ON', 'चालू') : t('OFF', 'बंद')}
+                    </span>
+                  </div>
+
+                  {/* Enable / Disable Toggle Switch */}
+                  <div className="flex items-center justify-between gap-4 p-4 rounded-lg bg-slate-50 border border-slate-200">
+                    <div>
+                      <div className="text-sm font-bold text-slate-900">
+                        {t('Enable Online UPI Payments', 'ऑनलाइन UPI भुगतान चालू / बंद करें')}
+                      </div>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {t(
+                          'Turn ON only after entering your verified business UPI ID below.',
+                          'नीचे सही UPI ID भरने के बाद ही इसे चालू करें।'
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={upiPaymentSettings.enabled}
+                      onClick={() => {
+                        setUpiPaymentSettings((prev) => ({ ...prev, enabled: !prev.enabled }));
+                        if (upiSettingsError) setUpiSettingsError('');
+                      }}
+                      className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
+                        upiPaymentSettings.enabled ? 'bg-emerald-600' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-sm transition ${
+                          upiPaymentSettings.enabled ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* UPI ID Field */}
+                  <div>
+                    <label
+                      htmlFor="admin-upi-id"
+                      className="block text-xs font-bold text-slate-800 mb-1.5"
+                    >
+                      {t('UPI ID (VPA)', 'UPI ID (जैसे name@okaxis)')}
+                    </label>
+                    <input
+                      id="admin-upi-id"
+                      type="text"
+                      autoComplete="off"
+                      value={upiPaymentSettings.upiId}
+                      onChange={(e) => {
+                        setUpiPaymentSettings((prev) => ({ ...prev, upiId: e.target.value }));
+                        if (upiSettingsError) setUpiSettingsError('');
+                      }}
+                      placeholder="name@okaxis"
+                      className="w-full px-3.5 py-2.5 text-sm font-mono rounded-lg border border-slate-300 bg-white text-slate-950 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {t(
+                        'Never hardcoded in code or env vars. Stored securely via PUT /api/admin/payment-settings.',
+                        'यह UPI ID कोड में नहीं लिखी जाती — सीधे सर्वर पर सुरक्षित रूप से सेव होती है।'
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Payee Name Field */}
+                  <div>
+                    <label
+                      htmlFor="admin-payee-name"
+                      className="block text-xs font-bold text-slate-800 mb-1.5"
+                    >
+                      {t('Payee Name', 'पाने वाले का नाम')}
+                    </label>
+                    <input
+                      id="admin-payee-name"
+                      type="text"
+                      maxLength={120}
+                      value={upiPaymentSettings.payeeName}
+                      onChange={(e) => {
+                        setUpiPaymentSettings((prev) => ({ ...prev, payeeName: e.target.value }));
+                        if (upiSettingsError) setUpiSettingsError('');
+                      }}
+                      placeholder="BHANU RAM BARIHA DIGITAL TECHNOLOGIES"
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-950 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  {upiSettingsError && (
+                    <div
+                      role="alert"
+                      className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2"
+                    >
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{upiSettingsError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      {upiPaymentSettings.updatedAt
+                        ? `${t('Last saved:', 'अंतिम अपडेट:')} ${formatDate(upiPaymentSettings.updatedAt)}`
+                        : t('Not saved yet', 'अभी सेव नहीं किया गया')}
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={savingUpiSettings}
+                      className="px-5 py-2.5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-60 text-white text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer"
+                    >
+                      {savingUpiSettings
+                        ? t('Saving...', 'सेव हो रहा है...')
+                        : t('Save Payment Settings', 'भुगतान सेटिंग सेव करें')}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+
+            {/* GST SETTINGS CARD (Owner-only write via PUT /api/admin/gst-settings) */}
+            <div className="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                <div>
+                  <h3 className="text-base font-bold text-slate-950 flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-blue-700" />
+                    <span>{t('GST Settings', 'GST सेटिंग')}</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {t(
+                      'GST is applied to new invoices and MRP labels only when a valid 15-character GSTIN is saved here.',
+                      'जब तक मान्य 15 अक्षरों का GSTIN यहाँ सेव न हो, तब तक बिल और MRP पर GST नहीं जुड़ेगा।'
+                    )}
+                  </p>
+                </div>
+                <span
+                  className={`font-mono font-bold uppercase text-[10px] px-2.5 py-1 rounded border shrink-0 self-start sm:self-auto ${
+                    gstSettings.gstRegistered
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                      : 'bg-amber-50 border-amber-200 text-amber-900'
+                  }`}
+                >
+                  {gstSettings.gstRegistered
+                    ? t('GST ACTIVE', 'GST चालू')
+                    : t('NO GSTIN (BILL OF SUPPLY)', 'बिना GSTIN')}
+                </span>
+              </div>
+
+              {loadingGstSettings ? (
+                <div className="py-8 text-center text-xs text-slate-500">
+                  {t('Loading GST settings...', 'GST सेटिंग लोड हो रही है...')}
+                </div>
+              ) : (
+                <form onSubmit={handleSaveGstSettings} className="space-y-5">
+                  <div
+                    className={`p-3.5 rounded-lg border text-xs flex items-start gap-2.5 ${
+                      gstSettings.gstRegistered
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                        : 'bg-amber-50 border-amber-200 text-amber-950'
+                    }`}
+                  >
+                    <AlertTriangle
+                      className={`w-4 h-4 shrink-0 mt-0.5 ${
+                        gstSettings.gstRegistered ? 'text-emerald-700' : 'text-amber-700'
+                      }`}
+                    />
+                    <div className="font-medium leading-relaxed">
+                      {gstSettings.gstRegistered
+                        ? t(
+                            `Registered GST Mode is ACTIVE (GSTIN: ${gstSettings.gstin}). New bills are issued as Tax Invoices with 18% GST (CGST 9% + SGST 9% within ${gstSettings.stateName}, or IGST 18% for other states) and SAC 998313.`,
+                            `पंजीकृत GST मोड चालू है (GSTIN: ${gstSettings.gstin})। नए बिल Tax Invoice (18% GST, SAC 998313) के रूप में बनेंगे और MRP पर +18% GST दिखेगा।`
+                          )
+                        : t(
+                            'GSTIN is empty — Unregistered mode is active. New bills are issued as Bill of Supply (0% GST) and MRP bars display "GST Not Applicable".',
+                            'GSTIN खाली है — बिना GST मोड चालू है। नए बिल "Bill of Supply (बिल)" के रूप में 0% GST के साथ बनेंगे और MRP पर "GST लागू नहीं" दिखेगा।'
+                          )}
+                    </div>
+                  </div>
+
+                  {!gstSettings.canEdit && (
+                    <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-xs font-medium">
+                      {t(
+                        'View-only: Only the verified website owner can modify GST settings.',
+                        'केवल देखने के लिए: GST सेटिंग केवल वेबसाइट मालिक ही बदल सकते हैं।'
+                      )}
+                    </div>
+                  )}
+
+                  {/* GSTIN Field (Optional) */}
+                  <div>
+                    <label
+                      htmlFor="admin-gstin"
+                      className="block text-xs font-bold text-slate-800 mb-1.5"
+                    >
+                      {t('GSTIN (Optional — leave blank if not registered)', 'GSTIN (वैकल्पिक — यदि GSTIN नहीं है तो खाली छोड़ें)')}
+                    </label>
+                    <input
+                      id="admin-gstin"
+                      type="text"
+                      maxLength={15}
+                      autoComplete="off"
+                      disabled={!gstSettings.canEdit || savingGstSettings}
+                      value={gstSettings.gstin}
+                      onChange={(e) => {
+                        setGstSettings((prev) => ({
+                          ...prev,
+                          gstin: e.target.value.toUpperCase().replace(/\s+/g, ''),
+                        }));
+                        if (gstSettingsError) setGstSettingsError('');
+                      }}
+                      placeholder={t('15-character GSTIN (e.g. 22AAAAA0000A1Z5)', '15 अक्षरों का GSTIN (खाली छोड़ सकते हैं)')}
+                      className="w-full px-3.5 py-2.5 text-sm font-mono uppercase rounded-lg border border-slate-300 bg-white text-slate-950 disabled:bg-slate-100 disabled:text-slate-500 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                    />
+                    <p className="text-[11px] text-slate-500 mt-1">
+                      {t(
+                        'Must be 15 characters matching official Indian GSTIN format, and first 2 digits must match the selected state code below.',
+                        'यदि भरें तो ठीक 15 अक्षर (मानक भारतीय GSTIN फ़ॉर्मेट) होना चाहिए और पहले 2 अंक नीचे चुने गए राज्य कोड से मिलने चाहिए।'
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Legal Name Field */}
+                  <div>
+                    <label
+                      htmlFor="admin-gst-legal-name"
+                      className="block text-xs font-bold text-slate-800 mb-1.5"
+                    >
+                      {t('Legal Business Name', 'कानूनी नाम (Legal Name)')}
+                    </label>
+                    <input
+                      id="admin-gst-legal-name"
+                      type="text"
+                      maxLength={160}
+                      disabled={!gstSettings.canEdit || savingGstSettings}
+                      value={gstSettings.legalName}
+                      onChange={(e) => {
+                        setGstSettings((prev) => ({ ...prev, legalName: e.target.value }));
+                        if (gstSettingsError) setGstSettingsError('');
+                      }}
+                      placeholder="BHANU RAM BARIHA DIGITAL TECHNOLOGIES"
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-950 disabled:bg-slate-100 disabled:text-slate-500 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                    />
+                  </div>
+
+                  {/* State Dropdown (Default Chhattisgarh 22) */}
+                  <div>
+                    <label
+                      htmlFor="admin-gst-state"
+                      className="block text-xs font-bold text-slate-800 mb-1.5"
+                    >
+                      {t('Business State & GST State Code', 'राज्य एवं GST राज्य कोड (डिफ़ॉल्ट: छत्तीसगढ़ - 22)')}
+                    </label>
+                    <select
+                      id="admin-gst-state"
+                      disabled={!gstSettings.canEdit || savingGstSettings}
+                      value={gstSettings.stateCode}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        const found = getIndianStateByCode(code);
+                        setGstSettings((prev) => ({
+                          ...prev,
+                          stateCode: code,
+                          stateName: found?.nameEn || 'Chhattisgarh',
+                        }));
+                        if (gstSettingsError) setGstSettingsError('');
+                      }}
+                      className="w-full px-3.5 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-950 disabled:bg-slate-100 disabled:text-slate-500 focus:outline-hidden focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                    >
+                      {INDIAN_STATES.map((st) => (
+                        <option key={st.code} value={st.code}>
+                          {st.code} — {language === 'hi' ? `${st.nameHi} (${st.nameEn})` : st.nameEn}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {gstSettingsError && (
+                    <div
+                      role="alert"
+                      className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2"
+                    >
+                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>{gstSettingsError}</span>
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                    <div className="text-[11px] text-slate-500 font-mono">
+                      {gstSettings.updatedAt
+                        ? `${t('Last saved:', 'अंतिम अपडेट:')} ${formatDate(gstSettings.updatedAt)}`
+                        : t('Default unregistered mode (Chhattisgarh - 22)', 'डिफ़ॉल्ट बिना GSTIN मोड (छत्तीसगढ़ - 22)')}
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={!gstSettings.canEdit || savingGstSettings}
+                      className="px-5 py-2.5 rounded-lg bg-blue-700 hover:bg-blue-800 disabled:opacity-50 text-white text-xs sm:text-sm font-bold shadow-xs transition-colors cursor-pointer"
+                    >
+                      {savingGstSettings
+                        ? t('Saving...', 'सेव हो रहा है...')
+                        : t('Save GST Settings', 'GST सेटिंग सेव करें')}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           </div>
         )}

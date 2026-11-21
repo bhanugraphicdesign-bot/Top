@@ -9,6 +9,15 @@ export interface DemoSiteItem {
   previewImage: string;
   accentFrom: string;
   accentTo: string;
+  mrp: number;
+  badgeEn?: string;
+  badgeHi?: string;
+}
+
+const INR_FORMATTER = new Intl.NumberFormat('en-IN');
+
+export function formatIndianMrp(mrp: number): string {
+  return `₹${INR_FORMATTER.format(mrp)}`;
 }
 
 /**
@@ -29,6 +38,7 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/shopping/hero.jpg',
     accentFrom: '#9d174d',
     accentTo: '#c2592b',
+    mrp: 149999,
   },
   {
     slug: 'core-engineering',
@@ -43,6 +53,7 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/core-engineering/hero.jpg',
     accentFrom: '#0f1f3d',
     accentTo: '#ea580c',
+    mrp: 79999,
   },
   {
     slug: 'web-ecosystem',
@@ -57,6 +68,7 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/web-ecosystem/hero.jpg',
     accentFrom: '#070b18',
     accentTo: '#6366f1',
+    mrp: 99999,
   },
   {
     slug: 'mobile-system',
@@ -71,6 +83,7 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/mobile-system/hero.jpg',
     accentFrom: '#0b1416',
     accentTo: '#3ddc84',
+    mrp: 99999,
   },
   {
     slug: 'artificial-intelligence',
@@ -85,6 +98,7 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/artificial-intelligence/hero.jpg',
     accentFrom: '#050814',
     accentTo: '#06b6d4',
+    mrp: 299999,
   },
   {
     slug: 'cloud-engineering',
@@ -99,6 +113,7 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/cloud-engineering/hero.jpg',
     accentFrom: '#060d18',
     accentTo: '#14b8a6',
+    mrp: 199999,
   },
   {
     slug: 'integration-suite',
@@ -113,6 +128,24 @@ export const DEMO_SITES: DemoSiteItem[] = [
     previewImage: '/demo/integration-suite/hero.jpg',
     accentFrom: '#070c14',
     accentTo: '#10b981',
+    mrp: 249999,
+  },
+  {
+    slug: 'maha-bazaar',
+    nameEn: 'Maha Bazaar Platform',
+    nameHi: 'महा बाज़ार प्लेटफ़ॉर्म',
+    descriptionEn:
+      'Enterprise multi-vendor marketplace with 4 interactive role portals: Customer Storefront, Seller Panel, Delivery Tracking, and Admin Dashboard.',
+    descriptionHi:
+      'विक्रेता, ग्राहक, डिलीवरी और एडमिन — एक ही एंटरप्राइज़ मल्टी-वेंडर मार्केटप्लेस प्लेटफ़ॉर्म पर।',
+    categoryEn: 'Enterprise Marketplace',
+    categoryHi: 'एंटरप्राइज़ मार्केटप्लेस',
+    previewImage: '/demo/maha-bazaar/hero.jpg',
+    accentFrom: '#1e1b4b',
+    accentTo: '#ea580c',
+    mrp: 1499999,
+    badgeEn: 'Flagship Demo',
+    badgeHi: 'फ़्लैगशिप डेमो',
   },
 ];
 

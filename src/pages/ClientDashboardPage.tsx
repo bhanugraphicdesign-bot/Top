@@ -2242,12 +2242,12 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
               <div>
                 <h3 className="text-base font-bold text-slate-950">
-                  {t('GST Tax Invoices & Verified Escrow Settlement', 'GST कर चालान एवं सत्यापित भुगतान')}
+                  {t('Bills, Invoices & Verified Settlement', 'बिल, चालान एवं सत्यापित भुगतान')}
                 </h3>
                 <p className="text-xs text-slate-500">
                   {t(
-                    'All invoice totals, 18% GST (HSN 998313), and payment intents are strictly derived and verified server-side.',
-                    'सभी चालान राशि, 18% GST (HSN 998313) एवं भुगतान इंटेंट पूरी तरह सर्वर द्वारा सत्यापित होते हैं।'
+                    'All bill totals, applicable taxes, and payment records are derived and verified server-side.',
+                    'सभी बिल राशि, लागू कर एवं भुगतान विवरण पूरी तरह सर्वर द्वारा सत्यापित होते हैं।'
                   )}
                 </p>
               </div>
@@ -2275,8 +2275,8 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                   </div>
                   <p className="text-slate-600 leading-relaxed">
                     {t(
-                      'Online payment processing is optional and currently disabled because PAYMENT_SECRET / a live gateway is not configured. All GST invoices remain viewable below with zero fake payment transactions.',
-                      'ऑनलाइन भुगतान वैकल्पिक है और PAYMENT_SECRET / लाइव पेमेंट गेटवे सेट न होने के कारण अभी बंद है। आप नीचे सभी GST चालान देख सकते हैं — कोई नकली भुगतान प्रक्रिया नहीं चलाई जाती।'
+                      'Online payment processing is optional and currently disabled because PAYMENT_SECRET / a live gateway is not configured. All bills and invoices remain viewable below.',
+                      'ऑनलाइन भुगतान वैकल्पिक है और PAYMENT_SECRET / लाइव पेमेंट गेटवे सेट न होने के कारण अभी बंद है। आप नीचे सभी बिल व चालान देख सकते हैं।'
                     )}
                   </p>
                 </div>
@@ -2296,89 +2296,142 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
               </div>
             ) : (
               <div className="space-y-4">
-                {invoicesList.map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="p-5 rounded-xl border border-slate-200 bg-white space-y-3"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                      <div>
-                        <div className="flex items-center gap-2 text-xs font-mono text-slate-500">
-                          <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>HSN {inv.hsnSac}</span>
-                          <span aria-hidden="true">·</span>
-                          <span
-                            className={`font-bold uppercase ${
-                              inv.status === 'paid' ? 'text-emerald-700' : 'text-amber-700'
-                            }`}
-                          >
-                            {inv.status === 'paid' ? t('Settled', 'भुगतान पूर्ण') : t('Payment Due', 'देय')}
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-bold text-slate-950 mt-1">
-                          {language === 'hi' && inv.milestoneTitleHi ? inv.milestoneTitleHi : inv.milestoneTitle}
-                        </h4>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          {language === 'hi' && inv.projectNameHi ? inv.projectNameHi : inv.projectName}
-                        </div>
-                      </div>
-
-                      <div className="text-left sm:text-right font-mono tabular-nums">
-                        <div className="text-lg font-extrabold text-slate-950">
-                          INR {inv.totalAmount.toLocaleString('en-IN')}
-                        </div>
-                        <div className="text-[11px] text-slate-500">
-                          {t('Base:', 'मूल:')} INR {inv.subtotal.toLocaleString('en-IN')} + {inv.gstRate}% GST (INR{' '}
-                          {inv.gstAmount.toLocaleString('en-IN')})
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                      <div className="text-slate-500 font-mono space-y-0.5">
+                {invoicesList.map((inv) => {
+                  const isBillOfSupply =
+                    inv.documentType === 'bill_of_supply' || Number(inv.gstRate || 0) === 0;
+                  return (
+                    <div
+                      key={inv.id}
+                      className="p-5 rounded-xl border border-slate-200 bg-white space-y-3"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                         <div>
-                          {t('Issued:', 'जारी तिथि:')} {formatDate(inv.issuedAt)} · {t('Due:', 'अंतिम तिथि:')}{' '}
-                          {formatDate(inv.dueAt)}
-                        </div>
-                        {inv.paymentTxnId && (
-                          <div className="text-emerald-700 font-semibold">
-                            {t('TXN Ref:', 'लेनदेन संदर्भ:')} {inv.paymentTxnId} ({inv.paymentMethod})
+                          <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-slate-500">
+                            <span className="font-bold text-slate-900">{inv.invoiceNumber}</span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-sans font-bold border ${
+                                isBillOfSupply
+                                  ? 'bg-slate-100 text-slate-700 border-slate-300'
+                                  : 'bg-blue-50 text-blue-800 border-blue-200'
+                              }`}
+                            >
+                              {isBillOfSupply
+                                ? t('Bill of Supply', 'Bill of Supply (बिल)')
+                                : t('Tax Invoice', 'Tax Invoice')}
+                            </span>
+                            {!isBillOfSupply && inv.hsnSac && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span>SAC {inv.hsnSac}</span>
+                              </>
+                            )}
+                            <span aria-hidden="true">·</span>
+                            <span
+                              className={`font-bold uppercase ${
+                                inv.status === 'paid' ? 'text-emerald-700' : 'text-amber-700'
+                              }`}
+                            >
+                              {inv.status === 'paid' ? t('Settled', 'भुगतान पूर्ण') : t('Payment Due', 'देय')}
+                            </span>
                           </div>
-                        )}
+                          {!isBillOfSupply && inv.supplierGstin && (
+                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                              {t('Supplier GSTIN:', 'आपूर्तिकर्ता GSTIN:')} {inv.supplierGstin}
+                            </div>
+                          )}
+                          <h4 className="text-sm font-bold text-slate-950 mt-1">
+                            {language === 'hi' && inv.milestoneTitleHi ? inv.milestoneTitleHi : inv.milestoneTitle}
+                          </h4>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {language === 'hi' && inv.projectNameHi ? inv.projectNameHi : inv.projectName}
+                          </div>
+                        </div>
+
+                        <div className="text-left sm:text-right font-mono tabular-nums">
+                          <div className="text-lg font-extrabold text-slate-950">
+                            INR {inv.totalAmount.toLocaleString('en-IN')}
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            {isBillOfSupply ? (
+                              <>
+                                {t('Base:', 'मूल:')} INR {inv.subtotal.toLocaleString('en-IN')} ·{' '}
+                                {t('GST Not Applicable', 'GST लागू नहीं')}
+                              </>
+                            ) : inv.taxType === 'cgst_sgst' ? (
+                              <>
+                                {t('Base:', 'मूल:')} INR {inv.subtotal.toLocaleString('en-IN')} + CGST{' '}
+                                {inv.cgstRate ?? 9}% (INR {(inv.cgstAmount ?? 0).toLocaleString('en-IN')}) + SGST{' '}
+                                {inv.sgstRate ?? 9}% (INR {(inv.sgstAmount ?? 0).toLocaleString('en-IN')})
+                              </>
+                            ) : inv.taxType === 'igst' ? (
+                              <>
+                                {t('Base:', 'मूल:')} INR {inv.subtotal.toLocaleString('en-IN')} + IGST{' '}
+                                {inv.igstRate ?? 18}% (INR {(inv.igstAmount ?? inv.gstAmount).toLocaleString('en-IN')})
+                              </>
+                            ) : (
+                              <>
+                                {t('Base:', 'मूल:')} INR {inv.subtotal.toLocaleString('en-IN')} + {inv.gstRate}% GST (INR{' '}
+                                {inv.gstAmount.toLocaleString('en-IN')})
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
+
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div className="text-slate-500 font-mono space-y-0.5">
+                          <div>
+                            {t('Issued:', 'जारी तिथि:')} {formatDate(inv.issuedAt)} · {t('Due:', 'अंतिम तिथि:')}{' '}
+                            {formatDate(inv.dueAt)}
+                          </div>
+                          {inv.paymentTxnId && (
+                            <div className="text-emerald-700 font-semibold">
+                              {t('TXN Ref:', 'लेनदेन संदर्भ:')} {inv.paymentTxnId} ({inv.paymentMethod})
+                            </div>
+                          )}
+                        </div>
 
                       {inv.status !== 'paid' && (
-                        isDemoSandbox || (paymentGatewayEnabled && (paymentWebhookConfigured || isAdmin)) ? (
+                        <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => setActiveCheckoutInvoice(inv)}
-                            className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                            onClick={() =>
+                              navigate('pay', {
+                                amount: String(inv.totalAmount),
+                                ref: inv.invoiceNumber,
+                              })
+                            }
+                            className="px-4 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 shadow-2xs"
                           >
                             <CreditCard className="w-3.5 h-3.5" />
-                            <span>{t('Initiate Verified Settlement', 'सत्यापित भुगतान प्रारंभ करें')}</span>
+                            <span>{t('Pay Now', 'अभी भुगतान करें')}</span>
                           </button>
-                        ) : paymentGatewayEnabled ? (
-                          <button
-                            type="button"
-                            onClick={() => handleSettleInvoice(inv)}
-                            disabled={processingPayment}
-                            className="px-4 py-2 text-xs font-bold text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
-                          >
-                            <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-                            <span>
-                              {t(
-                                'Generate Signed Escrow Intent (Webhook Required)',
-                                'हस्ताक्षरित एस्क्रो आशय बनाएं (वेबहुक आवश्यक)'
-                              )}
-                            </span>
-                          </button>
-                        ) : (
-                          <span className="px-3.5 py-2 text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0">
-                            <Lock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>{t('Optional Mode — Gateway Offline', 'वैकल्पिक मोड — गेटवे बंद')}</span>
-                          </span>
-                        )
+                          {isDemoSandbox || (paymentGatewayEnabled && (paymentWebhookConfigured || isAdmin)) ? (
+                            <button
+                              type="button"
+                              onClick={() => setActiveCheckoutInvoice(inv)}
+                              className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                            >
+                              <CreditCard className="w-3.5 h-3.5" />
+                              <span>{t('Initiate Verified Settlement', 'सत्यापित भुगतान प्रारंभ करें')}</span>
+                            </button>
+                          ) : paymentGatewayEnabled ? (
+                            <button
+                              type="button"
+                              onClick={() => handleSettleInvoice(inv)}
+                              disabled={processingPayment}
+                              className="px-4 py-2 text-xs font-bold text-slate-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-md transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
+                              <span>
+                                {t(
+                                  'Generate Signed Escrow Intent (Webhook Required)',
+                                  'हस्ताक्षरित एस्क्रो आशय बनाएं (वेबहुक आवश्यक)'
+                                )}
+                              </span>
+                            </button>
+                          ) : null}
+                        </div>
                       )}
                     </div>
 
@@ -2447,8 +2500,9 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
                         </div>
                       </div>
                     )}
-                  </div>
-                ))}
+                      </div>
+                    );
+                  })}
               </div>
             )}
           </div>

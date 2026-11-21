@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { DemoPriceBar } from '../components/DemoPriceBar';
 
 interface CloudEngineeringDemoProps {
   onBackToHome: () => void;
@@ -955,6 +956,9 @@ export const CloudEngineeringDemo: React.FC<CloudEngineeringDemoProps> = ({
             </div>
           </div>
         </div>
+
+        {/* MRP Price Bar */}
+        <DemoPriceBar slug="cloud-engineering" />
 
         {/* Navigation Header */}
         <header className="bg-[#060d18]/90 backdrop-blur-xl border-b border-white/10">
