@@ -107,7 +107,7 @@ export const ProfileModal: React.FC = () => {
           role="dialog"
           aria-modal="true"
           aria-labelledby="profile-modal-title"
-          className="relative bg-white rounded-xl shadow-2xl max-w-md w-full p-6 sm:p-7 text-left border border-slate-200"
+          className="relative bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-7 text-left border border-blue-200/70"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -231,7 +231,7 @@ export const ProfileModal: React.FC = () => {
                 closeProfileModal();
                 navigate(isAdmin ? 'admin-dashboard' : 'client-dashboard');
               }}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+              className="pws-btn-glass flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold text-slate-800 rounded-lg cursor-pointer"
             >
               <LayoutDashboard className="w-3.5 h-3.5 text-blue-700" />
               <span>

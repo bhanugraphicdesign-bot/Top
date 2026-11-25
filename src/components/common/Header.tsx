@@ -63,10 +63,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header
-      className={`sticky top-0 z-40 w-full transition-all duration-200 ${
-        scrolled
-          ? 'bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs'
-          : 'bg-white border-b border-slate-100'
+      className={`sticky top-0 z-40 w-full transition-all duration-300 ${
+        scrolled ? 'pws-header-glass' : 'pws-header-top'
       }`}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
@@ -86,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
 
           {/* Zone 2: Navigation Links (Desktop >= lg) */}
-          <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-sm font-semibold text-slate-600">
+          <nav className="hidden lg:flex items-center gap-4 xl:gap-5 text-sm font-semibold text-slate-800">
             {navItems.map((item) => (
               <a
                 key={item.route}
@@ -169,10 +167,10 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={(e) => handleNavClick(e, 'client-dashboard')}
               type="button"
               aria-current={currentRoute === 'client-dashboard' ? 'page' : undefined}
-              className={`hidden md:inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-md border transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 ${
+              className={`pws-btn-glass hidden md:inline-flex items-center px-3 py-1.5 text-xs font-bold rounded-md cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600 ${
                 currentRoute === 'client-dashboard'
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                  ? 'text-blue-700 border-blue-300'
+                  : 'text-slate-700'
               }`}
             >
               <span>{t('Client Portal', 'क्लाइंट पोर्टल')}</span>
@@ -233,7 +231,7 @@ export const Header: React.FC<HeaderProps> = ({
               <button
                 onClick={() => openAuthModal('login')}
                 type="button"
-                className="inline-flex items-center justify-center gap-1 min-h-[38px] sm:min-h-0 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-md transition-all cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-blue-600"
+                className="pws-btn-glass inline-flex items-center justify-center gap-1 min-h-[38px] sm:min-h-0 px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold text-slate-700 rounded-md cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <User className="w-3.5 h-3.5 text-blue-700 shrink-0" />
                 <span className="hidden sm:inline text-slate-500 font-medium">{t('Guest ·', 'गेस्ट ·')}</span>
@@ -245,9 +243,9 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={onOpenConsultation}
               type="button"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-md transition-all shadow-xs cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600"
+              className="pws-btn-3d hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white rounded-md cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600"
             >
-              <span>{t('Book Consultation', 'परामर्श बुक करें')}</span>
+              <span>{t('Book Free Consultation', 'मुफ़्त परामर्श बुक करें')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
 

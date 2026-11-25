@@ -19,7 +19,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
     <section id="company" className="py-20 sm:py-28 bg-white border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="max-w-3xl mb-14">
+        <div className="pws-reveal pws-home-surface-dark max-w-3xl mb-14">
           <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
             {t('ABOUT THE ENTERPRISE', 'कंपनी परिचय')}
           </div>
@@ -29,11 +29,11 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
           >
             {language === 'hi' ? (
               <>
-                भारतीय इंजीनियरिंग प्रतिभा का वैश्विक मंच: <span className="text-blue-700">भानु राम बरीहा डिजिटल टेक्नोलॉजीज</span>
+                भारतीय इंजीनियरिंग प्रतिभा का वैश्विक मंच: <span className="pws-gradient-text">भानु राम बरीहा डिजिटल टेक्नोलॉजीज</span>
               </>
             ) : (
               <>
-                Indian Engineering Precision Delivering to Global Benchmarks: <span className="text-blue-700">{COMPANY_INFO.name}</span>
+                Indian Engineering Precision Delivering to Global Benchmarks: <span className="pws-gradient-text">{COMPANY_INFO.name}</span>
               </>
             )}
           </h2>
@@ -47,31 +47,33 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
         {/* 2-Column Story & Campus Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
           {/* Left: Campus Image & Facility Credentials */}
-          <div className="lg:col-span-6 space-y-4">
-            <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-md group">
-              <OptimizedImage
-                assetKey="campusImage"
-                alt="Bhanu Ram Bariha Digital Technologies Innovation Campus and Engineering Delivery Center"
-                altHi="भानु राम बरीहा डिजिटल टेक्नोलॉजीज इनोवेशन कैंपस और इंजीनियरिंग डिलीवरी सेंटर"
-                width={1376}
-                height={768}
-                loading="lazy"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="w-full h-80 sm:h-96 object-cover transition-transform duration-500 group-hover:scale-102"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
-              <div className="absolute bottom-4 left-4 right-4 text-white">
-                <p className="text-xs font-semibold uppercase tracking-wider text-blue-300">
-                  {t('Innovation Campus & Delivery Center', 'इनोवेशन कैंपस और डिलीवरी सेंटर')}
-                </p>
-                <p className="text-sm font-bold mt-0.5">
-                  {siteContact.location}
-                </p>
+          <div className="pws-reveal lg:col-span-6 space-y-4">
+            <div className="pws-card-3d-dark relative rounded-2xl overflow-hidden group">
+              <div className="relative">
+                <OptimizedImage
+                  assetKey="campusImage"
+                  alt="Bhanu Ram Bariha Digital Technologies Innovation Campus and Engineering Delivery Center"
+                  altHi="भानु राम बरीहा डिजिटल टेक्नोलॉजीज इनोवेशन कैंपस और इंजीनियरिंग डिलीवरी सेंटर"
+                  width={1376}
+                  height={768}
+                  loading="lazy"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="w-full h-80 sm:h-96 object-cover transition-transform duration-500 group-hover:scale-102"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/55 to-transparent pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 bg-gradient-to-t from-slate-950/95 via-slate-950/80 to-transparent text-white">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-sky-300">
+                    {t('Innovation Campus & Delivery Center', 'इनोवेशन कैंपस और डिलीवरी सेंटर')}
+                  </p>
+                  <p className="text-sm font-bold mt-1 leading-snug whitespace-normal break-words">
+                    {siteContact.location}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Corporate Credentials Strip (Registration hidden until configured) */}
-            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
+            <div className="pws-home-light-card p-4 bg-slate-50 rounded-lg border border-slate-200 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600">
               <div className="flex items-center gap-2 min-w-0">
                 <Building2 className="w-4 h-4 text-blue-700 shrink-0" />
                 <span className="font-semibold text-slate-900 break-words">
@@ -87,12 +89,12 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
 
           {/* Right: Core Values & Strategic Pillars */}
           <div className="lg:col-span-6 space-y-6">
-            <h3 className="text-xl sm:text-2xl font-bold text-slate-900">
+            <h3 className="pws-home-heading-chip text-xl sm:text-2xl font-bold text-slate-900">
               {t('Our Engineering Operating Philosophy', 'हमारा इंजीनियरिंग संचालन दर्शन')}
             </h3>
 
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors">
+            <div className="pws-stagger-grid space-y-4">
+              <div className="pws-card-3d p-4 rounded-xl">
                 <h4 className="text-sm font-bold text-slate-900">
                   {t('Zero-Loss Architectural Discipline', 'शून्य-हानि आर्किटेक्चर अनुशासन')}
                 </h4>
@@ -104,7 +106,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
                 </p>
               </div>
 
-              <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors">
+              <div className="pws-card-3d p-4 rounded-xl">
                 <h4 className="text-sm font-bold text-slate-900">
                   {t('Complete Sovereign IP Ownership', 'संपूर्ण संप्रभु आईपी स्वामित्व')}
                 </h4>
@@ -116,7 +118,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
                 </p>
               </div>
 
-              <div className="p-4 rounded-lg border border-slate-200 bg-white hover:border-blue-300 transition-colors">
+              <div className="pws-card-3d p-4 rounded-xl">
                 <h4 className="text-sm font-bold text-slate-900">
                   {t('Deterministic AI Grounding', 'विश्वसनीय व सत्यापित एआई इंटीग्रेशन')}
                 </h4>
@@ -132,7 +134,7 @@ export const CompanyIntroSection: React.FC<CompanyIntroSectionProps> = ({
             <div className="pt-2">
               <button
                 onClick={onOpenConsultation}
-                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs font-bold text-blue-700 hover:text-white bg-blue-50 hover:bg-blue-700 rounded-md transition-colors cursor-pointer border border-blue-200 text-left"
+                className="pws-btn-glass inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs font-bold text-blue-700 rounded-lg cursor-pointer text-left"
               >
                 <span>{t('Meet Our Leadership & Engineering Architects', 'हमारे लीडरशिप और आर्किटेक्ट्स से जुड़ें')}</span>
                 <ArrowRight className="w-3.5 h-3.5 shrink-0" />

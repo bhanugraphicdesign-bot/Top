@@ -77,7 +77,7 @@ export const NotificationDropdown: React.FC = () => {
         onClick={() => setIsOpen(!isOpen)}
         className="relative min-w-[40px] min-h-[40px] sm:min-w-0 sm:min-h-0 p-1.5 sm:p-2 flex items-center justify-center text-slate-600 hover:text-blue-700 hover:bg-slate-100 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
         title={t('Notifications', 'सूचनाएं')}
-        aria-label="View notifications"
+        aria-label={t('View notifications', 'सूचनाएं देखें')}
         aria-expanded={isOpen}
         aria-haspopup="true"
       >

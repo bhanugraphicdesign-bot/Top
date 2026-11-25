@@ -40,7 +40,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
     <section id="ai-solutions" className="py-20 sm:py-28 bg-slate-50/70 border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="max-w-3xl mb-14">
+        <div className="pws-reveal pws-home-surface-dark max-w-3xl mb-14">
           <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
             {t('POWER WEB STUDIO AI INNOVATION SUITE', 'एआई इनोवेशन सुइट')}
           </div>
@@ -50,28 +50,28 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
           >
             {language === 'hi' ? (
               <>
-                सुरक्षित <span className="text-blue-700">एंटरप्राइज एआई</span> और स्वायत्त वर्कफ़्लो इंजन
+                सुरक्षित <span className="pws-gradient-text">एंटरप्राइज एआई</span> और स्वायत्त वर्कफ़्लो इंजन
               </>
             ) : (
               <>
-                Sovereign <span className="text-blue-700">Enterprise AI</span> & Autonomous Workflow Engines
+                Sovereign <span className="pws-gradient-text">Enterprise AI</span> & Autonomous Workflow Engines
               </>
             )}
           </h2>
           <p className="mt-3 text-base sm:text-lg text-slate-600 leading-relaxed">
             {t(
-              'Grounded generative intelligence engineered for zero hallucinations, mathematical confidence checks, and strict corporate data sovereignty.',
-              'शून्य भ्रांति (Zero Hallucination), गणितीय सटीकता और सख्त कॉर्पोरेट डेटा संप्रभुता के साथ निर्मित सुरक्षित एआई समाधान।'
+              'Source-grounded answers aimed at minimizing errors, with mathematical confidence checks and strict corporate data sovereignty.',
+              'स्रोत-आधारित जवाब, कम गलती का लक्ष्य (Source-grounded answers), गणितीय सटीकता और सख्त कॉर्पोरेट डेटा संप्रभुता के साथ निर्मित सुरक्षित एआई समाधान।'
             )}
           </p>
         </div>
 
         {/* 4 Core AI Solutions Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
           {AI_SOLUTIONS.map((solution) => (
             <div
               key={solution.id}
-              className="bg-white rounded-xl border border-slate-200 p-6 sm:p-7 shadow-xs hover:border-blue-400 hover:shadow-md transition-all flex flex-col justify-between"
+              className="pws-card-3d rounded-2xl p-6 sm:p-7 flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center gap-3 mb-4">
@@ -132,10 +132,10 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
         </div>
 
         {/* Interactive AI Architecture Scope Calculator & Visual Split */}
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+        <div className="pws-reveal pws-card-3d pws-no-tilt rounded-2xl overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-12">
             {/* Visual Left (5 cols) */}
-            <div className="lg:col-span-5 relative bg-slate-900 p-6 sm:p-8 flex flex-col justify-between overflow-hidden">
+            <div className="lg:col-span-5 relative bg-[#070d1d] p-6 sm:p-8 flex flex-col justify-between overflow-hidden">
               <OptimizedImage
                 assetKey="aiImage"
                 alt="Enterprise AI Neural Architecture and Sovereign Model Engineering Studio"
@@ -144,17 +144,21 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                 height={896}
                 loading="lazy"
                 sizes="(max-width: 1024px) 100vw, 42vw"
-                className="absolute inset-0 w-full h-full object-cover opacity-35"
+                className="absolute inset-0 w-full h-full object-cover opacity-15 blur-[1.5px]"
               />
-              <div className="relative z-10">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase mb-2">
-                  <Calculator className="w-4 h-4" />
+              <div
+                aria-hidden="true"
+                className="absolute inset-0 bg-gradient-to-b from-[#070d1d]/92 via-[#091229]/88 to-[#070d1d]/95 pointer-events-none"
+              />
+              <div className="relative z-10 p-4 sm:p-5 rounded-xl bg-slate-950/75 border border-slate-700/60 backdrop-blur-md">
+                <div className="flex items-center gap-2 text-xs font-bold text-sky-300 tracking-wider uppercase mb-2">
+                  <Calculator className="w-4 h-4 shrink-0" />
                   <span>{t('INTERACTIVE ARCHITECTURE ESTIMATOR', 'आर्किटेक्चर अनुमानक')}</span>
                 </div>
                 <h3 className="text-2xl font-bold text-white tracking-tight">
                   {t('Model Your Enterprise AI Architecture', 'अपने एंटरप्राइज एआई आर्किटेक्चर का मॉडल बनाएं')}
                 </h3>
-                <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                <p className="text-xs sm:text-sm text-slate-100 mt-2 leading-relaxed">
                   {t(
                     'Select your operational parameters to project workload efficiency gains, latency boundaries, and cloud blueprint.',
                     'दक्षता लाभ, लेटेंसी और अनुशंसित क्लाउड ब्लूप्रिंट का तुरंत अनुमान लगाने के लिए अपने पैरामीटर चुनें।'
@@ -163,21 +167,21 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
               </div>
 
               {/* Honest Architecture Scope Box */}
-              <div className="relative z-10 mt-8 p-4 rounded-lg bg-slate-950/80 border border-slate-800 backdrop-blur-md text-white space-y-3">
+              <div className="relative z-10 mt-8 p-4 rounded-xl bg-slate-950/90 border border-slate-700/80 backdrop-blur-md text-white space-y-3">
                 <div className="flex items-center justify-between gap-2 text-xs border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">{t('Automation Focus:', 'स्वचालन पद्धति:')}</span>
-                  <span className="font-mono text-emerald-400 font-bold text-xs text-right">
+                  <span className="text-slate-200">{t('Automation Focus:', 'स्वचालन पद्धति:')}</span>
+                  <span className="font-mono text-emerald-300 font-bold text-xs text-right">
                     {est.workflowApproach}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-xs border-b border-slate-800 pb-2">
-                  <span className="text-slate-400">{t('Deployment Tier:', 'परिनियोजन स्तर:')}</span>
-                  <span className="font-mono text-blue-400 font-bold text-xs text-right">
+                  <span className="text-slate-200">{t('Deployment Tier:', 'परिनियोजन स्तर:')}</span>
+                  <span className="font-mono text-sky-300 font-bold text-xs text-right">
                     {est.tierProfile}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-slate-400">{t('Performance Target:', 'प्रदर्शन मानदंड:')}</span>
+                  <span className="text-slate-200">{t('Performance Target:', 'प्रदर्शन मानदंड:')}</span>
                   <span className="font-mono text-white font-bold text-xs text-right">
                     {est.validationMethod}
                   </span>
@@ -188,9 +192,9 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
             {/* Interactive Calculator Form (7 cols) */}
             <div className="lg:col-span-7 p-6 sm:p-8 space-y-6">
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <div className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   1. {t('Select Your Industry Sector', 'अपना उद्योग क्षेत्र चुनें')}
-                </label>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: 'fintech', label: 'FinTech', labelHi: 'फिनटेक' },
@@ -202,10 +206,10 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                       type="button"
                       key={ind.id}
                       onClick={() => setCalcIndustry(ind.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-lg text-xs font-semibold text-center cursor-pointer ${
                         calcIndustry === ind.id
-                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'pws-btn-3d text-white'
+                          : 'pws-btn-glass text-slate-700'
                       }`}
                     >
                       {language === 'hi' ? ind.labelHi : ind.label}
@@ -215,9 +219,9 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <div className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   2. {t('Select Primary AI Workload', 'प्राथमिक एआई वर्कलोड चुनें')}
-                </label>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { id: 'rag', label: 'Private Knowledge RAG', labelHi: 'प्राइवेट नॉलेज आरएजी' },
@@ -229,10 +233,10 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                       type="button"
                       key={w.id}
                       onClick={() => setCalcWorkload(w.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-left border cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-lg text-xs font-semibold text-left cursor-pointer ${
                         calcWorkload === w.id
-                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'pws-btn-3d text-white'
+                          : 'pws-btn-glass text-slate-700'
                       }`}
                     >
                       {language === 'hi' ? w.labelHi : w.label}
@@ -242,9 +246,9 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <div className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   3. {t('Scale of Monthly Operations', 'मासिक संचालन का पैमाना')}
-                </label>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { id: 'startup', label: '<10,000 queries/mo', labelHi: '<10,000 क्वेरी/माह' },
@@ -255,10 +259,10 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
                       type="button"
                       key={s.id}
                       onClick={() => setCalcScale(s.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors ${
+                      className={`p-2.5 rounded-lg text-xs font-semibold text-center cursor-pointer ${
                         calcScale === s.id
-                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'pws-btn-3d text-white'
+                          : 'pws-btn-glass text-slate-700'
                       }`}
                     >
                       {language === 'hi' ? s.labelHi : s.label}
@@ -280,7 +284,7 @@ export const AiSolutionsSection: React.FC<AiSolutionsSectionProps> = ({
               <button
                 type="button"
                 onClick={onOpenConsultation}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all cursor-pointer shadow-xs"
+                className="pws-btn-3d w-full flex items-center justify-center gap-2 px-5 py-3.5 text-xs font-bold text-white rounded-lg cursor-pointer"
               >
                 <span>{t('Deploy This Enterprise AI Architecture', 'यह एंटरप्राइज एआई आर्किटेक्चर तैनात करें')}</span>
                 <ArrowRight className="w-4 h-4" />

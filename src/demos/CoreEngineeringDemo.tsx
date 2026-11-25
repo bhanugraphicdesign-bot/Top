@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { DemoPriceBar } from '../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../components/common/DemoLanguageToggle';
 import {
   ArrowLeft,
   ArrowRight,
@@ -574,38 +575,11 @@ export const CoreEngineeringDemo: React.FC<CoreEngineeringDemoProps> = ({
 
             {/* Right Actions: Language Toggle + Get Quote CTA + Mobile Hamburger */}
             <div className="flex items-center gap-2 shrink-0">
-              <div
-                role="radiogroup"
-                aria-label={t('Language Selector', 'भाषा चयन')}
-                className="flex items-center border border-slate-200 rounded-md p-0.5 bg-slate-100 text-[11px] font-bold"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={language === 'hi'}
-                  onClick={() => setLanguage('hi')}
-                  className={`px-2 py-1 rounded transition-colors cursor-pointer whitespace-nowrap ${
-                    language === 'hi'
-                      ? 'bg-[#0f1f3d] text-white'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  हिन्दी
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={language === 'en'}
-                  onClick={() => setLanguage('en')}
-                  className={`px-2 py-1 rounded transition-colors cursor-pointer whitespace-nowrap ${
-                    language === 'en'
-                      ? 'bg-[#0f1f3d] text-white'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  EN
-                </button>
-              </div>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="light"
+              />
 
               <button
                 type="button"

@@ -66,9 +66,10 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
   return (
     <div className="bg-white">
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal flex flex-col md:flex-row md:items-end justify-between gap-6">
             <div className="max-w-3xl">
               <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
                 {t('ANDROID MOBILITY & APPLICATION PORTFOLIO', 'एंड्रॉइड मोबिलिटी एवं ऐप पोर्टफोलियो')}
@@ -79,11 +80,11 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
               >
                 {language === 'hi' ? (
                   <>
-                    मिशन-क्रिटिकल <span className="text-blue-700">नेटिव एंड्रॉइड ऐप्स</span> और मोबाइल इकोसिस्टम
+                    मिशन-क्रिटिकल <span className="pws-gradient-text">नेटिव एंड्रॉइड ऐप्स</span> और मोबाइल इकोसिस्टम
                   </>
                 ) : (
                   <>
-                    Mission-Critical <span className="text-blue-700">Native Android Apps</span> & Ecosystems
+                    Mission-Critical <span className="pws-gradient-text">Native Android Apps</span> & Ecosystems
                   </>
                 )}
               </h1>
@@ -99,7 +100,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
             {isAdmin && (
               <button
                 onClick={() => setAdminModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-100 border border-slate-300 rounded-md transition-colors cursor-pointer shrink-0 shadow-2xs self-start md:self-auto"
+                className="pws-btn-glass flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-800 hover:text-blue-700 rounded-lg cursor-pointer shrink-0 self-start md:self-auto"
               >
                 <Settings className="w-3.5 h-3.5 text-blue-700" />
                 <span>{t('Admin: Manage Portfolio Apps', 'एडमिन: पोर्टफोलियो ऐप्स प्रबंधित करें')}</span>
@@ -114,15 +115,15 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
         {/* Search & Category Filter Bar */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-200">
           {/* 7 Category Filter Buttons (Interactive Tab Buttons) */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-lg border border-slate-200">
+          <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-white/90 backdrop-blur-md rounded-xl border border-blue-100 shadow-sm">
             {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   selectedCategory === cat
-                    ? 'bg-blue-700 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                    ? 'pws-btn-3d text-white'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-blue-50/70'
                 }`}
               >
                 {language === 'hi' ? categoryTranslations[cat].hi : categoryTranslations[cat].en}
@@ -134,6 +135,8 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
           <div className="relative w-full lg:w-[300px]">
             <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" aria-hidden="true" />
             <input
+              id="android-portfolio-search"
+              name="search"
               type="text"
               aria-label={t('Search Android applications', 'एंड्रॉइड एप्लिकेशन खोजें')}
               value={searchQuery}
@@ -156,11 +159,11 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
         </div>
 
         {/* 2-Column App Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="pws-stagger-grid grid grid-cols-1 lg:grid-cols-2 gap-8">
           {filteredApps.map((app) => (
             <div
               key={app.id}
-              className="rounded-xl border border-slate-200 bg-white p-6 sm:p-7 shadow-xs hover:border-blue-500 hover:shadow-md transition-all flex flex-col justify-between"
+              className="pws-card-3d rounded-2xl p-6 sm:p-7 flex flex-col justify-between"
             >
               <div>
                 {/* App Card Header: Icon + Name + Category + Status */}
@@ -281,7 +284,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                     <button
                       type="button"
                       onClick={() => setPreviewApp(app)}
-                      className="px-3.5 py-2 text-xs font-semibold text-slate-700 hover:text-blue-700 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                      className="pws-btn-glass px-3.5 py-2 text-xs font-semibold text-slate-800 hover:text-blue-700 rounded-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
                       {t('Concept Preview', 'कॉन्सेप्ट पूर्वावलोकन')}
                     </button>
@@ -290,7 +293,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                     <button
                       type="button"
                       onClick={() => navigate('app-detail', { id: app.id })}
-                      className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs focus-visible:outline-2 focus-visible:outline-blue-600"
+                      className="pws-btn-3d flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white rounded-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
                       <span>{t('App Details', 'ऐप विवरण')}</span>
                       <ArrowRight className="w-3.5 h-3.5" />
@@ -313,7 +316,7 @@ export const AndroidPortfolioPage: React.FC<AndroidPortfolioPageProps> = ({ onOp
                 setSelectedCategory('all');
                 setSearchQuery('');
               }}
-              className="px-4 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+              className="pws-btn-3d px-4 py-2 text-xs font-bold text-white rounded-md cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
             >
               {t('Reset Filters', 'फ़िल्टर रीसेट करें')}
             </button>

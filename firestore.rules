@@ -219,6 +219,136 @@ service cloud.firestore {
         && isNonEmptyString(data.subscribedAt, 64);
     }
 
+    function isValidBoundedStringList(arr, maxItems, maxItemLen) {
+      return arr is list
+        && arr.size() <= maxItems
+        && (arr.size() == 0 || (
+          arr[0] is string && arr[0].size() <= maxItemLen &&
+          arr[arr.size() - 1] is string && arr[arr.size() - 1].size() <= maxItemLen
+        ));
+    }
+
+    function isValidAiSessionConsent(consent) {
+      return consent is map
+        && consent.keys().hasAll(['accepted', 'acceptedAt', 'policyVersion'])
+        && consent.keys().hasOnly(['accepted', 'acceptedAt', 'policyVersion'])
+        && consent.accepted == true
+        && isNonEmptyString(consent.acceptedAt, 64)
+        && isNonEmptyString(consent.policyVersion, 32);
+    }
+
+    function isValidAiSessionCollected(collected) {
+      return collected is map
+        && collected.keys().hasOnly([
+          'businessName',
+          'businessDescription',
+          'businessStage',
+          'websiteType',
+          'recommendedConcepts',
+          'targetAudience',
+          'targetLocation',
+          'primaryVisitorAction',
+          'pages',
+          'designColors',
+          'designThemeMode',
+          'designStyle',
+          'designFonts',
+          'designButtons',
+          'designNavigation',
+          'designHero',
+          'designMedia',
+          'designAnimations',
+          'features',
+          'featureNotes',
+          'budget',
+          'timeline',
+          'domainHostingStatus',
+          'existingAssets',
+          'summary'
+        ])
+        && isOptionalString(collected, 'businessName', 200)
+        && isOptionalString(collected, 'businessDescription', 1000)
+        && isOptionalString(collected, 'businessStage', 120)
+        && isOptionalString(collected, 'websiteType', 160)
+        && (!('recommendedConcepts' in collected) || isValidBoundedStringList(collected.recommendedConcepts, 5, 400))
+        && isOptionalString(collected, 'targetAudience', 500)
+        && isOptionalString(collected, 'targetLocation', 240)
+        && isOptionalString(collected, 'primaryVisitorAction', 400)
+        && (!('pages' in collected) || isValidBoundedStringList(collected.pages, 30, 160))
+        && isOptionalString(collected, 'designColors', 300)
+        && isOptionalString(collected, 'designThemeMode', 160)
+        && isOptionalString(collected, 'designStyle', 300)
+        && isOptionalString(collected, 'designFonts', 300)
+        && isOptionalString(collected, 'designButtons', 300)
+        && isOptionalString(collected, 'designNavigation', 300)
+        && isOptionalString(collected, 'designHero', 300)
+        && isOptionalString(collected, 'designMedia', 300)
+        && isOptionalString(collected, 'designAnimations', 300)
+        && (!('features' in collected) || isValidBoundedStringList(collected.features, 40, 200))
+        && isOptionalString(collected, 'featureNotes', 2500)
+        && isOptionalString(collected, 'budget', 160)
+        && isOptionalString(collected, 'timeline', 160)
+        && isOptionalString(collected, 'domainHostingStatus', 240)
+        && isOptionalString(collected, 'existingAssets', 500)
+        && isOptionalString(collected, 'summary', 5000);
+    }
+
+    function isValidAiSessionMessage(msg) {
+      return msg is map
+        && msg.keys().hasAll(['id', 'role', 'text', 'step', 'createdAt'])
+        && msg.keys().hasOnly(['id', 'role', 'text', 'quickReplies', 'step', 'createdAt'])
+        && isNonEmptyString(msg.id, 64)
+        && msg.role in ['user', 'assistant']
+        && isNonEmptyString(msg.text, 4000)
+        && (!('quickReplies' in msg) || isValidBoundedStringList(msg.quickReplies, 8, 160))
+        && msg.step is int && msg.step >= 1 && msg.step <= 8
+        && isNonEmptyString(msg.createdAt, 64);
+    }
+
+    function isValidAiSessionMessages(messages) {
+      return messages is list
+        && messages.size() <= 100
+        && (messages.size() == 0 || (
+          isValidAiSessionMessage(messages[0]) &&
+          isValidAiSessionMessage(messages[messages.size() - 1])
+        ));
+    }
+
+    function isValidAiConsultationSession(data, sessionId) {
+      return data.keys().hasAll(['id', 'ownerUid', 'language', 'step', 'status', 'collected', 'messages', 'consent', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerUid', 'language', 'step', 'status', 'collected', 'messages', 'consent', 'createdAt', 'updatedAt'])
+        && data.id == sessionId
+        && data.ownerUid == request.auth.uid
+        && data.language in ['hi', 'en']
+        && data.step is int && data.step >= 1 && data.step <= 8
+        && data.status in ['in_progress', 'summary_ready']
+        && isValidAiSessionCollected(data.collected)
+        && isValidAiSessionMessages(data.messages)
+        && isValidAiSessionConsent(data.consent)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAiConsultationSessionUpdate(incoming, existing, sessionId) {
+      return existing.ownerUid == request.auth.uid
+        && incoming.id == sessionId
+        && incoming.ownerUid == request.auth.uid
+        && incoming.language in ['hi', 'en']
+        && incoming.step is int && incoming.step >= 1 && incoming.step <= 8
+        && incoming.status in ['in_progress', 'summary_ready']
+        && isValidAiSessionCollected(incoming.collected)
+        && isValidAiSessionMessages(incoming.messages)
+        && (incoming.updatedAt == request.time || incoming.updatedAt is timestamp)
+        && incoming.diff(existing).affectedKeys().hasOnly([
+          'language',
+          'step',
+          'status',
+          'collected',
+          'messages',
+          'updatedAt'
+        ]);
+    }
+
     // 1. Users Collection (Prevent Self-Privilege Escalation & Shadow Fields)
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
@@ -457,6 +587,21 @@ service cloud.firestore {
     // 24. Test Collection (Strictly Admin-Only — Zero Public Read/Write Access)
     match /test/{docId} {
       allow read, write: if isAdmin();
+    }
+
+    // 25. AI Website Consultant Sessions (Owner Create/Read/Update Only, Admin Read/Delete Only)
+    match /ai_consultation_sessions/{sessionId} {
+      allow get: if isValidId(sessionId) && isSignedIn() && (resource == null || resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      allow create: if isValidId(sessionId)
+        && isSignedIn()
+        && isValidAiConsultationSession(request.resource.data, sessionId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isValidId(sessionId)
+        && isSignedIn()
+        && isValidAiConsultationSessionUpdate(request.resource.data, resource.data, sessionId);
+      allow delete: if isValidId(sessionId) && isSignedIn() && isAdmin();
     }
   }
 }

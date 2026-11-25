@@ -10,9 +10,10 @@ export const PrivacyPolicyPage: React.FC = () => {
   return (
     <div className="bg-white">
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('DATA PRIVACY & SOVEREIGNTY CHARTER', 'डेटा गोपनीयता एवं संप्रभुता चार्टर')}
             </div>
@@ -38,8 +39,8 @@ export const PrivacyPolicyPage: React.FC = () => {
       </section>
 
       {/* Policy Content */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12 text-slate-700 leading-relaxed text-sm sm:text-base">
-        <div className="p-4 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
+      <div className="pws-reveal max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12 text-slate-700 leading-relaxed text-sm sm:text-base">
+        <div className="pws-card-3d pws-no-tilt p-5 rounded-2xl text-xs text-blue-900 flex items-start gap-3">
           <ShieldCheck className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
           <div>
             <strong className="block text-sm font-bold text-blue-950 mb-0.5">
@@ -69,14 +70,24 @@ export const PrivacyPolicyPage: React.FC = () => {
           </h2>
           <p>
             {language === 'hi'
-              ? 'हम भारतीय डिजिटल पर्सनल डेटा प्रोटेक्शन एक्ट 2023 के प्रावधानों का पूर्णतः पालन करते हैं। उपयोगकर्ताओं और उद्यम ग्राहकों को उनके व्यक्तिगत डेटा पर पूर्ण नियंत्रण, सहमति वापसी और डेटा हटाने का अधिकार प्राप्त है।'
-              : 'In strict conformance with the Digital Personal Data Protection Act 2023 of India, we process personal and corporate data solely for legitimate, contracted purposes with explicit verifiable consent.'}
+              ? 'हम भारतीय डिजिटल पर्सनल डेटा प्रोटेक्शन (DPDP) अधिनियम 2023 के अनुरूप काम करने का प्रयास करते हैं (अप्रमाणित)। उपयोगकर्ताओं और उद्यम ग्राहकों को उनके व्यक्तिगत डेटा पर नियंत्रण, सहमति वापसी और डेटा हटाने के अनुरोध का अधिकार प्राप्त है।'
+              : 'We strive to operate in alignment with the Digital Personal Data Protection (DPDP) Act 2023 of India (uncertified), processing personal and corporate data solely for legitimate, contracted purposes with verifiable consent.'}
           </p>
           <ul className="list-disc pl-5 space-y-1 text-xs sm:text-sm text-slate-600">
             <li>{t('Right to access and correct personal data records.', 'व्यक्तिगत डेटा तक पहुंच और सुधार का अधिकार।')}</li>
             <li>{t('Right to grievance redressal within 48 hours.', '48 घंटे के भीतर शिकायत निवारण का अधिकार।')}</li>
             <li>{t('Right to immediate erasure upon contract completion.', 'अनुबंध समाप्ति पर डेटा को तुरंत मिटाने का अधिकार।')}</li>
           </ul>
+          <p className="text-xs sm:text-sm text-slate-600">
+            {language === 'hi'
+              ? 'यह वेबसाइट आगंतुक ट्रैफ़िक को समझने के लिए Google Analytics कुकीज़ का उपयोग करती है।'
+              : 'This website uses Google Analytics cookies to understand visitor traffic.'}
+          </p>
+          <p className="text-xs sm:text-sm text-slate-600">
+            {language === 'hi'
+              ? 'फ़ॉर्म को स्पैम और स्वचालित दुरुपयोग से बचाने के लिए यह साइट Google reCAPTCHA Enterprise का उपयोग करती है, जिस पर Google की गोपनीयता नीति और सेवा की शर्तें लागू होती हैं।'
+              : 'To protect forms from spam and automated abuse, this site uses Google reCAPTCHA Enterprise, which is subject to the Google Privacy Policy and Terms of Service.'}
+          </p>
         </section>
 
         <section className="space-y-3">
@@ -105,7 +116,7 @@ export const PrivacyPolicyPage: React.FC = () => {
           <h2 className="text-xl font-bold text-slate-900">
             {t('5. Data Protection Officer (DPO) Contact', '5. डेटा संरक्षण अधिकारी (DPO) संपर्क')}
           </h2>
-          <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 font-mono space-y-1.5 break-words">
+          <div className="pws-card-3d pws-no-tilt p-5 rounded-2xl text-xs text-slate-700 font-mono space-y-1.5 break-words">
             <div className="font-sans font-bold text-slate-900">Office of the Data Protection Officer</div>
             <div>{siteContact.name}</div>
             <div>

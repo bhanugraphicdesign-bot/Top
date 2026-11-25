@@ -40,7 +40,7 @@
 | `FIREBASE_SERVICE_ACCOUNT_KEY` | Server-Side Only | Optional Service Account JSON | **Confidential Secret** | Explicit Admin SDK & GCS credentials outside GCP ADC; in Cloud Run prefer an attached minimal-privilege IAM Service Account |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Server-Side Only | Standard GCP ADC JSON file path | **Confidential Secret** | Triggers `applicationDefault()` Admin SDK initialization when running outside Cloud Run |
 | `CORS_ALLOWED_ORIGINS` | Server-Side Only | Comma-separated origin allowlist | Runtime Configuration | Additional trusted browser origins beyond `SITE_URL`, localhost, and `https://*.run.app` |
-| `VITE_FIREBASE_MEASUREMENT_ID` | Client Build Arg | Google Analytics 4 ID | Public Key | Optional Firebase Analytics measurement ID (`G-XXXXXXXXXX`) |
+| `VITE_FIREBASE_MEASUREMENT_ID` | Client Build Arg | Google Analytics 4 ID | Public Key | Optional Firebase Analytics measurement ID (`G-FYEH0TXXPB`) |
 | `FORM_RATE_LIMIT_MAX` | Server-Side Only | Number (default `8`) | Runtime Configuration | Max form submissions per IP per 15-minute window |
 | `TRUST_PROXY_HOPS` | Server-Side Only | Integer `0–5` (default `1`) | Runtime Configuration | Bounded Express `trust proxy` hop count for Google Cloud Run GFE & `req.ip` resolution |
 | `ENFORCE_APP_CHECK` | Server-Side Only | Boolean (`"true"` / `"false"`, default `"false"`) | Security Flag | Set `"true"` in Cloud Run with `VITE_RECAPTCHA_SITE_KEY` to fail closed (HTTP `403`/`503`) if App Check is missing or unconfigured |
@@ -121,7 +121,7 @@ npm run check
 docker build \
   --build-arg SITE_URL=https://YOUR-DOMAIN.com \
   --build-arg VITE_RECAPTCHA_SITE_KEY=YOUR_RECAPTCHA_SITE_KEY \
-  --build-arg VITE_FIREBASE_MEASUREMENT_ID=G-XXXXXXXXXX \
+  --build-arg VITE_FIREBASE_MEASUREMENT_ID=G-FYEH0TXXPB \
   -t asia-northeast1-docker.pkg.dev/turnkey-invention-70z9n/power-web-studio-ai/power-web-studio-ai:latest .
 
 # 3. Deploy to Google Cloud Run (with attached least-privilege IAM Service Account & Secret Manager)

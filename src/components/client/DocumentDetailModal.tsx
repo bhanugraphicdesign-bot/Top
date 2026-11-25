@@ -66,7 +66,7 @@ export const DocumentDetailModal: React.FC<DocumentDetailModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label={t('Close modal', 'बंद करें')}
             className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
           >
             <X className="w-5 h-5" />

@@ -173,7 +173,7 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label={t('Close modal', 'बंद करें')}
             className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
           >
             <X className="w-5 h-5" />
@@ -199,10 +199,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
           <form onSubmit={handleSubmit} className="space-y-3.5 max-h-[75vh] overflow-y-auto pr-1">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="ticket-priority" className="block text-xs font-semibold text-slate-700 mb-1">
                   {t('SLA Priority Level *', 'SLA प्राथमिकता स्तर *')}
                 </label>
                 <select
+                  id="ticket-priority"
+                  name="priority"
                   value={formData.priority}
                   onChange={(e) => setFormData({ ...formData, priority: e.target.value as any })}
                   className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-medium cursor-pointer"
@@ -215,10 +217,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="ticket-category" className="block text-xs font-semibold text-slate-700 mb-1">
                   {t('Issue Category', 'समस्या श्रेणी')}
                 </label>
                 <select
+                  id="ticket-category"
+                  name="category"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full px-3 py-1.5 text-xs border border-slate-300 rounded-md focus:border-blue-700 focus:outline-none font-medium cursor-pointer"
@@ -234,10 +238,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="ticket-project-code" className="block text-xs font-semibold text-slate-700 mb-1">
                   {t('Project Engagement Code', 'प्रोजेक्ट कोड')}
                 </label>
                 <input
+                  id="ticket-project-code"
+                  name="projectCode"
                   type="text"
                   value={formData.projectCode}
                   onChange={(e) => setFormData({ ...formData, projectCode: e.target.value })}
@@ -247,10 +253,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="ticket-environment" className="block text-xs font-semibold text-slate-700 mb-1">
                   {t('Target Environment / Version', 'लक्ष्य वातावरण / संस्करण')}
                 </label>
                 <input
+                  id="ticket-environment"
+                  name="environment"
                   type="text"
                   value={formData.environment}
                   onChange={(e) => setFormData({ ...formData, environment: e.target.value })}
@@ -261,10 +269,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="ticket-subject" className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('Subject / Summary *', 'विषय / सारांश *')}
               </label>
               <input
+                id="ticket-subject"
+                name="subject"
                 type="text"
                 required
                 value={formData.subject}
@@ -275,10 +285,12 @@ export const NewTicketModal: React.FC<NewTicketModalProps> = ({
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
+              <label htmlFor="ticket-details" className="block text-xs font-semibold text-slate-700 mb-1">
                 {t('Detailed Description & Steps to Reproduce *', 'विस्तृत विवरण एवं चरण *')}
               </label>
               <textarea
+                id="ticket-details"
+                name="details"
                 rows={4}
                 required
                 value={formData.details}

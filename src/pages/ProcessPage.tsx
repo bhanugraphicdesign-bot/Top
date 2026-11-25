@@ -13,9 +13,10 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
   return (
     <div className="bg-white">
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('RIGOROUS ENGINEERING METHODOLOGY', 'सख्त इंजीनियरिंग कार्यप्रणाली')}
             </div>
@@ -25,11 +26,11 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
             >
               {language === 'hi' ? (
                 <>
-                  अनुशासित <span className="text-blue-700">6-चरणीय विकास चक्र</span> और शून्य-त्रुटि परिनियोजन
+                  अनुशासित <span className="pws-gradient-text">6-चरणीय विकास चक्र</span> और शून्य-त्रुटि परिनियोजन
                 </>
               ) : (
                 <>
-                  Our Disciplined <span className="text-blue-700">6-Phase Engineering Lifecycle</span> & QA
+                  Our Disciplined <span className="pws-gradient-text">6-Phase Engineering Lifecycle</span> & QA
                 </>
               )}
             </h1>
@@ -46,8 +47,8 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 space-y-16">
         {/* Methodological Assurance Trio */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="pws-card-3d p-6 rounded-2xl">
             <ShieldCheck className="w-6 h-6 text-blue-700 mb-3" />
             <h3 className="text-base font-bold text-slate-900 mb-1">
               {t('Security & OWASP Checklist Reviews', 'सुरक्षा एवं OWASP चेकलिस्ट समीक्षा')}
@@ -60,7 +61,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
             </p>
           </div>
 
-          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs">
+          <div className="pws-card-3d p-6 rounded-2xl">
             <Activity className="w-6 h-6 text-emerald-600 mb-3" />
             <h3 className="text-base font-bold text-slate-900 mb-1">
               {t('Bi-Weekly Staging Releases', 'द्वि-साप्ताहिक स्टेजिंग रिलीज़')}
@@ -73,7 +74,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
             </p>
           </div>
 
-          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs">
+          <div className="pws-card-3d p-6 rounded-2xl">
             <Award className="w-6 h-6 text-blue-700 mb-3" />
             <h3 className="text-base font-bold text-slate-900 mb-1">
               {t('100% IP Handover', '100% आईपी हस्तांतरण')}
@@ -88,11 +89,11 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
         </div>
 
         {/* 6 Phases Deep Dive */}
-        <div className="space-y-8">
+        <div className="pws-stagger-grid space-y-8">
           {PROCESS_STEPS.map((step) => (
             <div
               key={step.number}
-              className="p-6 sm:p-8 rounded-xl border border-slate-200 bg-white shadow-xs space-y-5"
+              className="pws-card-3d pws-no-tilt p-6 sm:p-8 rounded-2xl space-y-5"
             >
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-4">
@@ -140,7 +141,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
         </div>
 
         {/* CTA */}
-        <div className="p-8 rounded-xl bg-slate-950 text-white flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="pws-reveal pws-card-3d-dark pws-no-tilt p-8 rounded-2xl bg-[#0B1220] text-white flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h3 className="text-xl font-bold">
               {t('Have a Technical Blueprint to Review?', 'क्या आपके पास समीक्षा के लिए कोई ब्लूप्रिंट है?')}
@@ -154,7 +155,7 @@ export const ProcessPage: React.FC<ProcessPageProps> = ({ onOpenConsultation }) 
           </div>
           <button
             onClick={onOpenConsultation}
-            className="px-5 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 rounded-md transition-colors cursor-pointer shrink-0"
+            className="pws-btn-3d px-5 py-2.5 text-xs font-bold text-white rounded-lg cursor-pointer shrink-0"
           >
             {t('Schedule Discovery Session', 'परामर्श सत्र बुक करें')}
           </button>

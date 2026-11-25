@@ -15,7 +15,7 @@ export const ProcessSection: React.FC = () => {
     <section id="process" className="py-20 sm:py-28 bg-slate-50/70 border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="max-w-3xl mb-14">
+        <div className="pws-reveal pws-home-surface-dark max-w-3xl mb-14">
           <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
             {t('ENGINEERING METHODOLOGY', 'विकास कार्यप्रणाली')}
           </div>
@@ -25,11 +25,11 @@ export const ProcessSection: React.FC = () => {
           >
             {language === 'hi' ? (
               <>
-                अनुशासित <span className="text-blue-700">6-चरणीय विकास चक्र</span> और गुणवत्ता नियंत्रण
+                अनुशासित <span className="pws-gradient-text">6-चरणीय विकास चक्र</span> और गुणवत्ता नियंत्रण
               </>
             ) : (
               <>
-                A Disciplined <span className="text-blue-700">6-Phase Engineering Lifecycle</span> with Zero Surprises
+                A Disciplined <span className="pws-gradient-text">6-Phase Engineering Lifecycle</span> with Zero Surprises
               </>
             )}
           </h2>
@@ -42,16 +42,14 @@ export const ProcessSection: React.FC = () => {
         </div>
 
         {/* 6 Process Steps in Clean Editorial Numbered Grid */}
-        <div className="space-y-4">
+        <div className="pws-stagger-grid space-y-4">
           {PROCESS_STEPS.map((step) => {
             const isExpanded = expandedStep === step.number;
             return (
               <div
                 key={step.number}
-                className={`rounded-xl border transition-all duration-200 bg-white overflow-hidden ${
-                  isExpanded
-                    ? 'border-blue-500 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300'
+                className={`pws-card-3d pws-no-tilt rounded-2xl overflow-hidden ${
+                  isExpanded ? 'ring-1 ring-blue-500/60' : ''
                 }`}
               >
                 {/* Clickable Header Bar */}

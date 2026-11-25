@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { DemoPriceBar } from '../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../components/common/DemoLanguageToggle';
 import {
   ArrowLeft,
   ArrowRight,
@@ -771,38 +772,11 @@ export const ShoppingDemo: React.FC<ShoppingDemoProps> = ({
             {/* Right Header Icons: Language + Login/Account + Wishlist + Cart */}
             <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
               {/* Language Switch */}
-              <div
-                role="radiogroup"
-                aria-label={t('Language Selector', 'भाषा चयन')}
-                className="flex items-center border border-neutral-200 rounded-md p-0.5 bg-neutral-100 text-[11px] font-bold"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={language === 'hi'}
-                  onClick={() => setLanguage('hi')}
-                  className={`px-2 py-1 rounded cursor-pointer transition-colors whitespace-nowrap ${
-                    language === 'hi'
-                      ? 'bg-[#9d174d] text-white'
-                      : 'text-neutral-600 hover:text-neutral-900'
-                  }`}
-                >
-                  हिन्दी
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={language === 'en'}
-                  onClick={() => setLanguage('en')}
-                  className={`px-2 py-1 rounded cursor-pointer transition-colors whitespace-nowrap ${
-                    language === 'en'
-                      ? 'bg-[#9d174d] text-white'
-                      : 'text-neutral-600 hover:text-neutral-900'
-                  }`}
-                >
-                  EN
-                </button>
-              </div>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="light"
+              />
 
               {/* Account / Login Icon */}
               <button
@@ -929,7 +903,8 @@ export const ShoppingDemo: React.FC<ShoppingDemoProps> = ({
                       >
                         <img
                           src={cat.image}
-                          alt={isHindi ? cat.labelHi : cat.labelEn}
+                          alt=""
+                          aria-hidden="true"
                           loading="lazy"
                           decoding="async"
                           referrerPolicy="no-referrer"
@@ -1342,10 +1317,11 @@ export const ShoppingDemo: React.FC<ShoppingDemoProps> = ({
                 onClick={() => handleSelectCategory(cat.id)}
                 className="rounded-xl overflow-hidden border border-neutral-200 bg-white hover:shadow-md transition-transform hover:-translate-y-0.5 text-left cursor-pointer group"
               >
-                <div className="aspect-[4/3] overflow-hidden bg-neutral-100">
+                <div className="aspect-[4/3] overflow-hidden bg-neutral-100" aria-hidden="true">
                   <img
                     src={cat.image}
-                    alt={isHindi ? cat.labelHi : cat.labelEn}
+                    alt=""
+                    aria-hidden="true"
                     loading="lazy"
                     decoding="async"
                     referrerPolicy="no-referrer"

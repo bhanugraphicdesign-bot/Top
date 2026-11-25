@@ -2,9 +2,10 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig } from 'vite';
+import { resolveCanonicalSiteOrigin } from './src/config/siteConfig';
 
 export default defineConfig(() => {
-  const siteUrl = (process.env.SITE_URL || '').trim().replace(/\/+$/, '');
+  const siteUrl = resolveCanonicalSiteOrigin(process.env.SITE_URL);
 
   return {
     plugins: [react(), tailwindcss()],
@@ -24,6 +25,7 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
+      sourcemap: false,
       chunkSizeWarningLimit: 500,
       rollupOptions: {
         output: {
@@ -41,7 +43,7 @@ export default defineConfig(() => {
               if (id.includes('react') || id.includes('scheduler')) {
                 return 'vendor-react';
               }
-              if (id.includes('lucide-react') || id.includes('motion')) {
+              if (id.includes('lucide-react')) {
                 return 'vendor-ui';
               }
               return 'vendor-core';

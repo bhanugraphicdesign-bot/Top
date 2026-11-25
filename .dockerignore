@@ -19,7 +19,8 @@ server.js
 
 # Dev, tests, scripts & audit documentation
 tests
-scripts
+scripts/*
+!scripts/generate-seo-files.ts
 uploads
 logs
 *.log

@@ -2,30 +2,35 @@ import React, { useEffect } from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { PageRoute } from '../../types';
 import { OPTIMIZED_ASSETS } from '../../data/content';
+import { getDemoSiteBySlug } from '../../data/demoSites';
+import {
+  CANONICAL_SITE_URL,
+  DEFAULT_OG_IMAGE_PATH as CONFIG_DEFAULT_OG_IMAGE_PATH,
+  PLACEHOLDER_SITE_URL as CONFIG_PLACEHOLDER_SITE_URL,
+  SITE_NAME as CONFIG_SITE_NAME,
+  buildOrganizationBusinessSchema,
+  resolveCanonicalSiteOrigin,
+} from '../../config/siteConfig';
 
-export const PLACEHOLDER_SITE_URL = 'https://YOUR-DOMAIN.com';
-export const DEFAULT_OG_IMAGE_PATH = '/og-image.jpg';
-export const SITE_NAME = 'POWER WEB STUDIO AI';
+export const PLACEHOLDER_SITE_URL = CONFIG_PLACEHOLDER_SITE_URL;
+export const DEFAULT_OG_IMAGE_PATH = CONFIG_DEFAULT_OG_IMAGE_PATH;
+export const SITE_NAME = CONFIG_SITE_NAME;
 
 export function resolveSiteOrigin(): string {
-  const buildSiteUrl = (import.meta.env.VITE_SITE_URL || '').trim().replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(buildSiteUrl) && buildSiteUrl !== PLACEHOLDER_SITE_URL) {
-    return buildSiteUrl;
+  const buildSiteUrl = (import.meta.env.VITE_SITE_URL || '').trim();
+  if (buildSiteUrl) {
+    return resolveCanonicalSiteOrigin(buildSiteUrl);
   }
   if (typeof document !== 'undefined') {
     const metaSiteUrl = document.head
       .querySelector<HTMLMetaElement>('meta[name="site-url"]')
       ?.getAttribute('content')
-      ?.trim()
-      .replace(/\/+$/, '');
-    if (metaSiteUrl && /^https?:\/\//i.test(metaSiteUrl) && metaSiteUrl !== PLACEHOLDER_SITE_URL) {
-      return metaSiteUrl;
+      ?.trim();
+    if (metaSiteUrl) {
+      return resolveCanonicalSiteOrigin(metaSiteUrl);
     }
   }
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin.replace(/\/+$/, '');
-  }
-  return PLACEHOLDER_SITE_URL;
+  return CANONICAL_SITE_URL;
 }
 
 export interface SEOProps {
@@ -88,25 +93,9 @@ function upsertStructuredData(
     }
   }
 
+  const isHomePage = canonicalUrl === `${origin}/`;
   const graph: Record<string, unknown>[] = [
-    {
-      '@type': 'Organization',
-      name: 'BHANU RAM BARIHA DIGITAL TECHNOLOGIES',
-      alternateName: SITE_NAME,
-      url: `${origin}/`,
-      logo: `${origin}/apple-touch-icon.png`,
-      image: `${origin}${DEFAULT_OG_IMAGE_PATH}`,
-      email: 'powerusertopuser@gmail.com',
-      telephone: '+91-8305457717',
-      address: {
-        '@type': 'PostalAddress',
-        streetAddress: 'Fingeshwar Borid Mod, Rajim Subdistrict',
-        addressLocality: 'Gariaband District',
-        addressRegion: 'Chhattisgarh',
-        postalCode: '493992',
-        addressCountry: 'IN',
-      },
-    },
+    buildOrganizationBusinessSchema(origin, isHomePage),
     {
       '@type': 'WebApplication',
       name: SITE_NAME,
@@ -304,6 +293,16 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
     ogImage: OPTIMIZED_ASSETS.aiImage.jpg,
     canonicalPath: '/ai-solutions',
   },
+  'ai-website-consultant': {
+    titleEn: 'AI Website Consultant | POWER WEB STUDIO AI',
+    titleHi: 'AI वेबसाइट कंसल्टेंट | POWER WEB STUDIO AI',
+    descriptionEn:
+      'Step-by-step AI Website Consultant to plan your business website, pages, design style, and features.',
+    descriptionHi:
+      'अपने बिजनेस के लिए स्टेप-बाय-स्टेप वेबसाइट प्लान, पेज, डिज़ाइन और फ़ीचर्स तय करने के लिए Power Web Studio AI Consultant।',
+    ogImage: DEFAULT_OG_IMAGE_PATH,
+    canonicalPath: '/ai-website-consultant',
+  },
   'android-portfolio': {
     titleEn: 'Native Android Apps Portfolio | POWER WEB STUDIO AI',
     titleHi: 'नेटिव एंड्रॉइड ऐप पोर्टफोलियो | POWER WEB STUDIO AI',
@@ -373,6 +372,7 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
       'भानु राम बरीहा डिजिटल टेक्नोलॉजीज को सेवाओं, कोटेशन या इनवॉइस का सीधा UPI भुगतान करें।',
     ogImage: DEFAULT_OG_IMAGE_PATH,
     canonicalPath: '/pay',
+    noIndex: true,
   },
   blog: {
     titleEn: 'Engineering Blog & Research | POWER WEB STUDIO AI',
@@ -402,6 +402,15 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
       'POWER WEB STUDIO AI के क्लाइंट्स के लिए सेवा की शर्तें, बौद्धिक संपदा अधिकार और अनुबंध दिशानिर्देश।',
     canonicalPath: '/terms',
   },
+  'refund-policy': {
+    titleEn: 'Refund & Cancellation Policy | POWER WEB STUDIO AI',
+    titleHi: 'रिफंड एवं रद्दीकरण नीति | POWER WEB STUDIO AI',
+    descriptionEn:
+      'Advance payment, cancellation, and refund policy for POWER WEB STUDIO AI software and digital services.',
+    descriptionHi:
+      'POWER WEB STUDIO AI सेवाओं के लिए एडवांस भुगतान, रद्दीकरण और रिफंड नीति।',
+    canonicalPath: '/refund-policy',
+  },
   'client-dashboard': {
     titleEn: 'Client Engineering Portal | POWER WEB STUDIO AI',
     titleHi: 'क्लाइंट इंजीनियरिंग पोर्टल | POWER WEB STUDIO AI',
@@ -428,10 +437,39 @@ export const ROUTE_SEO_CONFIG: Record<PageRoute, SEOProps> = {
   },
 };
 
-export const RouteSEO: React.FC<{ currentRoute: PageRoute }> = ({ currentRoute }) => {
-  // BlogPage and AppDetailPage manage their own dynamic item-level SEO tags cleanly
-  if (currentRoute === 'blog' || currentRoute === 'app-detail') {
+export const RouteSEO: React.FC<{ currentRoute: PageRoute; slug?: string }> = ({
+  currentRoute,
+  slug,
+}) => {
+  // AppDetailPage sets dynamic item-level SEO tags; BlogPage sets article SEO when a post is open
+  if (currentRoute === 'app-detail') {
     return null;
+  }
+  if (
+    currentRoute === 'blog' &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('post')
+  ) {
+    return null;
+  }
+  if (currentRoute === 'demo') {
+    const demoSite = getDemoSiteBySlug(slug);
+    if (demoSite) {
+      return (
+        <SEO
+          titleEn={`${demoSite.nameEn} — Demo Website | POWER WEB STUDIO AI`}
+          titleHi={`${demoSite.nameHi} — डेमो वेबसाइट | POWER WEB STUDIO AI`}
+          descriptionEn={demoSite.descriptionEn}
+          descriptionHi={demoSite.descriptionHi}
+          ogTitleEn={`${demoSite.nameEn} — Demo Website | POWER WEB STUDIO AI`}
+          ogTitleHi={`${demoSite.nameHi} — डेमो वेबसाइट | POWER WEB STUDIO AI`}
+          ogDescriptionEn={demoSite.descriptionEn}
+          ogDescriptionHi={demoSite.descriptionHi}
+          ogImage={demoSite.previewImage || DEFAULT_OG_IMAGE_PATH}
+          canonicalPath={`/demo/${demoSite.slug}`}
+        />
+      );
+    }
   }
   const config = ROUTE_SEO_CONFIG[currentRoute] || ROUTE_SEO_CONFIG.home;
   return <SEO {...config} />;

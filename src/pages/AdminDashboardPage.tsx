@@ -28,6 +28,7 @@ import { ProjectManagerModal } from '../components/admin/ProjectManagerModal';
 import { ServiceManagerModal } from '../components/admin/ServiceManagerModal';
 import { QuotationManagerModal } from '../components/admin/QuotationManagerModal';
 import { BlogManagerModal } from '../components/admin/BlogManagerModal';
+import { AdminAiConsultantSessionsSection } from '../components/admin/AdminAiConsultantSessionsSection';
 import {
   seedInitialDatabaseIfEmpty,
   fetchAllUsers,
@@ -81,6 +82,7 @@ import {
   AlertTriangle,
   IndianRupee,
   Settings,
+  Bot,
 } from 'lucide-react';
 
 interface InboundLead {
@@ -107,6 +109,7 @@ export const AdminDashboardPage: React.FC = () => {
     isSuperAdmin,
     isAuthReady,
     isRoleChecking,
+    isLoggingOut,
     openAuthModal,
   } = useAuth();
   const { navigate } = useNavigation();
@@ -125,7 +128,7 @@ export const AdminDashboardPage: React.FC = () => {
 
   // Redirect non-owner / unauthenticated visitors who open /admin directly
   useEffect(() => {
-    if (!isAuthReady || isRoleChecking || isAuthorizedAdmin) return;
+    if (!isAuthReady || isRoleChecking || isLoggingOut || isAuthorizedAdmin) return;
     if (!currentUser) {
       navigate('home');
       openAuthModal('login');
@@ -139,7 +142,17 @@ export const AdminDashboardPage: React.FC = () => {
       'alert'
     );
     navigate('home');
-  }, [isAuthReady, isRoleChecking, isAuthorizedAdmin, currentUser, navigate, openAuthModal, showToast, t]);
+  }, [
+    isAuthReady,
+    isRoleChecking,
+    isLoggingOut,
+    isAuthorizedAdmin,
+    currentUser,
+    navigate,
+    openAuthModal,
+    showToast,
+    t,
+  ]);
 
   const [activeTab, setActiveTab] = useState<
     | 'customers'
@@ -152,6 +165,7 @@ export const AdminDashboardPage: React.FC = () => {
     | 'upi-payments'
     | 'payment-settings'
     | 'support'
+    | 'ai-consultant'
     | 'content'
     | 'telemetry'
   >('customers');
@@ -1601,6 +1615,21 @@ export const AdminDashboardPage: React.FC = () => {
             <span className="text-[10px] bg-rose-100 text-rose-800 px-1.5 py-0.2 rounded-full font-bold">
               {ticketsList.length}
             </span>
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'ai-consultant'}
+            onClick={() => setActiveTab('ai-consultant')}
+            className={`px-3.5 py-2.5 text-xs sm:text-sm font-bold border-b-2 whitespace-nowrap transition-colors cursor-pointer flex items-center gap-1.5 focus-visible:outline-2 focus-visible:outline-blue-700 ${
+              activeTab === 'ai-consultant'
+                ? 'border-blue-700 text-blue-700'
+                : 'border-transparent text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <Bot className="w-4 h-4" />
+            <span>{t('AI Consultant Sessions', 'AI Consultant सेशन')}</span>
           </button>
 
           <button
@@ -4093,6 +4122,16 @@ export const AdminDashboardPage: React.FC = () => {
               )}
             </div>
           </div>
+        )}
+
+        {/* =====================================================================
+           AI WEBSITE CONSULTANT SESSIONS (READ-ONLY ADMIN VIEW)
+           ===================================================================== */}
+        {activeTab === 'ai-consultant' && isAuthorizedAdmin && (
+          <AdminAiConsultantSessionsSection
+            isAuthorizedAdmin={isAuthorizedAdmin}
+            usersList={usersList}
+          />
         )}
       </div>
 

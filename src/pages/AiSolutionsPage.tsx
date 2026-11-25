@@ -21,9 +21,10 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
   return (
     <div className="bg-white">
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('SOVEREIGN ARTIFICIAL INTELLIGENCE', 'संप्रभु आर्टिफिशियल इंटेलिजेंस')}
             </div>
@@ -33,11 +34,11 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
             >
               {language === 'hi' ? (
                 <>
-                  सत्यापित संदर्भों के साथ <span className="text-blue-700">एंटरप्राइज एआई</span> और स्वायत्त वर्कफ़्लो
+                  सत्यापित संदर्भों के साथ <span className="pws-gradient-text">एंटरप्राइज एआई</span> और स्वायत्त वर्कफ़्लो
                 </>
               ) : (
                 <>
-                  Deterministic <span className="text-blue-700">Enterprise AI</span> & Sovereign Agentic Workflows
+                  Deterministic <span className="pws-gradient-text">Enterprise AI</span> & Sovereign Agentic Workflows
                 </>
               )}
             </h1>
@@ -54,11 +55,11 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 space-y-16">
         {/* Core AI Solutions 4-Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-2 gap-8">
           {AI_SOLUTIONS.map((sol) => (
             <div
               key={sol.id}
-              className="p-6 sm:p-8 rounded-xl border border-slate-200 bg-white shadow-xs hover:border-blue-400 hover:shadow-md transition-all flex flex-col justify-between"
+              className="pws-card-3d p-6 sm:p-8 rounded-2xl flex flex-col justify-between"
             >
               <div>
                 <div className="text-xs font-mono font-bold text-blue-700 uppercase tracking-wider mb-1">
@@ -109,9 +110,9 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
         </div>
 
         {/* Interactive Scope & ROI Estimator Component */}
-        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-sm">
+        <div className="pws-reveal pws-card-3d pws-no-tilt rounded-2xl overflow-hidden">
           <div className="grid grid-cols-1 lg:grid-cols-12">
-            <div className="lg:col-span-5 relative bg-slate-900 p-6 sm:p-8 flex flex-col justify-between overflow-hidden">
+            <div className="lg:col-span-5 relative bg-[#0B1220] p-6 sm:p-8 flex flex-col justify-between overflow-hidden">
               <OptimizedImage
                 assetKey="aiImage"
                 alt="Enterprise AI Neural Architecture and Sovereign Model Engineering Studio"
@@ -162,9 +163,9 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
 
             <div className="lg:col-span-7 p-6 sm:p-8 space-y-6">
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <div className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   1. {t('Industry Sector', 'उद्योग क्षेत्र')}
-                </label>
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
                     { id: 'fintech', label: 'FinTech', labelHi: 'फिनटेक' },
@@ -176,10 +177,10 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                       type="button"
                       key={ind.id}
                       onClick={() => setCalcIndustry(ind.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
+                      className={`p-2.5 rounded-lg text-xs font-semibold text-center cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         calcIndustry === ind.id
-                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'pws-btn-3d text-white'
+                          : 'pws-btn-glass text-slate-700'
                       }`}
                     >
                       {language === 'hi' ? ind.labelHi : ind.label}
@@ -189,9 +190,9 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <div className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   2. {t('Select Primary AI Workload', 'प्राथमिक एआई वर्कलोड चुनें')}
-                </label>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
                     { id: 'rag', label: 'Private Knowledge RAG', labelHi: 'प्राइवेट नॉलेज आरएजी' },
@@ -203,10 +204,10 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                       type="button"
                       key={w.id}
                       onClick={() => setCalcWorkload(w.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-left border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
+                      className={`p-2.5 rounded-lg text-xs font-semibold text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         calcWorkload === w.id
-                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'pws-btn-3d text-white'
+                          : 'pws-btn-glass text-slate-700'
                       }`}
                     >
                       {language === 'hi' ? w.labelHi : w.label}
@@ -216,9 +217,9 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
+                <div className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
                   3. {t('Monthly Processing Scale', 'मासिक प्रसंस्करण का पैमाना')}
-                </label>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {[
                     { id: 'startup', label: '<10K requests/mo', labelHi: '<10,000 अनुरोध/माह' },
@@ -229,10 +230,10 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
                       type="button"
                       key={s.id}
                       onClick={() => setCalcScale(s.id)}
-                      className={`p-2.5 rounded-md text-xs font-semibold text-center border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-blue-600 ${
+                      className={`p-2.5 rounded-lg text-xs font-semibold text-center cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600 ${
                         calcScale === s.id
-                          ? 'bg-blue-700 text-white border-blue-700 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'pws-btn-3d text-white'
+                          : 'pws-btn-glass text-slate-700'
                       }`}
                     >
                       {language === 'hi' ? s.labelHi : s.label}
@@ -253,7 +254,7 @@ export const AiSolutionsPage: React.FC<AiSolutionsPageProps> = ({ onOpenConsulta
               <button
                 type="button"
                 onClick={onOpenConsultation}
-                className="w-full flex items-center justify-center gap-2 px-5 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all cursor-pointer shadow-xs focus-visible:outline-2 focus-visible:outline-blue-600"
+                className="pws-btn-3d w-full flex items-center justify-center gap-2 px-5 py-3.5 text-xs font-bold text-white rounded-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <span>{t('Deploy This Enterprise AI Architecture', 'यह एंटरप्राइज एआई आर्किटेक्चर तैनात करें')}</span>
                 <ArrowRight className="w-4 h-4" />

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { LanguageProvider, useLanguage } from './context/LanguageContext';
-import { NavigationProvider, useNavigation } from './context/NavigationContext';
+import { NavigationProvider, useNavigation, getPathForRoute } from './context/NavigationContext';
 import { AppsProvider } from './context/AppsContext';
 import { Header } from './components/common/Header';
 import { MobileMenu } from './components/common/MobileMenu';
 import { Footer } from './components/common/Footer';
 import { HeroSection } from './components/home/HeroSection';
+import { AiConsultantCtaSection } from './components/home/AiConsultantCtaSection';
 import { BrandShowcaseSection } from './components/home/BrandShowcaseSection';
 import { DemoWebsitesSection } from './components/home/DemoWebsitesSection';
 import { CompanyIntroSection } from './components/home/CompanyIntroSection';
@@ -19,7 +20,7 @@ import { ConsultationModal } from './components/modals/ConsultationModal';
 import { ServiceDetailModal } from './components/modals/ServiceDetailModal';
 import { AppDetailModal } from './components/modals/AppDetailModal';
 import { ToastContainer } from './components/common/ToastContainer';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { AuthModal } from './components/auth/AuthModal';
 import { ProfileModal } from './components/auth/ProfileModal';
@@ -27,13 +28,20 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { PageLoadingFallback } from './components/common/PageLoadingFallback';
 import { NetworkStatusAlert } from './components/common/NetworkStatusAlert';
 import { RouteSEO } from './components/common/SEO';
+import { PremiumEffectsController } from './components/common/PremiumEffectsController';
 import { trackPageView, trackCtaClick } from './firebase/analytics';
+import { trackGaPageView, initGa4LinkTracking } from './utils/ga4';
+import { initFormValidationMessages } from './utils/formValidationMessages';
+import { getDemoSiteBySlug } from './data/demoSites';
 import { ServiceItem, AndroidApp } from './types';
 
 // Code-split secondary pages and protected portals to minimize initial JS payload
 const AboutPage = lazy(() => import('./pages/AboutPage').then((m) => ({ default: m.AboutPage })));
 const ServicesPage = lazy(() => import('./pages/ServicesPage').then((m) => ({ default: m.ServicesPage })));
 const AiSolutionsPage = lazy(() => import('./pages/AiSolutionsPage').then((m) => ({ default: m.AiSolutionsPage })));
+const AiWebsiteConsultantPage = lazy(() =>
+  import('./pages/AiWebsiteConsultantPage').then((m) => ({ default: m.AiWebsiteConsultantPage }))
+);
 const AndroidPortfolioPage = lazy(() => import('./pages/AndroidPortfolioPage').then((m) => ({ default: m.AndroidPortfolioPage })));
 const AppDetailPage = lazy(() => import('./pages/AppDetailPage').then((m) => ({ default: m.AppDetailPage })));
 const ProcessPage = lazy(() => import('./pages/ProcessPage').then((m) => ({ default: m.ProcessPage })));
@@ -42,6 +50,9 @@ const PayPage = lazy(() => import('./pages/PayPage').then((m) => ({ default: m.P
 const BlogPage = lazy(() => import('./pages/BlogPage').then((m) => ({ default: m.BlogPage })));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })));
 const TermsPage = lazy(() => import('./pages/TermsPage').then((m) => ({ default: m.TermsPage })));
+const RefundPolicyPage = lazy(() =>
+  import('./pages/RefundPolicyPage').then((m) => ({ default: m.RefundPolicyPage }))
+);
 const ClientDashboardPage = lazy(() => import('./pages/ClientDashboardPage').then((m) => ({ default: m.ClientDashboardPage })));
 const AdminDashboardPage = lazy(() => import('./pages/AdminDashboardPage').then((m) => ({ default: m.AdminDashboardPage })));
 const ShoppingDemo = lazy(() => import('./demos/ShoppingDemo').then((m) => ({ default: m.ShoppingDemo })));
@@ -74,10 +85,25 @@ const MahaBazaarDemo = lazy(() =>
     default: m.MahaBazaarDemo,
   }))
 );
+const VidyaShikharDemo = lazy(() =>
+  import('./demos/VidyaShikharDemo').then((m) => ({
+    default: m.VidyaShikharDemo,
+  }))
+);
 
 function MainApp() {
   const { currentRoute, params, navigate } = useNavigation();
   const { language } = useLanguage();
+  const {
+    currentUser,
+    isAuthReady,
+    isAuthModalOpen,
+    closeAuthModal,
+    postLoginRedirectTarget,
+    consumePostLoginRedirect,
+    logoutSeq,
+    clearLoggingOut,
+  } = useAuth();
   const [isConsultationOpen, setIsConsultationOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceItem | null>(null);
   const [selectedApp, setSelectedApp] = useState<AndroidApp | null>(null);
@@ -86,10 +112,71 @@ function MainApp() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const languageRef = useRef(language);
   languageRef.current = language;
+  const lastHandledLogoutSeqRef = useRef(0);
+
+  // Strict modal separation: whenever Login modal opens, Consultation modal stays closed
+  useEffect(() => {
+    if (isAuthModalOpen) {
+      setIsConsultationOpen(false);
+    }
+  }, [isAuthModalOpen]);
+
+  // Redirect to dashboard ONLY after onAuthStateChanged confirms user & role
+  // Exception: if user logged in while on /ai-website-consultant, stay on that intended destination
+  useEffect(() => {
+    if (!postLoginRedirectTarget || !currentUser || !isAuthReady) return;
+    setIsConsultationOpen(false);
+    setMobileMenuOpen(false);
+    consumePostLoginRedirect();
+    if (currentRoute === 'ai-website-consultant') {
+      return;
+    }
+    navigate(postLoginRedirectTarget);
+  }, [postLoginRedirectTarget, currentUser, isAuthReady, currentRoute, consumePostLoginRedirect, navigate]);
+
+  // After logout, clear modals and return cleanly to homepage
+  useEffect(() => {
+    if (logoutSeq <= lastHandledLogoutSeqRef.current) return;
+    lastHandledLogoutSeqRef.current = logoutSeq;
+    setIsConsultationOpen(false);
+    setMobileMenuOpen(false);
+    closeAuthModal();
+    navigate('home');
+    clearLoggingOut();
+  }, [logoutSeq, closeAuthModal, navigate, clearLoggingOut]);
 
   useEffect(() => {
     trackPageView(currentRoute, languageRef.current);
   }, [currentRoute]);
+
+  useEffect(() => initGa4LinkTracking(), []);
+
+  useEffect(() => initFormValidationMessages(language), [language]);
+
+  const gaPagePath =
+    currentRoute === 'not-found'
+      ? (typeof window !== 'undefined' ? window.location.pathname : '/not-found') || '/not-found'
+      : getPathForRoute(currentRoute, params).split('?')[0] || '/';
+
+  const demoSlug = currentRoute === 'demo' ? (params.slug || '').trim().toLowerCase() : '';
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      let pageTitle = document.title;
+      if (currentRoute === 'demo' && demoSlug) {
+        const demoSite = getDemoSiteBySlug(demoSlug);
+        if (demoSite) {
+          pageTitle =
+            languageRef.current === 'hi'
+              ? `${demoSite.nameHi} — डेमो वेबसाइट | POWER WEB STUDIO AI`
+              : `${demoSite.nameEn} — Demo Website | POWER WEB STUDIO AI`;
+        }
+      }
+      trackGaPageView(gaPagePath, pageTitle);
+    }, 80);
+
+    return () => window.clearTimeout(timer);
+  }, [gaPagePath, currentRoute, demoSlug]);
 
   const handleOpenConsultation = (
     serviceType = 'enterprise-software',
@@ -97,13 +184,19 @@ function MainApp() {
     prefillMsg = ''
   ) => {
     trackCtaClick(ctaSource, serviceType);
+    closeAuthModal();
     setPreselectedConsultService(serviceType);
     setPrefillConsultMessage(prefillMsg);
     setIsConsultationOpen(true);
   };
 
+  const handleCloseConsultation = () => {
+    setIsConsultationOpen(false);
+  };
+
   const handleSelectServiceForConsult = (serviceId: string) => {
     trackCtaClick('service_detail_consultation', serviceId);
+    closeAuthModal();
     setPreselectedConsultService(serviceId);
     setPrefillConsultMessage('');
     setIsConsultationOpen(true);
@@ -111,6 +204,7 @@ function MainApp() {
 
   const handleRequestApkDemo = (appId: string) => {
     trackCtaClick('android_apk_demo', `Android APK Demo (${appId})`);
+    closeAuthModal();
     setPreselectedConsultService(`Android APK Demo (${appId})`);
     setPrefillConsultMessage('');
     setIsConsultationOpen(true);
@@ -143,6 +237,8 @@ function MainApp() {
             }
           />
         );
+      case 'ai-website-consultant':
+        return <AiWebsiteConsultantPage />;
       case 'android-portfolio':
         return (
           <AndroidPortfolioPage
@@ -175,18 +271,33 @@ function MainApp() {
         return <PrivacyPolicyPage />;
       case 'terms':
         return <TermsPage />;
+      case 'refund-policy':
+        return <RefundPolicyPage />;
       case 'client-dashboard':
-        return <ClientDashboardPage />;
+        return (
+          <div data-pws-zone="admin" className="pws-zone-admin">
+            <ClientDashboardPage />
+          </div>
+        );
       case 'admin-dashboard':
-        return <AdminDashboardPage />;
+        return (
+          <div data-pws-zone="admin" className="pws-zone-admin">
+            <AdminDashboardPage />
+          </div>
+        );
       case 'demo': {
         const slug = (params.slug || '').toLowerCase();
         const buildDemoMsg = (hiName: string, enName: string) =>
           language === 'hi'
             ? `डेमो: ${hiName} जैसी वेबसाइट बनवानी है`
             : `Demo: Interested in building a website like ${enName}`;
+        const wrapDemo = (node: React.ReactNode) => (
+          <div data-pws-zone="demo" className="pws-zone-demo">
+            {node}
+          </div>
+        );
         if (slug === 'shopping') {
-          return (
+          return wrapDemo(
             <ShoppingDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -200,7 +311,7 @@ function MainApp() {
           );
         }
         if (slug === 'core-engineering') {
-          return (
+          return wrapDemo(
             <CoreEngineeringDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -214,7 +325,7 @@ function MainApp() {
           );
         }
         if (slug === 'web-ecosystem') {
-          return (
+          return wrapDemo(
             <WebEcosystemDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -228,7 +339,7 @@ function MainApp() {
           );
         }
         if (slug === 'mobile-system') {
-          return (
+          return wrapDemo(
             <MobileSystemDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -242,7 +353,7 @@ function MainApp() {
           );
         }
         if (slug === 'artificial-intelligence') {
-          return (
+          return wrapDemo(
             <ArtificialIntelligenceDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -256,7 +367,7 @@ function MainApp() {
           );
         }
         if (slug === 'cloud-engineering') {
-          return (
+          return wrapDemo(
             <CloudEngineeringDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -270,7 +381,7 @@ function MainApp() {
           );
         }
         if (slug === 'integration-suite') {
-          return (
+          return wrapDemo(
             <IntegrationSuiteDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -284,7 +395,7 @@ function MainApp() {
           );
         }
         if (slug === 'maha-bazaar') {
-          return (
+          return wrapDemo(
             <MahaBazaarDemo
               onBackToHome={() => navigate('home')}
               onRequestQuote={() =>
@@ -292,6 +403,20 @@ function MainApp() {
                   'enterprise-software',
                   'demo_maha_bazaar_build_platform',
                   buildDemoMsg('महा बाज़ार प्लेटफ़ॉर्म', 'Maha Bazaar Platform')
+                )
+              }
+            />
+          );
+        }
+        if (slug === 'vidya-shikhar') {
+          return wrapDemo(
+            <VidyaShikharDemo
+              onBackToHome={() => navigate('home')}
+              onRequestQuote={() =>
+                handleOpenConsultation(
+                  'enterprise-software',
+                  'demo_vidya_shikhar_build_website',
+                  buildDemoMsg('विद्या शिखर अकादमी', 'Vidya Shikhar Academy')
                 )
               }
             />
@@ -311,7 +436,7 @@ function MainApp() {
               <button
                 type="button"
                 onClick={() => navigate('home')}
-                className="px-5 py-2.5 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold cursor-pointer"
+                className="pws-btn-3d px-5 py-2.5 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold cursor-pointer"
               >
                 {language === 'hi' ? 'मुख्य पृष्ठ पर वापस जाएँ' : 'Back to Home'}
               </button>
@@ -340,14 +465,14 @@ function MainApp() {
                 <button
                   type="button"
                   onClick={() => navigate('home')}
-                  className="px-5 py-2.5 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold transition-colors cursor-pointer"
+                  className="pws-btn-3d px-5 py-2.5 rounded-md bg-blue-700 hover:bg-blue-800 text-white text-xs font-bold transition-colors cursor-pointer"
                 >
                   {language === 'hi' ? 'मुख्य पृष्ठ पर जाएं' : 'Return to Home'}
                 </button>
                 <button
                   type="button"
                   onClick={() => navigate('services')}
-                  className="px-5 py-2.5 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
+                  className="pws-btn-glass px-5 py-2.5 rounded-md bg-white border border-slate-300 hover:bg-slate-100 text-slate-800 text-xs font-semibold transition-colors cursor-pointer"
                 >
                   {language === 'hi' ? 'सेवाएं देखें' : 'Explore Services'}
                 </button>
@@ -358,69 +483,87 @@ function MainApp() {
       case 'home':
       default:
         return (
-          <>
-            {/* 1. Hero Section */}
-            <HeroSection
-              onOpenConsultation={() =>
-                handleOpenConsultation('enterprise-software', 'hero_schedule_consultation')
-              }
-            />
+          <div className="pws-home-wallpaper relative isolate">
+            <div className="pws-home-wallpaper-bg" aria-hidden="true" />
+            <div className="pws-home-wallpaper-scrim" aria-hidden="true" />
+            <div className="relative z-10">
+              {/* 1. Hero Section */}
+              <HeroSection
+                onOpenConsultation={() =>
+                  handleOpenConsultation('enterprise-software', 'hero_schedule_consultation')
+                }
+              />
 
-            {/* 1.5 Official Brand & Platform Showcase Posters */}
-            <BrandShowcaseSection
-              onOpenConsultation={() =>
-                handleOpenConsultation('enterprise-software', 'brand_showcase_consultation')
-              }
-            />
+              {/* 1.2 AI Website Consultant CTA */}
+              <AiConsultantCtaSection
+                onStartAiConsultant={() => navigate('ai-website-consultant')}
+                onOpenConsultation={() =>
+                  handleOpenConsultation('enterprise-software', 'ai_cta_book_consultation')
+                }
+              />
 
-            {/* 1.6 Interactive Client Demo Websites Gallery */}
-            <DemoWebsitesSection
-              onOpenDemo={(slug) => navigate('demo', { slug })}
-            />
+              {/* 1.5 Official Brand & Platform Showcase Posters */}
+              <BrandShowcaseSection
+                onOpenConsultation={() =>
+                  handleOpenConsultation('enterprise-software', 'brand_showcase_consultation')
+                }
+              />
 
-            {/* 2. Company Introduction (Bhanu Ram Bariha Digital Technologies) */}
-            <CompanyIntroSection
-              onOpenConsultation={() =>
-                handleOpenConsultation('leadership-briefing', 'company_intro_consultation')
-              }
-            />
+              {/* 1.6 Interactive Client Demo Websites Gallery */}
+              <DemoWebsitesSection
+                onOpenDemo={(slug) => navigate('demo', { slug })}
+              />
 
-            {/* 3. Core Technology Services */}
-            <ServicesSection onSelectService={(service) => setSelectedService(service)} />
+              {/* 2. Company Introduction (Bhanu Ram Bariha Digital Technologies) */}
+              <CompanyIntroSection
+                onOpenConsultation={() =>
+                  handleOpenConsultation('leadership-briefing', 'company_intro_consultation')
+                }
+              />
 
-            {/* 4. Android Apps Portfolio Preview */}
-            <AndroidPortfolioSection
-              onSelectApp={(app) => {
-                navigate('app-detail', { id: app.id });
-              }}
-              onRequestApkDemo={handleRequestApkDemo}
-            />
+              {/* 3. Core Technology Services */}
+              <ServicesSection onSelectService={(service) => setSelectedService(service)} />
 
-            {/* 5. Sovereign Enterprise AI Solutions & Interactive Scope Calculator */}
-            <AiSolutionsSection
-              onOpenConsultation={() =>
-                handleOpenConsultation('ai-solutions', 'ai_solutions_section_consultation')
-              }
-            />
+              {/* 4. Android Apps Portfolio Preview */}
+              <AndroidPortfolioSection
+                onSelectApp={(app) => {
+                  navigate('app-detail', { id: app.id });
+                }}
+                onRequestApkDemo={handleRequestApkDemo}
+              />
 
-            {/* 6. Why Choose Us (Quantitative Rigor & Claim-to-Proof) */}
-            <WhyChooseUsSection />
+              {/* 5. Sovereign Enterprise AI Solutions & Interactive Scope Calculator */}
+              <AiSolutionsSection
+                onOpenConsultation={() =>
+                  handleOpenConsultation('ai-solutions', 'ai_solutions_section_consultation')
+                }
+              />
 
-            {/* 7. Disciplined 6-Phase Engineering Methodology */}
-            <ProcessSection />
+              {/* 6. Why Choose Us (Quantitative Rigor & Claim-to-Proof) */}
+              <WhyChooseUsSection />
 
-            {/* 8. Contact CTA, Squad Estimator & Inquiries */}
-            <ContactCtaSection />
-          </>
+              {/* 7. Disciplined 6-Phase Engineering Methodology */}
+              <ProcessSection />
+
+              {/* 8. Contact CTA, Squad Estimator & Inquiries */}
+              <ContactCtaSection />
+            </div>
+          </div>
         );
     }
   };
 
   const isStandaloneDemo = currentRoute === 'demo';
+  const isHomeRoute = currentRoute === 'home';
 
   return (
-    <div className="min-h-screen flex flex-col bg-white text-slate-900 selection:bg-blue-600 selection:text-white font-sans">
-      <RouteSEO currentRoute={currentRoute} />
+    <div
+      className={`min-h-screen flex flex-col text-slate-900 selection:bg-blue-600 selection:text-white font-sans ${
+        isHomeRoute ? 'bg-[#090f24]' : 'bg-white'
+      }`}
+    >
+      <RouteSEO currentRoute={currentRoute} slug={params.slug} />
+      <PremiumEffectsController routeKey={`${currentRoute}:${params.slug || ''}`} />
 
       {!isStandaloneDemo && (
         <>
@@ -462,7 +605,7 @@ function MainApp() {
       {/* Interactive Modals */}
       <ConsultationModal
         isOpen={isConsultationOpen}
-        onClose={() => setIsConsultationOpen(false)}
+        onClose={handleCloseConsultation}
         preselectedService={preselectedConsultService}
         prefillMessage={prefillConsultMessage}
       />

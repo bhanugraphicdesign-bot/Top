@@ -1,0 +1,372 @@
+/* ============================================================================
+   POWER WEB STUDIO AI — Login-Only 3D Neumorphic + Soft Glassmorphism Styles
+   Strictly scoped to `.pws-login-shell` so no other page is affected.
+   ============================================================================ */
+
+.pws-login-shell {
+  --login-bg: linear-gradient(145deg, #dceafc 0%, #eef5ff 44%, #f8fbff 76%, #ffffff 100%);
+  --login-card-bg: rgba(247, 251, 255, 0.78);
+  --login-card-border: rgba(255, 255, 255, 0.88);
+  --login-card-shadow:
+    22px 24px 52px rgba(147, 177, 214, 0.38),
+    -16px -16px 40px rgba(255, 255, 255, 0.94),
+    0 12px 32px rgba(37, 99, 235, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  --login-heading: #0f172a;
+  --login-subtext: #475569;
+  --login-label: #1e293b;
+  --login-muted: #64748b;
+  --login-brand-accent: #1d4ed8;
+  --login-input-bg: rgba(238, 244, 252, 0.88);
+  --login-input-border: rgba(203, 219, 240, 0.75);
+  --login-input-shadow:
+    inset 5px 5px 11px rgba(154, 179, 211, 0.34),
+    inset -5px -5px 11px rgba(255, 255, 255, 0.95);
+  --login-input-focus-bg: rgba(255, 255, 255, 0.96);
+  --login-input-focus-shadow:
+    inset 2px 2px 6px rgba(37, 99, 235, 0.12),
+    0 0 0 3px rgba(59, 130, 246, 0.24);
+  --login-input-text: #0f172a;
+  --login-input-placeholder: #64748b;
+  --login-icon-color: #475569;
+  --login-surface-btn-bg: rgba(246, 250, 255, 0.92);
+  --login-surface-btn-border: rgba(255, 255, 255, 0.9);
+  --login-surface-btn-shadow:
+    6px 6px 14px rgba(148, 175, 211, 0.34),
+    -6px -6px 14px rgba(255, 255, 255, 0.96);
+  --login-surface-btn-hover-shadow:
+    8px 10px 20px rgba(148, 175, 211, 0.42),
+    -6px -6px 16px rgba(255, 255, 255, 1);
+  --login-surface-btn-active-shadow:
+    inset 4px 4px 8px rgba(148, 175, 211, 0.38),
+    inset -4px -4px 8px rgba(255, 255, 255, 0.95);
+  --login-surface-btn-text: #1e293b;
+  --login-divider: rgba(148, 163, 184, 0.32);
+  --login-logo-bg: linear-gradient(145deg, #ffffff 0%, #e6f0ff 100%);
+  --login-logo-shadow:
+    10px 12px 24px rgba(37, 99, 235, 0.22),
+    -8px -8px 20px rgba(255, 255, 255, 0.95),
+    0 0 28px rgba(59, 130, 246, 0.24);
+  --login-checkbox-bg: #edf4fc;
+  --login-checkbox-shadow:
+    inset 3px 3px 6px rgba(148, 175, 211, 0.42),
+    inset -3px -3px 6px rgba(255, 255, 255, 0.95);
+  --login-error-bg: rgba(254, 242, 242, 0.92);
+  --login-error-border: rgba(252, 165, 165, 0.75);
+  --login-error-text: #b91c1c;
+  --login-success-bg: rgba(236, 253, 245, 0.92);
+  --login-success-border: rgba(110, 231, 183, 0.75);
+  --login-success-text: #047857;
+  --login-orb-1: radial-gradient(circle at 32% 30%, #ffffff 0%, #dbeafe 34%, #93c5fd 76%, #60a5fa 100%);
+  --login-orb-2: radial-gradient(circle at 30% 28%, #f0f9ff 0%, #bae6fd 38%, #60a5fa 82%, #3b82f6 100%);
+  --login-orb-3: radial-gradient(circle at 34% 32%, #ffffff 0%, #e0edff 45%, #bfdbfe 85%, #93c5fd 100%);
+  --login-orb-shadow:
+    28px 34px 64px rgba(59, 130, 246, 0.2),
+    -18px -18px 42px rgba(255, 255, 255, 0.85),
+    inset 10px 12px 24px rgba(255, 255, 255, 0.82);
+
+  background: var(--login-bg);
+  color: var(--login-heading);
+  transition: background 240ms ease, color 200ms ease;
+}
+
+.pws-login-shell.pws-login-dark {
+  --login-bg: linear-gradient(145deg, #070d19 0%, #0d172a 48%, #12213c 100%);
+  --login-card-bg: rgba(17, 27, 46, 0.82);
+  --login-card-border: rgba(148, 184, 235, 0.16);
+  --login-card-shadow:
+    22px 26px 56px rgba(2, 6, 16, 0.78),
+    -10px -10px 28px rgba(42, 66, 108, 0.18),
+    0 0 38px rgba(37, 99, 235, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --login-heading: #f8fafc;
+  --login-subtext: #cbd5e1;
+  --login-label: #e2e8f0;
+  --login-muted: #94a3b8;
+  --login-brand-accent: #60a5fa;
+  --login-input-bg: rgba(10, 18, 33, 0.88);
+  --login-input-border: rgba(148, 163, 184, 0.18);
+  --login-input-shadow:
+    inset 5px 5px 12px rgba(2, 6, 15, 0.75),
+    inset -4px -4px 10px rgba(45, 68, 108, 0.16);
+  --login-input-focus-bg: rgba(13, 23, 42, 0.96);
+  --login-input-focus-shadow:
+    inset 2px 2px 8px rgba(2, 6, 15, 0.6),
+    0 0 0 3px rgba(96, 165, 250, 0.32);
+  --login-input-text: #f8fafc;
+  --login-input-placeholder: #94a3b8;
+  --login-icon-color: #94a3b8;
+  --login-surface-btn-bg: rgba(22, 35, 58, 0.92);
+  --login-surface-btn-border: rgba(148, 184, 235, 0.16);
+  --login-surface-btn-shadow:
+    6px 8px 18px rgba(2, 6, 16, 0.62),
+    -4px -4px 12px rgba(56, 84, 132, 0.16);
+  --login-surface-btn-hover-shadow:
+    8px 10px 22px rgba(2, 6, 16, 0.74),
+    -4px -4px 14px rgba(59, 130, 246, 0.22);
+  --login-surface-btn-active-shadow:
+    inset 4px 4px 10px rgba(2, 6, 16, 0.75),
+    inset -3px -3px 8px rgba(56, 84, 132, 0.14);
+  --login-surface-btn-text: #f1f5f9;
+  --login-divider: rgba(148, 163, 184, 0.2);
+  --login-logo-bg: linear-gradient(145deg, #1b2c4b 0%, #0f1b31 100%);
+  --login-logo-shadow:
+    10px 14px 28px rgba(2, 6, 16, 0.72),
+    -6px -6px 16px rgba(59, 130, 246, 0.16),
+    0 0 30px rgba(59, 130, 246, 0.28);
+  --login-checkbox-bg: #0b1426;
+  --login-checkbox-shadow:
+    inset 3px 3px 6px rgba(2, 6, 15, 0.8),
+    inset -2px -2px 6px rgba(56, 84, 132, 0.2);
+  --login-error-bg: rgba(127, 29, 29, 0.32);
+  --login-error-border: rgba(248, 113, 113, 0.45);
+  --login-error-text: #fecaca;
+  --login-success-bg: rgba(6, 78, 59, 0.34);
+  --login-success-border: rgba(52, 211, 153, 0.45);
+  --login-success-text: #a7f3d0;
+  --login-orb-1: radial-gradient(circle at 30% 28%, rgba(96, 165, 250, 0.32) 0%, rgba(37, 99, 235, 0.2) 48%, rgba(15, 23, 42, 0.15) 100%);
+  --login-orb-2: radial-gradient(circle at 32% 30%, rgba(56, 189, 248, 0.26) 0%, rgba(29, 78, 216, 0.22) 55%, rgba(11, 18, 32, 0.15) 100%);
+  --login-orb-3: radial-gradient(circle at 32% 32%, rgba(125, 211, 252, 0.2) 0%, rgba(30, 64, 175, 0.16) 60%, rgba(15, 23, 42, 0.12) 100%);
+  --login-orb-shadow:
+    22px 28px 54px rgba(2, 6, 16, 0.56),
+    inset 8px 10px 22px rgba(147, 197, 253, 0.14);
+}
+
+/* Soft 3D Background Circles */
+.pws-login-orb {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  box-shadow: var(--login-orb-shadow);
+}
+
+.pws-login-orb-1 {
+  width: clamp(240px, 34vw, 460px);
+  height: clamp(240px, 34vw, 460px);
+  top: -100px;
+  left: -90px;
+  background: var(--login-orb-1);
+  opacity: 0.85;
+}
+
+.pws-login-orb-2 {
+  width: clamp(260px, 38vw, 520px);
+  height: clamp(260px, 38vw, 520px);
+  bottom: -140px;
+  right: -110px;
+  background: var(--login-orb-2);
+  opacity: 0.82;
+}
+
+.pws-login-orb-3 {
+  width: clamp(140px, 18vw, 240px);
+  height: clamp(140px, 18vw, 240px);
+  top: 18%;
+  right: 12%;
+  background: var(--login-orb-3);
+  opacity: 0.72;
+}
+
+/* Main 3D Neumorphic + Glass Card */
+@keyframes pwsLoginCardFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pwsLoginLogoFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.pws-login-card {
+  background: var(--login-card-bg);
+  border: 1px solid var(--login-card-border);
+  box-shadow: var(--login-card-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  animation: pwsLoginCardFadeIn 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 3D Floating Brand Logo Tile */
+.pws-login-logo-tile {
+  background: var(--login-logo-bg);
+  border: 1px solid var(--login-card-border);
+  box-shadow: var(--login-logo-shadow);
+  animation: pwsLoginLogoFloat 4.8s ease-in-out infinite;
+}
+
+/* Recessed Neumorphic Inputs */
+.pws-login-input-wrap {
+  background: var(--login-input-bg);
+  border: 1px solid var(--login-input-border);
+  box-shadow: var(--login-input-shadow);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.pws-login-input-wrap:focus-within {
+  background: var(--login-input-focus-bg);
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: var(--login-input-focus-shadow);
+}
+
+.pws-login-input {
+  color: var(--login-input-text);
+  background: transparent;
+}
+
+.pws-login-input::placeholder {
+  color: var(--login-input-placeholder);
+  opacity: 0.85;
+}
+
+.pws-login-input:-webkit-autofill,
+.pws-login-input:-webkit-autofill:hover,
+.pws-login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--login-input-text);
+  transition: background-color 9999s ease-in-out 0s;
+}
+
+/* Primary 3D Blue Gradient Login Button */
+.pws-login-primary-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 52%, #0ea5e9 100%);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  box-shadow:
+    0 12px 26px -6px rgba(37, 99, 235, 0.52),
+    0 4px 10px -2px rgba(14, 165, 233, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -3px 0 rgba(15, 23, 42, 0.18);
+  transition:
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms ease,
+    filter 180ms ease;
+}
+
+.pws-login-primary-btn:hover:not(:disabled) {
+  transform: translateY(-1.5px);
+  filter: brightness(1.04);
+  box-shadow:
+    0 16px 32px -6px rgba(37, 99, 235, 0.62),
+    0 6px 16px -2px rgba(14, 165, 233, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -3px 0 rgba(15, 23, 42, 0.2);
+}
+
+.pws-login-primary-btn:active:not(:disabled) {
+  transform: translateY(1px) scale(0.99);
+  box-shadow:
+    0 6px 14px -4px rgba(37, 99, 235, 0.45),
+    inset 0 2px 6px rgba(15, 23, 42, 0.26);
+}
+
+.pws-login-primary-btn:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+/* Raised Neumorphic Secondary / Icon Buttons */
+.pws-login-neu-btn {
+  background: var(--login-surface-btn-bg);
+  color: var(--login-surface-btn-text);
+  border: 1px solid var(--login-surface-btn-border);
+  box-shadow: var(--login-surface-btn-shadow);
+  transition:
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms ease,
+    background-color 180ms ease;
+}
+
+.pws-login-neu-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--login-surface-btn-hover-shadow);
+}
+
+.pws-login-neu-btn:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.985);
+  box-shadow: var(--login-surface-btn-active-shadow);
+}
+
+.pws-login-neu-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Custom Neumorphic Remember Me Checkbox */
+.pws-login-checkbox-box {
+  background: var(--login-checkbox-bg);
+  border: 1px solid var(--login-input-border);
+  box-shadow: var(--login-checkbox-shadow);
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.pws-login-checkbox-box[data-checked="true"] {
+  background: linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%);
+  border-color: #2563eb;
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.4);
+}
+
+/* Semantic Feedback Surfaces */
+.pws-login-error-box {
+  background: var(--login-error-bg);
+  border: 1px solid var(--login-error-border);
+  color: var(--login-error-text);
+}
+
+.pws-login-success-box {
+  background: var(--login-success-bg);
+  border: 1px solid var(--login-success-border);
+  color: var(--login-success-text);
+}
+
+/* Lighter effects on narrow mobile screens for smooth performance */
+@media (max-width: 640px) {
+  .pws-login-logo-tile {
+    animation: none;
+  }
+
+  .pws-login-card {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .pws-login-orb-3 {
+    display: none;
+  }
+}
+
+/* Respect prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .pws-login-card,
+  .pws-login-logo-tile {
+    animation: none !important;
+  }
+
+  .pws-login-shell,
+  .pws-login-input-wrap,
+  .pws-login-primary-btn,
+  .pws-login-neu-btn,
+  .pws-login-checkbox-box {
+    transition: none !important;
+  }
+
+  .pws-login-primary-btn:hover:not(:disabled),
+  .pws-login-primary-btn:active:not(:disabled),
+  .pws-login-neu-btn:hover:not(:disabled),
+  .pws-login-neu-btn:active:not(:disabled) {
+    transform: none !important;
+  }
+}

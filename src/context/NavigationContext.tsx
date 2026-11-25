@@ -15,6 +15,7 @@ const VALID_ROUTES: PageRoute[] = [
   'about',
   'services',
   'ai-solutions',
+  'ai-website-consultant',
   'android-portfolio',
   'app-detail',
   'demo',
@@ -24,6 +25,7 @@ const VALID_ROUTES: PageRoute[] = [
   'blog',
   'privacy',
   'terms',
+  'refund-policy',
   'client-dashboard',
   'admin-dashboard',
 ];

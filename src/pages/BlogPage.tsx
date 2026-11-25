@@ -130,9 +130,10 @@ export const BlogPage: React.FC = () => {
       )}
 
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('ARCHITECTURAL DISPATCH & RESEARCH', 'आर्किटेक्चरल शोध एवं विचार')}
             </div>
@@ -142,11 +143,11 @@ export const BlogPage: React.FC = () => {
             >
               {language === 'hi' ? (
                 <>
-                  एंटरप्राइज इंजीनियरिंग, एंड्रॉइड और <span className="text-blue-700">सॉवरेन एआई</span> पर तकनीकी शोध
+                  एंटरप्राइज इंजीनियरिंग, एंड्रॉइड और <span className="pws-gradient-text">सॉवरेन एआई</span> पर तकनीकी शोध
                 </>
               ) : (
                 <>
-                  Technical Insights on Enterprise Architecture, Android & <span className="text-blue-700">Sovereign AI</span>
+                  Technical Insights on Enterprise Architecture, Android & <span className="pws-gradient-text">Sovereign AI</span>
                 </>
               )}
             </h1>
@@ -164,7 +165,7 @@ export const BlogPage: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-20 space-y-12">
         {/* Featured Editorial Banner */}
         {featuredPost && (
-          <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 group">
+          <div className="pws-reveal pws-card-3d-dark pws-no-tilt relative rounded-2xl overflow-hidden bg-[#0B1220] group">
             <OptimizedImage
               assetKey="blogImage"
               alt={`Power Web Studio AI Engineering Blog — ${featuredPost.title}`}
@@ -189,7 +190,7 @@ export const BlogPage: React.FC = () => {
               <div className="mt-4 flex items-center gap-4 text-xs">
                 <button
                   onClick={() => openPost(featuredPost)}
-                  className="px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white font-bold rounded-md transition-colors cursor-pointer"
+                  className="pws-btn-3d px-4 py-2 text-white font-bold rounded-lg cursor-pointer"
                 >
                   {t('Read Full Paper', 'पूरा लेख पढ़ें')}
                 </button>
@@ -202,11 +203,11 @@ export const BlogPage: React.FC = () => {
         )}
 
         {/* Articles Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-3 gap-8">
           {posts.map((post) => (
             <div
               key={post.id}
-              className="p-6 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-md transition-all flex flex-col justify-between"
+              className="pws-card-3d p-6 rounded-2xl flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between text-xs text-slate-600 mb-3 pb-2 border-b border-slate-100">
@@ -231,7 +232,9 @@ export const BlogPage: React.FC = () => {
               <div>
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
                   <div>
-                    <span className="font-semibold text-slate-900 block">{post.author}</span>
+                    <span className="font-semibold text-slate-900 block">
+                      {language === 'hi' ? (post.authorHi || post.author) : post.author}
+                    </span>
                     <span className="text-[11px] text-slate-600">
                       {language === 'hi' ? (post.authorRoleHi || post.authorRole) : post.authorRole}
                     </span>
@@ -273,7 +276,7 @@ export const BlogPage: React.FC = () => {
               <button
                 type="button"
                 onClick={closePost}
-                aria-label={t('Close modal', 'मोडल बंद करें')}
+                aria-label={t('Close modal', 'बंद करें')}
                 className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
               >
                 <X className="w-5 h-5" />
@@ -290,7 +293,9 @@ export const BlogPage: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-3 py-3 border-y border-slate-100 mb-6 text-xs text-slate-600">
                 <div className="flex flex-wrap items-center gap-2">
                   <User className="w-4 h-4 text-blue-700" aria-hidden="true" />
-                  <span className="font-semibold text-slate-900">{selectedPost.author}</span>
+                  <span className="font-semibold text-slate-900">
+                    {language === 'hi' ? (selectedPost.authorHi || selectedPost.author) : selectedPost.author}
+                  </span>
                   <span aria-hidden="true" className="text-slate-300">·</span>
                   <span>{language === 'hi' ? (selectedPost.authorRoleHi || selectedPost.authorRole) : selectedPost.authorRole}</span>
                 </div>

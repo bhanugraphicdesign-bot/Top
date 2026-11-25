@@ -29,7 +29,7 @@ export const WhyChooseUsSection: React.FC = () => {
     <section id="why-choose-us" className="py-20 sm:py-28 bg-white border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="max-w-3xl mb-14">
+        <div className="pws-reveal pws-home-surface-dark max-w-3xl mb-14">
           <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
             {t('ARCHITECTURAL ADVANTAGES', 'एंटरप्राइज विशेषताएं')}
           </div>
@@ -39,11 +39,11 @@ export const WhyChooseUsSection: React.FC = () => {
           >
             {language === 'hi' ? (
               <>
-                अग्रणी उद्यम <span className="text-blue-700">पावर वेब स्टूडियो एआई</span> को क्यों चुनते हैं
+                अग्रणी उद्यम <span className="pws-gradient-text">पावर वेब स्टूडियो एआई</span> को क्यों चुनते हैं
               </>
             ) : (
               <>
-                Why Global Enterprises Choose <span className="text-blue-700">Power Web Studio AI</span>
+                Why Global Enterprises Choose <span className="pws-gradient-text">Power Web Studio AI</span>
               </>
             )}
           </h2>
@@ -56,11 +56,11 @@ export const WhyChooseUsSection: React.FC = () => {
         </div>
 
         {/* 6-Grid Pillars with Hairline Borders (Anti-slop compliant) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {WHY_CHOOSE_US_PILLARS.map((pillar) => (
             <div
               key={pillar.id}
-              className="p-6 sm:p-7 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-xs transition-all flex flex-col justify-between"
+              className="pws-card-3d p-6 sm:p-7 rounded-2xl flex flex-col justify-between"
             >
               <div>
                 <div className="flex items-center justify-between mb-4">

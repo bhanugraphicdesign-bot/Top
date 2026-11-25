@@ -9,9 +9,10 @@ export const TermsPage: React.FC = () => {
   return (
     <div className="bg-white">
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('MASTER SERVICES AGREEMENT & TERMS', 'मास्टर सेवा अनुबंध एवं शर्तें')}
             </div>
@@ -37,7 +38,7 @@ export const TermsPage: React.FC = () => {
       </section>
 
       {/* Terms Content */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12 text-slate-700 leading-relaxed text-sm sm:text-base">
+      <div className="pws-reveal max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-12 text-slate-700 leading-relaxed text-sm sm:text-base">
         <section className="space-y-3">
           <h2 className="text-xl font-bold text-slate-900">
             {t('1. Binding Agreement', '1. बाध्यकारी समझौता')}

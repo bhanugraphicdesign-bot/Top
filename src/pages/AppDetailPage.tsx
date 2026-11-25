@@ -72,7 +72,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
         <button
           type="button"
           onClick={() => navigate('android-portfolio')}
-          className="px-4 py-2.5 bg-blue-700 hover:bg-blue-800 text-white rounded-md text-xs font-bold transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+          className="pws-btn-3d px-4 py-2.5 text-white rounded-lg text-xs font-bold cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
         >
           {t('Return to Android Portfolio', 'एंड्रॉइड पोर्टफोलियो पर वापस जाएं')}
         </button>
@@ -132,13 +132,14 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
       </div>
 
       {/* Hero Header for App */}
-      <section className="border-b border-slate-200 py-12 sm:py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="pws-hero-surface border-b border-slate-200 py-12 sm:py-16">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Left Info */}
-            <div className="lg:col-span-8 space-y-4">
+            <div className="pws-reveal lg:col-span-8 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-16 h-16 rounded-2xl bg-blue-700 text-white flex items-center justify-center shrink-0 shadow-md">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-700 to-blue-500 text-white flex items-center justify-center shrink-0 shadow-md">
                   <Smartphone className="w-8 h-8" />
                 </div>
                 <div>
@@ -181,16 +182,18 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
+                  type="button"
                   onClick={runSimulation}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shadow-xs"
+                  className="pws-btn-3d inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-lg cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5" />
                   <span>{t('Run Architecture Walkthrough', 'आर्किटेक्चर वॉकथ्रू चलाएं')}</span>
                 </button>
 
                 <button
+                  type="button"
                   onClick={() => onOpenConsultation(`Custom Build Scope: ${app.name}`)}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-md transition-colors cursor-pointer"
+                  className="pws-btn-glass inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-slate-700 hover:text-blue-700 rounded-lg cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5 text-blue-700" />
                   <span>{t('Demo coming soon · Request Pilot Build', 'डेमो जल्द उपलब्ध होगा · पायलट पूछें')}</span>
@@ -199,8 +202,8 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
             </div>
 
             {/* Right Metrics Strip */}
-            <div className="lg:col-span-4 space-y-3">
-              <div className="p-5 rounded-xl border border-slate-200 bg-slate-50 space-y-4">
+            <div className="pws-reveal lg:col-span-4 space-y-3">
+              <div className="pws-card-3d p-5 rounded-2xl space-y-4">
                 <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block border-b border-slate-200 pb-2">
                   {t('Concept Architecture Targets', 'कॉन्सेप्ट आर्किटेक्चर लक्ष्य')}
                 </span>
@@ -229,11 +232,11 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Screenshots Display */}
-            <div className="lg:col-span-7">
+            <div className="pws-reveal lg:col-span-7">
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider block mb-3">
                 {t('Device Surface & Screen Architecture', 'डिवाइस स्क्रीन पूर्वावलोकन')}
               </span>
-              <div className="rounded-xl overflow-hidden border border-slate-300 shadow-lg bg-slate-900">
+              <div className="pws-card-3d-dark rounded-2xl overflow-hidden bg-[#0B1220]">
                 <OptimizedImage
                   assetKey="appMockupImage"
                   customSrc={app.screenshots[0]}
@@ -249,8 +252,8 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
             </div>
 
             {/* Interactive Terminal Sandbox Preview */}
-            <div className="lg:col-span-5">
-              <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-xs space-y-4">
+            <div className="pws-reveal lg:col-span-5">
+              <div className="pws-card-3d pws-no-tilt p-6 rounded-2xl space-y-4">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">
                     {t('Terminal Simulation State', 'टर्मिनल सिमुलेशन स्थिति')}
@@ -260,7 +263,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                   </span>
                 </div>
 
-                <div className="p-3 bg-slate-900 rounded-lg font-mono text-xs text-slate-200 space-y-1.5">
+                <div className="p-3 bg-[#0B1220] rounded-lg font-mono text-xs text-slate-200 space-y-1.5">
                   <div className="text-slate-400">// {app.architecture}</div>
                   <div>$ init_mobile_pod --app={app.id}</div>
                   {demoSimActive && simStep >= 1 && (
@@ -282,8 +285,9 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
                 </p>
 
                 <button
+                  type="button"
                   onClick={runSimulation}
-                  className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold rounded-md transition-colors cursor-pointer"
+                  className="pws-btn-glass w-full py-2.5 text-slate-800 text-xs font-bold rounded-lg cursor-pointer"
                 >
                   {t('Run Verification Sequence', 'सत्यापन अनुक्रम चलाएं')}
                 </button>
@@ -333,7 +337,7 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
 
           {activeTab === 'architecture' && (
             <div className="space-y-6">
-              <div className="p-6 rounded-xl border border-slate-200 bg-white space-y-4">
+              <div className="pws-card-3d pws-no-tilt p-6 rounded-2xl space-y-4">
                 <h3 className="text-base font-bold text-slate-900">
                   {t('Pattern: ', 'पैटर्न: ')}{app.architecture}
                 </h3>
@@ -364,11 +368,11 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
           )}
 
           {activeTab === 'features' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-2 gap-3">
               {(language === 'hi' ? app.keyFeaturesHi : app.keyFeatures).map((feat, i) => (
                 <div
                   key={i}
-                  className="p-4 rounded-lg border border-slate-200 bg-slate-50/70 flex items-start gap-3 text-xs text-slate-800"
+                  className="pws-card-3d p-4 rounded-xl flex items-start gap-3 text-xs text-slate-800"
                 >
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <span>{feat}</span>
@@ -378,9 +382,9 @@ export const AppDetailPage: React.FC<AppDetailPageProps> = ({ onOpenConsultation
           )}
 
           {activeTab === 'changelog' && app.changelog && (
-            <div className="space-y-3">
+            <div className="pws-stagger-grid space-y-3">
               {app.changelog.map((log, idx) => (
-                <div key={idx} className="p-4 rounded-lg border border-slate-200 bg-white">
+                <div key={idx} className="pws-card-3d pws-no-tilt p-4 rounded-xl">
                   <div className="flex items-center justify-between text-xs mb-1">
                     <span className="font-mono font-bold text-blue-700">{log.version}</span>
                     <span className="text-slate-600">{log.date}</span>

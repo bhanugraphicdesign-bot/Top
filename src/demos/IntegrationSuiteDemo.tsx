@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { DemoPriceBar } from '../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../components/common/DemoLanguageToggle';
 
 interface IntegrationSuiteDemoProps {
   onBackToHome: () => void;
@@ -1070,34 +1071,11 @@ export const IntegrationSuiteDemo: React.FC<IntegrationSuiteDemoProps> = ({
               <span className="sm:hidden text-[11px] font-medium text-emerald-300 whitespace-nowrap">
                 {isHi ? 'DEMO नमूना' : 'DEMO Sample'}
               </span>
-              <div
-                className="inline-flex items-center rounded-md border border-slate-700/80 bg-slate-900/80 p-0.5"
-                role="group"
-                aria-label="Language switch"
-              >
-                <button
-                  type="button"
-                  onClick={() => setLanguage('hi')}
-                  className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors cursor-pointer whitespace-nowrap ${
-                    isHi
-                      ? 'bg-emerald-500 text-slate-950'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  हिंदी
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLanguage('en')}
-                  className={`px-2 py-0.5 text-[11px] font-semibold rounded transition-colors cursor-pointer whitespace-nowrap ${
-                    !isHi
-                      ? 'bg-emerald-500 text-slate-950'
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  EN
-                </button>
-              </div>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="dark"
+              />
             </div>
           </div>
         </div>

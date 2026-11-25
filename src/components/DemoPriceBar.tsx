@@ -33,7 +33,7 @@ export const DemoPriceBar: React.FC<DemoPriceBarProps> = ({ slug }) => {
   };
 
   return (
-    <div className="w-full bg-white border-b border-slate-200 text-slate-900">
+    <div className="w-full bg-white/90 backdrop-blur-md border-b border-blue-200/70 text-slate-900 shadow-[0_8px_24px_-16px_rgba(11,18,32,0.2)]">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <p className="text-xs sm:text-[13px] font-medium text-slate-800 leading-snug min-w-0">
           {isHi ? (
@@ -58,7 +58,7 @@ export const DemoPriceBar: React.FC<DemoPriceBarProps> = ({ slug }) => {
         <button
           type="button"
           onClick={handleRequestSimilar}
-          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-md bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 font-bold text-xs transition-colors cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-600"
+          className="pws-btn-amber w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-md text-slate-950 font-bold text-xs cursor-pointer whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-amber-600"
         >
           <span>{isHi ? 'इस जैसी वेबसाइट बनवाएँ' : 'Build a Website Like This'}</span>
           <ArrowRight className="w-3.5 h-3.5 shrink-0" />

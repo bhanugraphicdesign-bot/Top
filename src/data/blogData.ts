@@ -1,4 +1,4 @@
-import { BlogPost } from '../types';
+import type { BlogPost } from '../types';
 
 export const BLOG_POSTS: BlogPost[] = [
   {
@@ -29,13 +29,14 @@ export const BLOG_POSTS: BlogPost[] = [
   },
   {
     id: 'offline-first-kotlin-jetpack-compose',
-    title: 'Scaling Offline-First Android Apps Across 18,000 Field Terminals',
-    titleHi: '18,000 फील्ड टर्मिनलों पर ऑफलाइन-फर्स्ट एंड्रॉइड ऐप्स का सफल संचालन',
+    title: 'Scaling Offline-First Android Apps for Field Operations',
+    titleHi: 'फील्ड संचालन के लिए ऑफलाइन-फर्स्ट एंड्रॉइड ऐप्स का सफल संचालन',
     excerpt: 'Lessons learned building memory-hardened Jetpack Compose mobile apps with SQLite cipher encryption and low-bandwidth geospatial compression.',
     excerptHi: 'मेमोरी-कुशल जेटपैक कम्पोज़ ऐप्स, SQLite साइफर एन्क्रिप्शन और कम-बैंडविड्थ डेटा कम्प्रेशन के साथ फील्ड मोबिलिटी का निर्माण।',
     category: 'Mobile Systems',
     categoryHi: 'मोबाइल सिस्टम',
-    author: 'Lead Android Mobility Squad',
+    author: 'Android Development',
+    authorHi: 'Android डेवलपमेंट',
     authorRole: 'Systems Mobility Group',
     authorRoleHi: 'सिस्टम मोबिलिटी ग्रुप',
     date: 'October 2026',
@@ -61,7 +62,8 @@ export const BLOG_POSTS: BlogPost[] = [
     excerptHi: 'सहमति प्रबंधन, उद्देश्य सीमा प्रवर्तन और ज़ीरो-नॉलेज डेटा मास्किंग के लिए व्यावहारिक आर्किटेक्चरल पैटर्न।',
     category: 'Compliance & Governance',
     categoryHi: 'अनुपालन एवं प्रशासन',
-    author: 'Enterprise Security Architecture Team',
+    author: 'Security Design',
+    authorHi: 'सिक्योरिटी डिज़ाइन',
     authorRole: 'Compliance Assurance Unit',
     authorRoleHi: 'अनुपालन आश्वासन इकाई',
     date: 'September 2026',

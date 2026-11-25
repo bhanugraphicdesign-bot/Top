@@ -8,6 +8,9 @@ import {
   updateProfile,
   signOut,
   sendPasswordResetEmail,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth';
 import { auth, googleProvider, browserPopupRedirectResolver } from '../firebase/config';
 import {
@@ -18,6 +21,7 @@ import {
 } from '../firebase/services';
 
 type RoleSource = 'user_roles' | 'custom_claim' | 'owner_email' | 'client' | null;
+type PostLoginTarget = 'client-dashboard' | 'admin-dashboard' | null;
 
 interface AuthContextType {
   currentUser: User | null;
@@ -29,9 +33,14 @@ interface AuthContextType {
   roleCheckError: string | null;
   isAuthReady: boolean;
   isRoleChecking: boolean;
+  isLoggingOut: boolean;
+  logoutSeq: number;
+  clearLoggingOut: () => void;
+  postLoginRedirectTarget: PostLoginTarget;
+  consumePostLoginRedirect: () => void;
   refreshUserRole: () => Promise<boolean>;
-  loginWithGoogle: () => Promise<void>;
-  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  loginWithGoogle: (rememberMe?: boolean) => Promise<void>;
+  loginWithEmail: (email: string, pass: string, rememberMe?: boolean) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -55,27 +64,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [roleCheckError, setRoleCheckError] = useState<string | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isRoleChecking, setIsRoleChecking] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutSeq, setLogoutSeq] = useState(0);
+  const [postLoginRedirectTarget, setPostLoginRedirectTarget] = useState<PostLoginTarget>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register' | 'forgot'>('login');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const googleSignInInFlightRef = useRef<Promise<void> | null>(null);
+  const pendingInteractiveLoginRef = useRef(false);
 
-  const openAuthModal = (tab: 'login' | 'register' | 'forgot' = 'login') => {
+  const openAuthModal = useCallback((tab: 'login' | 'register' | 'forgot' = 'login') => {
     setAuthModalTab(tab);
     setIsAuthModalOpen(true);
-  };
+  }, []);
 
-  const closeAuthModal = () => {
+  const closeAuthModal = useCallback(() => {
     setIsAuthModalOpen(false);
-  };
+  }, []);
 
-  const openProfileModal = () => {
+  const openProfileModal = useCallback(() => {
     setIsProfileModalOpen(true);
-  };
+  }, []);
 
-  const closeProfileModal = () => {
+  const closeProfileModal = useCallback(() => {
     setIsProfileModalOpen(false);
-  };
+  }, []);
+
+  const consumePostLoginRedirect = useCallback(() => {
+    setPostLoginRedirectTarget(null);
+  }, []);
+
+  const clearLoggingOut = useCallback(() => {
+    setIsLoggingOut(false);
+  }, []);
 
   const resolveUserRoleState = useCallback(
     async (user: User, forceTokenRefresh = false): Promise<boolean> => {
@@ -175,12 +196,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   // Listen to Firebase Auth state (admin derived strictly from user_roles/{uid} or custom claim)
+  // Post-login dashboard redirect triggers ONLY after onAuthStateChanged confirms the user & role.
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       if (user) {
-        await resolveUserRoleState(user, false);
+        const shouldRedirectAfterLogin = pendingInteractiveLoginRef.current;
+        const resolvedAdmin = await resolveUserRoleState(user, shouldRedirectAfterLogin);
+        if (auth.currentUser?.uid === user.uid && shouldRedirectAfterLogin) {
+          pendingInteractiveLoginRef.current = false;
+          setIsAuthModalOpen(false);
+          setPostLoginRedirectTarget(resolvedAdmin ? 'admin-dashboard' : 'client-dashboard');
+        }
       } else {
+        pendingInteractiveLoginRef.current = false;
+        setPostLoginRedirectTarget(null);
         setUserRole('client');
         setIsSuperAdmin(false);
         setRoleDocExists(false);
@@ -208,14 +238,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return resolveUserRoleState(activeUser, true);
   }, [resolveUserRoleState]);
 
-  const loginWithGoogle = useCallback(async (): Promise<void> => {
+  const loginWithGoogle = useCallback(async (rememberMe = true): Promise<void> => {
     if (googleSignInInFlightRef.current) {
       return googleSignInInFlightRef.current;
     }
 
     const run = (async () => {
       let signedInUser: User;
+      pendingInteractiveLoginRef.current = true;
+      setPostLoginRedirectTarget(null);
       try {
+        await setPersistence(
+          auth,
+          rememberMe ? browserLocalPersistence : browserSessionPersistence
+        ).catch(() => undefined);
         const result = await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver);
         signedInUser = result.user;
       } catch (err: any) {
@@ -232,29 +268,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (auth.currentUser) {
             signedInUser = auth.currentUser;
           } else if (msg.includes('Pending promise was never set')) {
+            pendingInteractiveLoginRef.current = false;
+            setPostLoginRedirectTarget(null);
             const normalized = Object.assign(
               new Error('Google sign-in popup was closed before completing.'),
               { code: 'auth/popup-closed-by-user' }
             );
             throw normalized;
           } else {
+            pendingInteractiveLoginRef.current = false;
+            setPostLoginRedirectTarget(null);
             throw err;
           }
         } else {
+          pendingInteractiveLoginRef.current = false;
+          setPostLoginRedirectTarget(null);
           throw err;
         }
       }
 
       if (signedInUser) {
-        setCurrentUser(signedInUser);
-        await resolveUserRoleState(signedInUser, true);
-        await logAuditEvent(
-          'AUTH_LOGIN_GOOGLE',
-          `users/${signedInUser.uid}`,
-          `Signed in with Google: ${signedInUser.email}`
-        );
+        try {
+          await logAuditEvent(
+            'AUTH_LOGIN_GOOGLE',
+            `users/${signedInUser.uid}`,
+            `Signed in with Google: ${signedInUser.email}`
+          );
+        } catch {
+          // Never block sign-in on audit logging failure
+        }
       }
-      closeAuthModal();
     })();
 
     googleSignInInFlightRef.current = run;
@@ -265,57 +308,119 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         googleSignInInFlightRef.current = null;
       }
     }
-  }, [resolveUserRoleState]);
+  }, []);
 
-  const loginWithEmail = useCallback(
-    async (email: string, pass: string) => {
-      const cleanEmail = email.trim();
+  const loginWithEmail = useCallback(async (email: string, pass: string, rememberMe = true) => {
+    const cleanEmail = email.trim();
+    pendingInteractiveLoginRef.current = true;
+    setPostLoginRedirectTarget(null);
+    try {
+      await setPersistence(
+        auth,
+        rememberMe ? browserLocalPersistence : browserSessionPersistence
+      ).catch(() => undefined);
       const result = await signInWithEmailAndPassword(auth, cleanEmail, pass);
       if (result.user) {
-        setCurrentUser(result.user);
-        await resolveUserRoleState(result.user, true);
-        await logAuditEvent('AUTH_LOGIN_EMAIL', `users/${result.user.uid}`, `Signed in with Email: ${cleanEmail}`);
+        try {
+          await logAuditEvent(
+            'AUTH_LOGIN_EMAIL',
+            `users/${result.user.uid}`,
+            `Signed in with Email: ${cleanEmail}`
+          );
+        } catch {
+          // Never block sign-in on audit logging failure
+        }
       }
-      closeAuthModal();
-    },
-    [resolveUserRoleState]
-  );
+    } catch (err) {
+      if (!auth.currentUser) {
+        pendingInteractiveLoginRef.current = false;
+        setPostLoginRedirectTarget(null);
+      }
+      throw err;
+    }
+  }, []);
 
   const registerWithEmail = useCallback(async (email: string, pass: string, name?: string) => {
     const cleanEmail = email.trim();
     const cleanName = (name || '').trim();
-    const result = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
-    if (result.user) {
-      if (cleanName) {
-        await updateProfile(result.user, { displayName: cleanName });
-        await result.user.reload();
-        if (auth.currentUser) {
-          setCurrentUser(auth.currentUser);
+    pendingInteractiveLoginRef.current = true;
+    setPostLoginRedirectTarget(null);
+    try {
+      const result = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
+      if (result.user) {
+        if (cleanName) {
+          await updateProfile(result.user, { displayName: cleanName });
+          await result.user.reload();
+          if (auth.currentUser) {
+            setCurrentUser(auth.currentUser);
+          }
+          try {
+            await syncUserAccount({
+              uid: result.user.uid,
+              email: result.user.email,
+              displayName: cleanName,
+              photoURL: result.user.photoURL,
+            });
+          } catch {
+            // Non-fatal sync warning
+          }
         }
-        await syncUserAccount({
-          uid: result.user.uid,
-          email: result.user.email,
-          displayName: cleanName,
-          photoURL: result.user.photoURL,
-        });
+        try {
+          await logAuditEvent(
+            'AUTH_REGISTER',
+            `users/${result.user.uid}`,
+            `Registered new account: ${cleanEmail}`
+          );
+        } catch {
+          // Never block registration on audit logging failure
+        }
       }
-      await logAuditEvent('AUTH_REGISTER', `users/${result.user.uid}`, `Registered new account: ${cleanEmail}`);
+    } catch (err) {
+      if (!auth.currentUser) {
+        pendingInteractiveLoginRef.current = false;
+        setPostLoginRedirectTarget(null);
+      }
+      throw err;
     }
-    closeAuthModal();
   }, []);
 
   const logout = useCallback(async () => {
-    if (currentUser) {
-      await logAuditEvent('AUTH_LOGOUT', `users/${currentUser.uid}`, `Logged out user: ${currentUser.email}`);
-    }
+    setIsLoggingOut(true);
+    pendingInteractiveLoginRef.current = false;
+    setPostLoginRedirectTarget(null);
+    setIsAuthModalOpen(false);
     setIsProfileModalOpen(false);
-    await signOut(auth);
+    try {
+      sessionStorage.removeItem('pws_demo_client');
+    } catch {
+      // Ignore storage access errors
+    }
+    try {
+      if (currentUser) {
+        await logAuditEvent(
+          'AUTH_LOGOUT',
+          `users/${currentUser.uid}`,
+          `Logged out user: ${currentUser.email}`
+        );
+      }
+    } catch {
+      // Never block sign-out on audit logging failure
+    }
+    try {
+      await signOut(auth);
+    } finally {
+      setLogoutSeq((prev) => prev + 1);
+    }
   }, [currentUser]);
 
   const resetPassword = useCallback(async (email: string) => {
     const cleanEmail = email.trim();
     await sendPasswordResetEmail(auth, cleanEmail);
-    await logAuditEvent('AUTH_RESET_PASSWORD', 'auth', `Password reset email sent to: ${cleanEmail}`);
+    try {
+      await logAuditEvent('AUTH_RESET_PASSWORD', 'auth', `Password reset email sent to: ${cleanEmail}`);
+    } catch {
+      // Ignore audit log failure
+    }
   }, []);
 
   return (
@@ -330,6 +435,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         roleCheckError,
         isAuthReady,
         isRoleChecking,
+        isLoggingOut,
+        logoutSeq,
+        clearLoggingOut,
+        postLoginRedirectTarget,
+        consumePostLoginRedirect,
         refreshUserRole,
         loginWithGoogle,
         loginWithEmail,

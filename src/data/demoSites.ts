@@ -147,6 +147,23 @@ export const DEMO_SITES: DemoSiteItem[] = [
     badgeEn: 'Flagship Demo',
     badgeHi: 'फ़्लैगशिप डेमो',
   },
+  {
+    slug: 'vidya-shikhar',
+    nameEn: 'Vidya Shikhar Academy',
+    nameHi: 'विद्या शिखर अकादमी',
+    descriptionEn:
+      'Right Guidance, Strong Preparation — Complete coaching institute platform with Website, Student Portal, Teacher Panel, and Admin Dashboard.',
+    descriptionHi:
+      'सही मार्गदर्शन, मज़बूत तैयारी — वेबसाइट, छात्र पोर्टल, टीचर पैनल और एडमिन डैशबोर्ड के साथ संपूर्ण कोचिंग संस्थान प्लेटफ़ॉर्म।',
+    categoryEn: 'Education / Coaching',
+    categoryHi: 'एजुकेशन / कोचिंग',
+    previewImage: '/demo/vidya-shikhar/hero.jpg',
+    accentFrom: '#0b1936',
+    accentTo: '#d97706',
+    mrp: 299999,
+    badgeEn: 'Premium Demo',
+    badgeHi: 'प्रीमियम डेमो',
+  },
 ];
 
 export function getDemoSiteBySlug(slug?: string): DemoSiteItem | undefined {

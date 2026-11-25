@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { DemoPriceBar } from '../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../components/common/DemoLanguageToggle';
 
 interface ArtificialIntelligenceDemoProps {
   onBackToHome: () => void;
@@ -136,7 +137,7 @@ const SERVICES: AiService[] = [
     scopeHi: [
       'वेबसाइट, WhatsApp और आंतरिक पोर्टल के लिए चैट इंटरफ़ेस',
       'कंपनी दस्तावेज़ों (RAG) के आधार पर सटीक संदर्भ उत्तर',
-      'हिंदी और अंग्रेज़ी दोनों भाषाओं में स्वाभाविक बातचीत',
+      'हिन्दी और अंग्रेज़ी दोनों भाषाओं में स्वाभाविक बातचीत',
       'जटिल प्रश्नों को तुरंत मानव एजेंट को सौंपने की व्यवस्था',
     ],
     scopeEn: [
@@ -512,7 +513,7 @@ const PACKAGES: AiPackage[] = [
       'एक कस्टम AI चैटबॉट',
       'वेबसाइट या WhatsApp इंटीग्रेशन',
       'कंपनी FAQ व डॉक्यूमेंट नॉलेज सेटअप',
-      'हिंदी / English बातचीत सपोर्ट',
+      'हिन्दी / English बातचीत सपोर्ट',
     ],
     featuresEn: [
       'One custom AI chat assistant',
@@ -718,7 +719,7 @@ export const ArtificialIntelligenceDemo: React.FC<ArtificialIntelligenceDemoProp
   onBackToHome,
   onRequestQuote,
 }) => {
-  const { language, toggleLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const isHi = language === 'hi';
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1023,14 +1024,11 @@ export const ArtificialIntelligenceDemo: React.FC<ArtificialIntelligenceDemoProp
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={toggleLanguage}
-                className="px-2.5 py-1 rounded border border-white/15 bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-slate-100 transition-colors cursor-pointer whitespace-nowrap"
-                aria-label={isHi ? 'Switch to English' : 'हिंदी में बदलें'}
-              >
-                {isHi ? 'EN' : 'हिन्दी'}
-              </button>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="dark"
+              />
               <button
                 type="button"
                 onClick={onBackToHome}

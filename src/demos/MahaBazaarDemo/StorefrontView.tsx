@@ -33,6 +33,7 @@ import {
   Bell,
   X,
 } from 'lucide-react';
+import { DemoLanguageToggle } from '../../components/common/DemoLanguageToggle';
 import {
   CATEGORY_CARDS,
   CartItem,
@@ -447,26 +448,11 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
               </button>
             </div>
 
-            <div className="inline-flex rounded-lg bg-indigo-900 border border-indigo-800 p-0.5">
-              <button
-                type="button"
-                onClick={() => onToggleLanguage('hi')}
-                className={`px-2 py-1 text-xs font-bold rounded-md cursor-pointer transition-colors ${
-                  isHi ? 'bg-orange-500 text-white' : 'text-indigo-200 hover:text-white'
-                }`}
-              >
-                हिंदी
-              </button>
-              <button
-                type="button"
-                onClick={() => onToggleLanguage('en')}
-                className={`px-2 py-1 text-xs font-bold rounded-md cursor-pointer transition-colors ${
-                  !isHi ? 'bg-orange-500 text-white' : 'text-indigo-200 hover:text-white'
-                }`}
-              >
-                EN
-              </button>
-            </div>
+            <DemoLanguageToggle
+              language={isHi ? 'hi' : 'en'}
+              onChange={onToggleLanguage}
+              tone="dark"
+            />
 
             <button
               type="button"
@@ -501,6 +487,7 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
           {HERO_SLIDES.map((slide, idx) => (
             <div
               key={slide.id}
+              aria-hidden={idx !== activeSlide}
               className={`absolute inset-0 transition-opacity duration-700 ${
                 idx === activeSlide ? 'opacity-100 z-10' : 'opacity-0 z-0 pointer-events-none'
               }`}
@@ -517,9 +504,15 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
                   <p className="text-xs sm:text-sm font-bold text-orange-300 tracking-wide">
                     {isHi ? slide.kickerHi : slide.kickerEn}
                   </p>
-                  <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight text-balance">
-                    {isHi ? slide.titleHi : slide.titleEn}
-                  </h1>
+                  {idx === activeSlide ? (
+                    <h1 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight text-balance">
+                      {isHi ? slide.titleHi : slide.titleEn}
+                    </h1>
+                  ) : (
+                    <h2 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white leading-tight text-balance">
+                      {isHi ? slide.titleHi : slide.titleEn}
+                    </h2>
+                  )}
                   <p className="text-sm sm:text-base text-indigo-100 leading-relaxed">
                     {isHi ? slide.subtitleHi : slide.subtitleEn}
                   </p>
@@ -601,10 +594,10 @@ export const StorefrontView: React.FC<StorefrontViewProps> = ({
                     : 'border-slate-200 shadow-xs hover:shadow-md'
                 }`}
               >
-                <div className="aspect-[4/3] overflow-hidden bg-slate-100">
+                <div className="aspect-[4/3] overflow-hidden bg-slate-100" aria-hidden="true">
                   <MahaImage
                     src={cat.image}
-                    alt={isHi ? cat.nameHi : cat.nameEn}
+                    alt=""
                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 </div>

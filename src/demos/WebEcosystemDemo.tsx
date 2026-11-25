@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { DemoPriceBar } from '../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../components/common/DemoLanguageToggle';
 
 interface WebEcosystemDemoProps {
   onBackToHome: () => void;
@@ -545,7 +546,7 @@ export const WebEcosystemDemo: React.FC<WebEcosystemDemoProps> = ({
   onBackToHome,
   onRequestQuote,
 }) => {
-  const { language, toggleLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const isHi = language === 'hi';
 
   // Navigation & UI state
@@ -766,14 +767,11 @@ export const WebEcosystemDemo: React.FC<WebEcosystemDemoProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={toggleLanguage}
-                className="px-2.5 py-1 rounded border border-white/15 bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-slate-100 transition-colors cursor-pointer whitespace-nowrap"
-                aria-label={isHi ? 'Switch to English' : 'हिंदी में बदलें'}
-              >
-                {isHi ? 'EN' : 'हिन्दी'}
-              </button>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="dark"
+              />
               <button
                 type="button"
                 onClick={onBackToHome}

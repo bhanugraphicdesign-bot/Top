@@ -578,7 +578,7 @@ export const PLATFORM_FEATURES = [
   { id: 'returns', titleHi: 'रिटर्न मैनेजमेंट', titleEn: 'Return Management', descHi: 'आसान रिटर्न अनुरोध, पिकअप और रिफ़ंड ट्रैकिंग।', descEn: 'Clear return workflows, reverse pickup, and refund status.' },
   { id: 'analytics', titleHi: 'रिपोर्ट और एनालिटिक्स', titleEn: 'Reports & Analytics', descHi: 'कैटेगरी बिक्री, GMV और विक्रेता प्रदर्शन डैशबोर्ड।', descEn: 'Category performance, GMV overview, and operational reports.' },
   { id: 'rbac', titleHi: 'रोल-आधारित एक्सेस', titleEn: 'Role-Based Access', descHi: 'सुपर एडमिन, विक्रेता, डिलीवरी व सपोर्ट के अलग अधिकार।', descEn: 'Separate permissions for Admin, Seller, Delivery, and Support.' },
-  { id: 'bilingual', titleHi: 'हिंदी / English', titleEn: 'Hindi / English', descHi: 'भारतीय ग्राहकों और विक्रेताओं के लिए द्विभाषी अनुभव।', descEn: 'Bilingual storefront and operations interface for wider reach.' },
+  { id: 'bilingual', titleHi: 'हिन्दी / English', titleEn: 'Hindi / English', descHi: 'भारतीय ग्राहकों और विक्रेताओं के लिए द्विभाषी अनुभव।', descEn: 'Bilingual storefront and operations interface for wider reach.' },
   { id: 'mobile-ready', titleHi: 'मोबाइल ऐप-रेडी', titleEn: 'Mobile App-Ready', descHi: 'Android और iOS ऐप से जुड़ने योग्य API-फ़र्स्ट संरचना।', descEn: 'API-first architecture ready to power Android & iOS apps.' },
 ];
 

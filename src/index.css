@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./styles/premium.css";
 
 /* Metric-adjusted local fallbacks to minimize Cumulative Layout Shift (CLS) during font swap */
 @font-face {

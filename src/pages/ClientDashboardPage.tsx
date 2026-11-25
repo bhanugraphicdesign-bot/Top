@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useNavigation } from '../context/NavigationContext';
 import { useAuth } from '../context/AuthContext';
@@ -41,6 +41,8 @@ import {
   ChevronUp,
   CreditCard,
   Receipt,
+  LogOut,
+  Mail,
 } from 'lucide-react';
 
 interface SprintTask {
@@ -533,18 +535,51 @@ const DEMO_ENTERPRISE_DOCUMENTS: EnterpriseDocument[] = [
 export const ClientDashboardPage: React.FC = () => {
   const { language, t, formatDate, showToast } = useLanguage();
   const { navigate } = useNavigation();
-  const { currentUser, isAdmin, openAuthModal } = useAuth();
+  const {
+    currentUser,
+    isAdmin,
+    isAuthReady,
+    isRoleChecking,
+    isLoggingOut,
+    openAuthModal,
+    openProfileModal,
+    logout,
+  } = useAuth();
   const siteContact = useSiteContact();
+  const [avatarError, setAvatarError] = useState(false);
+  const promptedLoginRef = useRef(false);
 
-  // Strictly distinguish real authenticated Firebase session vs unauthenticated Demo Sandbox
-  const [demoClientMode, setDemoClientMode] = useState<boolean>(() => {
-    return sessionStorage.getItem('pws_demo_client') === 'true';
-  });
+  // Strict authenticated Client Portal access: clear any stale demo flag and require real Firebase session
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem('pws_demo_client');
+    } catch {
+      // Ignore storage access errors
+    }
+  }, []);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [currentUser?.photoURL]);
+
+  // Logged-out users opening /client-dashboard see the login modal (never the dashboard)
+  useEffect(() => {
+    if (!isAuthReady || isLoggingOut) return;
+    if (currentUser) {
+      promptedLoginRef.current = false;
+      return;
+    }
+    if (!promptedLoginRef.current) {
+      promptedLoginRef.current = true;
+      openAuthModal('login');
+    }
+  }, [isAuthReady, isLoggingOut, currentUser, openAuthModal]);
+
   const isRealClient = Boolean(currentUser);
-  const isDemoSandbox = !isRealClient && demoClientMode;
-  const isAuthorizedClient = isRealClient || isDemoSandbox;
+  const isDemoSandbox = false;
+  const isAuthorizedClient = isRealClient;
 
-  const [activePersona, setActivePersona] = useState<'kalinga' | 'utkal'>('kalinga');
+  const [activePersona] = useState<'kalinga' | 'utkal'>('kalinga');
 
   const [activeTab, setActiveTab] = useState<
     'tracking' | 'milestones' | 'updates' | 'documents' | 'invoices' | 'support' | 'sla'
@@ -1407,28 +1442,36 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
     }
   };
 
-  // Enter/Exit demo client mode
-  const handleToggleDemoClient = (enable: boolean) => {
-    setDemoClientMode(enable);
-    if (enable) {
-      sessionStorage.setItem('pws_demo_client', 'true');
-      showToast(
-        language === 'hi'
-          ? 'डेमो क्लाइंट कार्यक्षेत्र सक्रिय: कलिंगा लॉजिस्टिक्स के रूप में अनुकरण।'
-          : 'Demo Client Workspace Active: Simulating Kalinga Logistics Ltd.',
-        'success'
-      );
-    } else {
-      sessionStorage.removeItem('pws_demo_client');
-      showToast(
-        language === 'hi' ? 'डेमो मोड बंद हुआ।' : 'Demo client mode deactivated.',
-        'info'
-      );
-    }
-  };
+  /* =========================================================================
+     AUTH RESTORATION LOADING STATE (NEVER FLASH DASHBOARD WHILE AUTH LOADS)
+     ========================================================================= */
+  if (!isAuthReady || isLoggingOut || (Boolean(currentUser) && isRoleChecking)) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 sm:p-6 text-white">
+        <div className="max-w-md w-full bg-slate-950 border border-slate-800 rounded-2xl p-6 sm:p-10 shadow-2xl text-center space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-blue-900/40 border border-blue-500/40 text-blue-400 flex items-center justify-center mx-auto">
+            <RefreshCw className="w-7 h-7 animate-spin text-blue-400" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-xl font-extrabold text-white tracking-tight">
+              {isLoggingOut
+                ? t('Signing Out...', 'लॉग आउट हो रहा है...')
+                : t('Restoring Your Session...', 'आपका सत्र सत्यापित हो रहा है...')}
+            </h1>
+            <p className="text-xs text-slate-400">
+              {t(
+                'Checking your Firebase authentication session before loading the dashboard.',
+                'डैशबोर्ड लोड करने से पहले आपके लॉगिन सत्र की जांच की जा रही है।'
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   /* =========================================================================
-     RESTRICTED CLIENT ACCESS BARRIER (IF NOT LOGGED IN & NOT IN DEMO)
+     RESTRICTED CLIENT ACCESS BARRIER (LOGGED-OUT VISITORS SEE LOGIN MODAL)
      ========================================================================= */
   if (!isAuthorizedClient) {
     return (
@@ -1443,29 +1486,14 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
               {t('Enterprise Client Access Gate', 'एंटरप्राइज क्लाइंट एक्सेस गेट')}
             </span>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              {t('Authorized Customer Workspace', 'अधिकृत ग्राहक कार्यक्षेत्र')}
+              {t('Sign In Required', 'साइन इन आवश्यक है')}
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md mx-auto">
               {t(
-                'Confidential workspace for tracking active engineering sprints, technical milestone sign-offs, signed NDA/MSA vaults, and SLA support tickets.',
-                'सक्रिय स्प्रिंट्स, तकनीकी माइलस्टोन स्वीकृति, हस्ताक्षरित NDA/MSA दस्तावेज़ और SLA सहायता टिकटों की सुरक्षित निगरानी हेतु अधिकृत ग्राहक पोर्टल।'
+                'Please sign in with Google or your registered email to access your Client Portal workspace.',
+                'अपना क्लाइंट पोर्टल कार्यक्षेत्र खोलने के लिए कृपया Google या अपने पंजीकृत ईमेल से साइन इन करें।'
               )}
             </p>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-900/90 border border-slate-800 text-left space-y-2 text-xs font-mono text-slate-300">
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-500">{t('Security Protocol:', 'सुरक्षा प्रोटोकॉल:')}</span>
-              <span className="text-emerald-400 font-bold text-right">DPDP-Aligned Practices (Uncertified)</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-500">{t('Contract Availability:', 'अनुबंध उपलब्धता:')}</span>
-              <span className="text-blue-400 font-bold text-right">SOW-Scoped Availability Target</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">{t('Codebase Ownership:', 'कोडबेस स्वामित्व:')}</span>
-              <span className="text-purple-400 font-bold">100% Client IP Ownership Deed</span>
-            </div>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
@@ -1479,21 +1507,11 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
             </button>
 
             <button
-              onClick={() => handleToggleDemoClient(true)}
+              onClick={() => navigate('home')}
               type="button"
               className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
             >
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              <span>{t('Launch Demo Client Workspace', 'डेमो क्लाइंट पोर्टल में प्रवेश करें')}</span>
-            </button>
-          </div>
-
-          <div className="pt-2">
-            <button
-              onClick={() => navigate('home')}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1 mx-auto"
-            >
-              <span>{t('Return to Public Portal', 'सार्वजनिक पोर्टल पर वापस जाएं')}</span>
+              <span>{t('Return to Homepage', 'होमपेज पर वापस जाएं')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1508,73 +1526,79 @@ Certificate ID: CERT-${doc.id.toUpperCase()}-${Date.now()}
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        {/* Explicit Demo Sandbox Mode Notice Banner (only when not signed into Firebase) */}
-        {isDemoSandbox && (
-          <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-blue-900">
-            <div className="flex items-center gap-2 font-medium">
-              <Eye className="w-4 h-4 text-blue-700 shrink-0" />
-              <span>
-                <strong>{t('DEMO EVALUATION SANDBOX (UNAUTHENTICATED PREVIEW):', 'डेमो मूल्यांकन सैंडबॉक्स (असत्यापित पूर्वावलोकन):')}</strong>{' '}
-                {t(
-                  'Viewing simulated data as Rajiv Sengupta. Local sandbox interactions do not write to Cloud Firestore or settle live invoices until you sign in.',
-                  'राजीव सेनगुप्ता के रूप में सिमुलेटेड डेटा देखा जा रहा है। लाइव डेटाबेस लेखन व चालान निपटान के लिए साइन इन करें।'
-                )}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => setActivePersona(activePersona === 'kalinga' ? 'utkal' : 'kalinga')}
-                className="px-2.5 py-1 text-xs font-bold text-blue-900 bg-blue-100 hover:bg-blue-200 rounded border border-blue-300 transition-colors cursor-pointer"
-              >
-                {activePersona === 'kalinga' ? t('Switch to Utkal Health', 'उत्कल हेल्थ में बदलें') : t('Switch to Kalinga Logistics', 'कलिंगा लॉजिस्टिक्स में बदलें')}
-              </button>
-              <button
-                onClick={() => handleToggleDemoClient(false)}
-                className="px-2.5 py-1 text-xs font-bold text-slate-700 bg-white hover:bg-slate-100 rounded border border-slate-300 transition-colors cursor-pointer"
-              >
-                {t('Exit Demo', 'डेमो छोड़ें')}
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Enterprise Client Header Banner */}
         <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-xs">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pb-6 border-b border-slate-100">
-            <div>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
-                  {t('Enterprise Client Portal', 'एंटरप्राइज क्लाइंट पोर्टल')}
-                </span>
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                  {isDemoSandbox
-                    ? t('Role-Isolated Access · Sample Sandbox', 'रोल-आधारित सुरक्षा · सैंपल सैंडबॉक्स')
-                    : t('Role-Isolated Verified Session', 'रोल-आधारित सत्यापित सत्र')}
-                </span>
-                {siteContact.companyRegistration && (
-                  <span className="text-xs text-slate-500 font-mono hidden sm:inline">
-                    {siteContact.companyRegistration}
-                  </span>
-                )}
-              </div>
+            <div className="flex items-start gap-4 min-w-0">
+              {currentUser?.photoURL && !avatarError ? (
+                <img
+                  src={currentUser.photoURL}
+                  alt={currentUser.displayName || currentUser.email || 'Account'}
+                  referrerPolicy="no-referrer"
+                  onError={() => setAvatarError(true)}
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-full object-cover border-2 border-blue-200 shadow-xs shrink-0"
+                />
+              ) : (
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-blue-700 text-white flex items-center justify-center font-extrabold text-xl shadow-xs shrink-0">
+                  {(currentUser?.displayName || currentUser?.email || 'C').charAt(0).toUpperCase()}
+                </div>
+              )}
 
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
-                {isDemoSandbox
-                  ? activePersona === 'kalinga'
-                    ? 'Kalinga Logistics Infrastructure Ltd.'
-                    : 'Utkal Health Sciences Foundation'
-                  : currentUser?.displayName || currentUser?.email || t('Verified Enterprise Client', 'सत्यापित एंटरप्राइज क्लाइंट')}
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-slate-600 max-w-2xl">
-                {t(
-                  'Dedicated Software Engineering Pod · Principal Architect: Er. Bhanu Ram Bariha',
-                  'समर्पित सॉफ्टवेयर इंजीनियरिंग दल · प्रधान सिस्टम्स वास्तुकार: भानु राम बरीहा'
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <span className="px-2.5 py-1 text-xs font-bold rounded-md bg-blue-50 text-blue-700 border border-blue-200 uppercase tracking-wider">
+                    {t('Enterprise Client Portal', 'एंटरप्राइज क्लाइंट पोर्टल')}
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    {t('Role-Isolated Verified Session', 'रोल-आधारित सत्यापित सत्र')}
+                  </span>
+                  {siteContact.companyRegistration && (
+                    <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+                      {siteContact.companyRegistration}
+                    </span>
+                  )}
+                </div>
+
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight truncate">
+                  {currentUser?.displayName ||
+                    currentUser?.email ||
+                    t('Verified Enterprise Client', 'सत्यापित एंटरप्राइज क्लाइंट')}
+                </h1>
+                {currentUser?.email && (
+                  <div className="mt-1 flex items-center gap-1.5 text-xs sm:text-sm text-slate-600 font-medium truncate">
+                    <Mail className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                    <span className="truncate">{currentUser.email}</span>
+                  </div>
                 )}
-              </p>
+                <p className="mt-1 text-xs sm:text-sm text-slate-500 max-w-2xl">
+                  {t(
+                    'Dedicated Software Engineering Pod · Principal Architect: Er. Bhanu Ram Bariha',
+                    'समर्पित सॉफ्टवेयर इंजीनियरिंग दल · प्रधान सिस्टम्स वास्तुकार: भानु राम बरीहा'
+                  )}
+                </p>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={openProfileModal}
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+              >
+                <User className="w-3.5 h-3.5 text-blue-700" />
+                <span>{t('My Account', 'मेरा खाता')}</span>
+              </button>
+
+              <button
+                onClick={() => void logout()}
+                type="button"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-3.5 h-3.5 text-rose-600" />
+                <span>{t('Logout', 'लॉग आउट')}</span>
+              </button>
+
               <button
                 onClick={() => setTicketModalOpen(true)}
                 type="button"

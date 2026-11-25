@@ -12,6 +12,17 @@ import { getAuth } from 'firebase-admin/auth';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { Storage } from '@google-cloud/storage';
+import { GoogleGenAI, Type } from '@google/genai';
+import {
+  CANONICAL_SITE_URL,
+  DEFAULT_SITEMAP_APP_IDS,
+  PLACEHOLDER_SITE_URL,
+  buildRobotsTxt,
+  buildSitemapXml,
+  resolveCanonicalSiteOrigin,
+} from './src/config/siteConfig.ts';
+import { DEMO_SITES, getDemoSiteBySlug } from './src/data/demoSites.ts';
+import { BLOG_POSTS } from './src/data/blogData.ts';
 
 dotenv.config();
 
@@ -271,7 +282,10 @@ app.use(
           'https://www.gstatic.com',
           'https://www.recaptcha.net',
           'https://www.google-analytics.com',
+          'https://*.google-analytics.com',
           'https://analytics.google.com',
+          'https://*.analytics.google.com',
+          'https://*.googletagmanager.com',
         ],
         frameSrc: [
           "'self'",
@@ -1468,6 +1482,106 @@ async function verifyAppCheckForForm(
   }
 }
 
+const RECAPTCHA_ENTERPRISE_SITE_KEY = '6LflRSsuAAAAAJHVpuPKz3AVn0B9WBau9fC0V8K_';
+const RECAPTCHA_ENTERPRISE_PROJECT_ID = 'gen-lang-client-0641950103';
+const RECAPTCHA_ENTERPRISE_MIN_SCORE = 0.5;
+const RECAPTCHA_FAIL_MESSAGE =
+  'सुरक्षा जांच विफल रही, कृपया दोबारा कोशिश करें। / Security check failed, please try again.';
+
+async function verifyRecaptchaEnterprise(
+  req: express.Request,
+  res: express.Response,
+  allowedActions: readonly string[]
+): Promise<boolean> {
+  const apiKey = (process.env.RECAPTCHA_API_KEY || '').trim();
+  if (!apiKey) {
+    console.warn(
+      '[reCAPTCHA Enterprise] RECAPTCHA_API_KEY is not set; accepting form submission without assessment.'
+    );
+    return true;
+  }
+
+  const rawToken = typeof req.body?.recaptchaToken === 'string' ? req.body.recaptchaToken.trim() : '';
+  const rawAction = typeof req.body?.recaptchaAction === 'string' ? req.body.recaptchaAction.trim() : '';
+  const expectedAction = allowedActions.includes(rawAction) ? rawAction : allowedActions[0];
+
+  if (!rawToken || rawToken.length > 4096) {
+    console.warn(`[reCAPTCHA Enterprise] Missing or invalid token for action "${expectedAction}".`);
+    res.status(403).json({
+      code: 'RECAPTCHA_FAILED',
+      error: RECAPTCHA_FAIL_MESSAGE,
+      errorHi: RECAPTCHA_FAIL_MESSAGE,
+      errorEn: RECAPTCHA_FAIL_MESSAGE,
+    });
+    return false;
+  }
+
+  const assessmentEndpoint = `https://recaptchaenterprise.googleapis.com/v1/projects/${RECAPTCHA_ENTERPRISE_PROJECT_ID}/assessments?key=${encodeURIComponent(apiKey)}`;
+
+  try {
+    const response = await fetch(assessmentEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        event: {
+          token: rawToken,
+          siteKey: RECAPTCHA_ENTERPRISE_SITE_KEY,
+          expectedAction,
+        },
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      console.warn(
+        `[reCAPTCHA Enterprise] Google API returned HTTP ${response.status} for action "${expectedAction}"; accepting submission so forms do not break.`
+      );
+      return true;
+    }
+
+    const assessment = (await response.json()) as {
+      tokenProperties?: {
+        valid?: boolean;
+        action?: string;
+        invalidReason?: string;
+      };
+      riskAnalysis?: {
+        score?: number;
+      };
+    };
+
+    const isValid = assessment?.tokenProperties?.valid === true;
+    const actionMatches = assessment?.tokenProperties?.action === expectedAction;
+    const score = typeof assessment?.riskAnalysis?.score === 'number' ? assessment.riskAnalysis.score : -1;
+
+    if (isValid && actionMatches && score >= RECAPTCHA_ENTERPRISE_MIN_SCORE) {
+      return true;
+    }
+
+    console.warn(
+      `[reCAPTCHA Enterprise] Rejected submission (expectedAction=${expectedAction}, valid=${isValid}, actualAction=${assessment?.tokenProperties?.action || 'none'}, score=${score}, reason=${assessment?.tokenProperties?.invalidReason || 'none'}).`
+    );
+    res.status(403).json({
+      code: 'RECAPTCHA_FAILED',
+      error: RECAPTCHA_FAIL_MESSAGE,
+      errorHi: RECAPTCHA_FAIL_MESSAGE,
+      errorEn: RECAPTCHA_FAIL_MESSAGE,
+    });
+    return false;
+  } catch (err: any) {
+    const safeReason =
+      typeof err?.name === 'string' && err.name
+        ? err.name
+        : 'network_error';
+    console.warn(
+      `[reCAPTCHA Enterprise] Unable to reach Google API (${safeReason}) for action "${expectedAction}"; accepting submission so forms do not break.`
+    );
+    return true;
+  }
+}
+
 const attachmentSchema = z
   .object({
     fileUrl: z.string().trim().max(300).optional(),
@@ -1589,7 +1703,7 @@ app.use('/api', rateLimiter);
 const RAW_GEMINI_KEY = (process.env.GEMINI_API_KEY || '').trim();
 const HAS_GEMINI_API_KEY =
   RAW_GEMINI_KEY.length > 0 && !/^(my_gemini_api_key|replace_with|your_)/i.test(RAW_GEMINI_KEY);
-const RAW_SITE_URL = (process.env.SITE_URL || '').trim();
+const RAW_SITE_URL = resolveCanonicalSiteOrigin(process.env.SITE_URL);
 const HAS_PRODUCTION_SITE_URL =
   /^https?:\/\//i.test(RAW_SITE_URL) && !RAW_SITE_URL.includes('YOUR-DOMAIN.com');
 
@@ -2869,6 +2983,9 @@ app.post('/api/leads', requireJsonContentType, createLeadRateLimiter(), async (r
   if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
     return;
   }
+  if (!(await verifyRecaptchaEnterprise(req, res, ['contact_submit', 'consultation_submit']))) {
+    return;
+  }
 
   const lang = resolveRequestedLanguage(req);
   const parsed = leadInputSchema.safeParse(req.body || {});
@@ -2990,6 +3107,15 @@ app.post('/api/quotations', requireJsonContentType, createFormRateLimiter('quota
   if (!(await verifyAppCheckForForm(req, res, 'inquiry'))) {
     return;
   }
+  if (
+    !(await verifyRecaptchaEnterprise(req, res, [
+      'quotation_submit',
+      'consultation_submit',
+      'contact_submit',
+    ]))
+  ) {
+    return;
+  }
 
   const lang = resolveRequestedLanguage(req);
   const parsed = quotationInputSchema.safeParse(req.body || {});
@@ -3095,6 +3221,9 @@ app.post('/api/newsletter/subscribe', requireJsonContentType, createFormRateLimi
     return;
   }
   if (!(await verifyAppCheckForForm(req, res, 'newsletter'))) {
+    return;
+  }
+  if (!(await verifyRecaptchaEnterprise(req, res, ['newsletter_submit']))) {
     return;
   }
 
@@ -5249,6 +5378,9 @@ app.post(
     if (!validateAntiBotFields(req, res, 'payment')) {
       return;
     }
+    if (!(await verifyRecaptchaEnterprise(req, res, ['payment_submit']))) {
+      return;
+    }
 
     const lang = resolveRequestedLanguage(req);
     const parsed = createUpiPaymentSchema.safeParse(req.body || {});
@@ -5362,6 +5494,9 @@ app.patch(
     const paymentId = String(req.params.id || '').trim();
     if (!SAFE_ID_REGEX.test(paymentId)) {
       return res.status(400).json({ error: 'अमान्य भुगतान आईडी।' });
+    }
+    if (!(await verifyRecaptchaEnterprise(req, res, ['payment_utr_submit']))) {
+      return;
     }
 
     const parsed = submitUpiUtrSchema.safeParse(req.body || {});
@@ -5591,122 +5726,921 @@ app.patch(
 );
 
 /* =========================================================================
+   AI WEBSITE CONSULTANT CHAT (SERVER-SIDE GEMINI + AUTHENTICATED RATE LIMIT)
+   ========================================================================= */
+
+const AI_CONSULTANT_MODEL = 'gemini-3.1-flash-lite';
+const AI_CONSULTANT_FALLBACK_MODEL = 'gemini-4-hydrogen';
+const AI_CONSULTANT_TIMEOUT_MS = 20_000;
+const AI_CONSULTANT_TOTAL_BUDGET_MS = 28_000;
+const AI_CONSULTANT_RATE_WINDOW_MS = 10 * 60 * 1000; // 10 minutes
+const AI_CONSULTANT_MAX_REQUESTS_PER_WINDOW = 30;
+const AI_CONSULTANT_QUOTA_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+const aiConsultantRateMap = new Map<string, number[]>();
+const aiConsultantModelCooldownUntil = new Map<string, number>();
+
+function isAiConsultantModelOnCooldown(model: string): boolean {
+  const until = aiConsultantModelCooldownUntil.get(model);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    aiConsultantModelCooldownUntil.delete(model);
+    return false;
+  }
+  return true;
+}
+
+function markAiConsultantModelCooldown(model: string): void {
+  aiConsultantModelCooldownUntil.set(model, Date.now() + AI_CONSULTANT_QUOTA_COOLDOWN_MS);
+}
+
+let cachedAiConsultantClient: GoogleGenAI | null = null;
+function getAiConsultantGeminiClient(): GoogleGenAI | null {
+  if (!HAS_GEMINI_API_KEY) return null;
+  if (!cachedAiConsultantClient) {
+    cachedAiConsultantClient = new GoogleGenAI({
+      apiKey: RAW_GEMINI_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return cachedAiConsultantClient;
+}
+
+function reserveAiConsultantRateLimitSlot(uid: string): {
+  allowed: boolean;
+  remaining: number;
+  retryAfterSeconds: number;
+  slotTimestamp?: number;
+} {
+  const now = Date.now();
+  const cutoff = now - AI_CONSULTANT_RATE_WINDOW_MS;
+
+  if (aiConsultantRateMap.size > 500) {
+    for (const [key, timestamps] of aiConsultantRateMap.entries()) {
+      const recent = timestamps.filter((ts) => ts > cutoff);
+      if (recent.length === 0) {
+        aiConsultantRateMap.delete(key);
+      } else if (recent.length !== timestamps.length) {
+        aiConsultantRateMap.set(key, recent);
+      }
+    }
+  }
+
+  const recent = (aiConsultantRateMap.get(uid) || []).filter((ts) => ts > cutoff);
+  if (recent.length >= AI_CONSULTANT_MAX_REQUESTS_PER_WINDOW) {
+    aiConsultantRateMap.set(uid, recent);
+    const oldestActive = recent[0] ?? now;
+    const retryAfterSeconds = Math.max(
+      1,
+      Math.ceil((oldestActive + AI_CONSULTANT_RATE_WINDOW_MS - now) / 1000)
+    );
+    return { allowed: false, remaining: 0, retryAfterSeconds };
+  }
+
+  recent.push(now);
+  aiConsultantRateMap.set(uid, recent);
+  return {
+    allowed: true,
+    remaining: Math.max(0, AI_CONSULTANT_MAX_REQUESTS_PER_WINDOW - recent.length),
+    retryAfterSeconds: 0,
+    slotTimestamp: now,
+  };
+}
+
+function releaseAiConsultantRateLimitSlot(uid: string, slotTimestamp?: number): void {
+  if (!slotTimestamp) return;
+  const existing = aiConsultantRateMap.get(uid);
+  if (!existing || existing.length === 0) return;
+  const idx = existing.lastIndexOf(slotTimestamp);
+  if (idx !== -1) {
+    existing.splice(idx, 1);
+  }
+  if (existing.length === 0) {
+    aiConsultantRateMap.delete(uid);
+  }
+}
+
+function redactContactPiiForAi(raw: string): string {
+  if (!raw) return '';
+  let text = raw.replace(
+    /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+    '[email-redacted]'
+  );
+  // Redact phone-like sequences (10+ digits or country-coded numbers) while preserving budgets/years
+  text = text.replace(
+    /(?:\+\d{1,3}[\s.-]?)?(?:\(?\d{2,5}\)?[\s.-]?){2,4}\d{2,5}/g,
+    (match) => {
+      const digitsOnly = match.replace(/\D/g, '');
+      if (digitsOnly.length >= 10 && digitsOnly.length <= 15) {
+        return '[phone-redacted]';
+      }
+      return match;
+    }
+  );
+  return text;
+}
+
+function clampAiString(val: unknown, maxLen: number): string {
+  if (typeof val !== 'string') return '';
+  return val.trim().slice(0, maxLen);
+}
+
+function clampAiStringArray(val: unknown, maxItems: number, maxItemLen: number): string[] {
+  if (!Array.isArray(val)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of val) {
+    if (typeof item !== 'string') continue;
+    const clean = item.trim().slice(0, maxItemLen);
+    if (!clean || seen.has(clean.toLowerCase())) continue;
+    seen.add(clean.toLowerCase());
+    out.push(clean);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+const aiConsultantCollectedSchema = z
+  .object({
+    businessName: z.string().max(160).optional(),
+    businessDescription: z.string().max(600).optional(),
+    businessStage: z.string().max(60).optional(),
+    websiteType: z.string().max(100).optional(),
+    recommendedConcepts: z.array(z.string().max(300)).max(5).optional(),
+    targetAudience: z.string().max(300).optional(),
+    targetLocation: z.string().max(160).optional(),
+    primaryVisitorAction: z.string().max(240).optional(),
+    pages: z.array(z.string().max(120)).max(25).optional(),
+    designColors: z.string().max(200).optional(),
+    designThemeMode: z.string().max(100).optional(),
+    designStyle: z.string().max(200).optional(),
+    designFonts: z.string().max(200).optional(),
+    designButtons: z.string().max(200).optional(),
+    designNavigation: z.string().max(200).optional(),
+    designHero: z.string().max(200).optional(),
+    designMedia: z.string().max(200).optional(),
+    designAnimations: z.string().max(200).optional(),
+    features: z.array(z.string().max(160)).max(30).optional(),
+    featureNotes: z.string().max(1500).optional(),
+    budget: z.string().max(120).optional(),
+    timeline: z.string().max(120).optional(),
+    domainHostingStatus: z.string().max(160).optional(),
+    existingAssets: z.string().max(300).optional(),
+    summary: z.string().max(3000).optional(),
+  })
+  .strict();
+
+type AiConsultantCollected = z.infer<typeof aiConsultantCollectedSchema>;
+
+const aiConsultantChatRequestSchema = z.object({
+  language: z.enum(['hi', 'en']).default('hi'),
+  currentStep: z.number().int().min(1).max(8).default(1),
+  message: z.string().trim().min(1, 'Message is required').max(1500, 'Message is too long'),
+  history: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        text: z.string().trim().min(1).max(2500),
+      })
+    )
+    .max(40)
+    .default([]),
+  collected: aiConsultantCollectedSchema.optional(),
+});
+
+function sanitizeCollectedForAiPrompt(collected?: AiConsultantCollected): AiConsultantCollected {
+  if (!collected) return {};
+  const clean: AiConsultantCollected = {};
+  const strFieldLimits: Array<[keyof AiConsultantCollected, number]> = [
+    ['businessName', 160],
+    ['businessDescription', 600],
+    ['businessStage', 60],
+    ['websiteType', 100],
+    ['targetAudience', 300],
+    ['targetLocation', 160],
+    ['primaryVisitorAction', 240],
+    ['designColors', 200],
+    ['designThemeMode', 100],
+    ['designStyle', 200],
+    ['designFonts', 200],
+    ['designButtons', 200],
+    ['designNavigation', 200],
+    ['designHero', 200],
+    ['designMedia', 200],
+    ['designAnimations', 200],
+    ['featureNotes', 1500],
+    ['budget', 120],
+    ['timeline', 120],
+    ['domainHostingStatus', 160],
+    ['existingAssets', 300],
+    ['summary', 3000],
+  ];
+  for (const [key, maxLen] of strFieldLimits) {
+    const val = collected[key];
+    if (typeof val === 'string' && val.trim()) {
+      (clean as Record<string, unknown>)[key] = redactContactPiiForAi(val.trim()).slice(0, maxLen);
+    }
+  }
+  if (Array.isArray(collected.recommendedConcepts) && collected.recommendedConcepts.length > 0) {
+    clean.recommendedConcepts = clampAiStringArray(
+      collected.recommendedConcepts.map((c) => redactContactPiiForAi(c)),
+      5,
+      300
+    );
+  }
+  if (Array.isArray(collected.pages) && collected.pages.length > 0) {
+    clean.pages = clampAiStringArray(
+      collected.pages.map((p) => redactContactPiiForAi(p)),
+      25,
+      120
+    );
+  }
+  if (Array.isArray(collected.features) && collected.features.length > 0) {
+    clean.features = clampAiStringArray(
+      collected.features.map((f) => redactContactPiiForAi(f)),
+      30,
+      160
+    );
+  }
+  return clean;
+}
+
+function mergeAiCollectedFields(
+  previous: AiConsultantCollected,
+  incoming: Record<string, unknown> | undefined
+): AiConsultantCollected {
+  const merged: AiConsultantCollected = { ...previous };
+  if (!incoming || typeof incoming !== 'object') return merged;
+
+  const strFieldLimits: Array<[keyof AiConsultantCollected, number]> = [
+    ['businessName', 160],
+    ['businessDescription', 600],
+    ['businessStage', 60],
+    ['websiteType', 100],
+    ['targetAudience', 300],
+    ['targetLocation', 160],
+    ['primaryVisitorAction', 240],
+    ['designColors', 200],
+    ['designThemeMode', 100],
+    ['designStyle', 200],
+    ['designFonts', 200],
+    ['designButtons', 200],
+    ['designNavigation', 200],
+    ['designHero', 200],
+    ['designMedia', 200],
+    ['designAnimations', 200],
+    ['featureNotes', 1500],
+    ['budget', 120],
+    ['timeline', 120],
+    ['domainHostingStatus', 160],
+    ['existingAssets', 300],
+    ['summary', 3000],
+  ];
+
+  for (const [key, maxLen] of strFieldLimits) {
+    const nextVal = clampAiString(incoming[key], maxLen);
+    if (nextVal) {
+      (merged as Record<string, unknown>)[key] = redactContactPiiForAi(nextVal).slice(0, maxLen);
+    }
+  }
+
+  const nextConcepts = clampAiStringArray(incoming.recommendedConcepts, 5, 300).map((s) =>
+    redactContactPiiForAi(s).slice(0, 300)
+  );
+  if (nextConcepts.length > 0) {
+    merged.recommendedConcepts = nextConcepts;
+  }
+
+  const nextPages = clampAiStringArray(incoming.pages, 25, 120).map((s) =>
+    redactContactPiiForAi(s).slice(0, 120)
+  );
+  if (nextPages.length > 0) {
+    merged.pages = nextPages;
+  }
+
+  const nextFeatures = clampAiStringArray(incoming.features, 30, 160).map((s) =>
+    redactContactPiiForAi(s).slice(0, 160)
+  );
+  if (nextFeatures.length > 0) {
+    merged.features = nextFeatures;
+  }
+
+  return merged;
+}
+
+const AI_CONSULTANT_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    reply: {
+      type: Type.STRING,
+      description:
+        'Helpful, concise assistant response in the requested language, asking at most ONE focused question at a time.',
+    },
+    quickReplies: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: '2 to 6 short, tappable quick-reply chip suggestions in the requested language.',
+    },
+    step: {
+      type: Type.INTEGER,
+      description: 'Current active consultation step from 1 to 8.',
+    },
+    isSummaryReady: {
+      type: Type.BOOLEAN,
+      description: 'True only when Step 8 summary has been presented to the user.',
+    },
+    collected: {
+      type: Type.OBJECT,
+      description: 'Cumulative structured website planning fields collected so far.',
+      properties: {
+        businessName: { type: Type.STRING },
+        businessDescription: { type: Type.STRING },
+        businessStage: { type: Type.STRING },
+        websiteType: { type: Type.STRING },
+        recommendedConcepts: { type: Type.ARRAY, items: { type: Type.STRING } },
+        targetAudience: { type: Type.STRING },
+        targetLocation: { type: Type.STRING },
+        primaryVisitorAction: { type: Type.STRING },
+        pages: { type: Type.ARRAY, items: { type: Type.STRING } },
+        designColors: { type: Type.STRING },
+        designThemeMode: { type: Type.STRING },
+        designStyle: { type: Type.STRING },
+        designFonts: { type: Type.STRING },
+        designButtons: { type: Type.STRING },
+        designNavigation: { type: Type.STRING },
+        designHero: { type: Type.STRING },
+        designMedia: { type: Type.STRING },
+        designAnimations: { type: Type.STRING },
+        features: { type: Type.ARRAY, items: { type: Type.STRING } },
+        featureNotes: { type: Type.STRING },
+        budget: { type: Type.STRING },
+        timeline: { type: Type.STRING },
+        domainHostingStatus: { type: Type.STRING },
+        existingAssets: { type: Type.STRING },
+        summary: { type: Type.STRING },
+      },
+    },
+  },
+  required: ['reply', 'quickReplies', 'step', 'isSummaryReady', 'collected'],
+};
+
+function buildAiConsultantSystemInstruction(language: 'hi' | 'en'): string {
+  const langRule =
+    language === 'hi'
+      ? 'Respond ONLY in polite, clear, natural Hindi (Devanagari script), using common English tech terms where natural (e.g., E-commerce, SaaS, Hero section, Domain/Hosting). All quickReplies must be in Hindi (or concise Hindi + familiar label).'
+      : 'Respond ONLY in clear, warm, professional English. All quickReplies must be in English.';
+
+  return [
+    'You are the Power Web Studio AI Consultant. Your job is to guide a client step by step to plan a website—even if they have zero prior website idea.',
+    langRule,
+    '',
+    'CORE CONVERSATION RULES:',
+    '1. Ask ONLY ONE focused question per turn. Keep replies concise, friendly, and easy to read on a mobile screen (short paragraphs or brief bullets).',
+    '2. Adapt intelligently to earlier answers. Never re-ask information the user already provided.',
+    '3. Guide the user smoothly across these 8 steps (stay on a step if needed until the core info for that step is clear, then advance to the next step):',
+    '   - Step 1: Business/project name, what it does, and whether it is a new or existing business.',
+    '   - Step 2: Website type. Offer these options: Business, E-commerce, School/Education, Portfolio, Agency, Booking/Appointment, Blog/News, AI tool, SaaS, Other/Not sure. If the user picks "Other/Not sure" or is unsure, recommend exactly 3 tailored website concepts with clear reasons for their business (also save them in collected.recommendedConcepts) and ask which concept fits best.',
+    '   - Step 3: Target audience, city/state/country, and main action visitors should take (e.g. call/WhatsApp inquiry, book appointment, buy online, sign up).',
+    '   - Step 4: Relevant pages only—suggest a tailored shortlist based on their business and website type instead of generic bloat.',
+    '   - Step 5: Design preferences covering colors, light/dark mode, overall style, fonts, button style, navigation style, hero section, images/video preference, and animations. If the user is unsure about any design aspect, proactively suggest clean, practical defaults and ask if they want to keep or tweak them.',
+    '   - Step 6: Features. Clearly explain which requested features are standard website features vs. which require extra backend development, API keys, paid third-party services, or third-party accounts (for example: payment gateways, SMS/WhatsApp APIs, AI APIs, custom user accounts/dashboards, external booking/CRM integrations). Record those transparency notes in collected.featureNotes.',
+    '   - Step 7: Budget (explicitly allow "Not decided" / "अभी तय नहीं"), target timeline, domain & hosting status, and existing logo/content availability.',
+    '   - Step 8: Present a clean, structured summary of everything collected so far (and save it in collected.summary), set isSummaryReady to true, and clearly invite the user to edit any section if they want changes. If the user asks to edit any detail during Step 8, update the relevant collected field(s), refresh the summary, and ask if anything else needs changing.',
+    '',
+    'STRICT GUARDRAILS (NEVER VIOLATE):',
+    '- NEVER promise prices, exact quotes, discounts, or guaranteed delivery dates.',
+    '- NEVER claim that any feature already works, is live, or is already built for the user.',
+    '- Stay strictly on website planning. If the user asks an off-topic question, politely note that you only help with website planning and gently bring them back to the current step.',
+    '- NEVER ask for personal email addresses, phone numbers, or payment details.',
+    '- Always return valid JSON matching the exact schema, preserving previously collected fields unless the user explicitly edits them.',
+  ].join('\n');
+}
+
+async function generateConsultantReplyWithTimeout(
+  client: GoogleGenAI,
+  model: string,
+  systemInstruction: string,
+  promptPayload: string,
+  timeoutMs = AI_CONSULTANT_TIMEOUT_MS
+): Promise<string> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const err = new Error('AI_CONSULTANT_TIMEOUT');
+      err.name = 'TimeoutError';
+      reject(err);
+    }, timeoutMs);
+  });
+
+  try {
+    const response = await Promise.race([
+      client.models.generateContent({
+        model,
+        contents: promptPayload,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: AI_CONSULTANT_RESPONSE_SCHEMA,
+        },
+      }),
+      timeoutPromise,
+    ]);
+    return (response.text ?? '').trim();
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+interface ClassifiedGeminiConsultantError {
+  category:
+    | 'timeout'
+    | 'quota_exhausted'
+    | 'rate_limit_burst'
+    | 'model_not_found'
+    | 'auth_error'
+    | 'bad_request'
+    | 'transient_upstream'
+    | 'unknown_upstream';
+  httpStatus: number;
+  rpcStatus: string;
+  retryable: boolean;
+  preferFallbackModel: boolean;
+  safeReason: string;
+}
+
+function classifyGeminiConsultantError(err: unknown): ClassifiedGeminiConsultantError {
+  const errObj = (err && typeof err === 'object' ? err : {}) as {
+    status?: number | string;
+    code?: number | string;
+    name?: string;
+    message?: string;
+  };
+  const rawMessage = String(errObj.message || '');
+  let httpStatus = Number(errObj.status || errObj.code || 0);
+  if (!Number.isFinite(httpStatus)) httpStatus = 0;
+
+  let rpcStatus = '';
+  let parsedMessage = rawMessage;
+
+  // @google/genai ApiError often embeds the upstream JSON payload inside err.message
+  const jsonStart = rawMessage.indexOf('{');
+  if (jsonStart !== -1) {
+    try {
+      const parsed = JSON.parse(rawMessage.slice(jsonStart));
+      const nested = parsed?.error && typeof parsed.error === 'object' ? parsed.error : parsed;
+      if (typeof nested?.code === 'number' && !httpStatus) {
+        httpStatus = nested.code;
+      }
+      if (typeof nested?.status === 'string') {
+        rpcStatus = nested.status;
+      }
+      if (typeof nested?.message === 'string' && nested.message.trim()) {
+        parsedMessage = nested.message.trim();
+      }
+    } catch {
+      // Keep rawMessage when not valid JSON
+    }
+  }
+
+  const combined = `${rpcStatus} ${parsedMessage} ${rawMessage}`;
+  const safeReason = parsedMessage
+    .replace(/AIza[0-9A-Za-z_-]{10,}/g, '[redacted-key]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 180);
+
+  const isTimeout = errObj.name === 'TimeoutError' || rawMessage === 'AI_CONSULTANT_TIMEOUT';
+  if (isTimeout) {
+    return {
+      category: 'timeout',
+      httpStatus: 504,
+      rpcStatus: 'DEADLINE_EXCEEDED',
+      retryable: false,
+      preferFallbackModel: false,
+      safeReason: 'Request exceeded server timeout',
+    };
+  }
+
+  if (
+    httpStatus === 404 ||
+    rpcStatus === 'NOT_FOUND' ||
+    /model[s]?\b.*not found|is not supported for generateContent/i.test(combined)
+  ) {
+    return {
+      category: 'model_not_found',
+      httpStatus: httpStatus || 404,
+      rpcStatus: rpcStatus || 'NOT_FOUND',
+      retryable: true,
+      preferFallbackModel: true,
+      safeReason,
+    };
+  }
+
+  if (
+    httpStatus === 401 ||
+    httpStatus === 403 ||
+    rpcStatus === 'PERMISSION_DENIED' ||
+    rpcStatus === 'UNAUTHENTICATED' ||
+    /API_KEY_INVALID|API key not valid|PERMISSION_DENIED/i.test(combined)
+  ) {
+    return {
+      category: 'auth_error',
+      httpStatus: httpStatus || 403,
+      rpcStatus: rpcStatus || 'PERMISSION_DENIED',
+      retryable: false,
+      preferFallbackModel: false,
+      safeReason,
+    };
+  }
+
+  if (httpStatus === 429 || rpcStatus === 'RESOURCE_EXHAUSTED' || /RESOURCE_EXHAUSTED|quota/i.test(combined)) {
+    const looksHardQuota =
+      /exceeded your current quota|limit:\s*0|PerDay|per day|FreeTier|free_tier|billing|GenerateRequestsPerDay/i.test(
+        combined
+      );
+    return {
+      category: looksHardQuota ? 'quota_exhausted' : 'rate_limit_burst',
+      httpStatus: 429,
+      rpcStatus: rpcStatus || 'RESOURCE_EXHAUSTED',
+      retryable: true,
+      preferFallbackModel: true,
+      safeReason,
+    };
+  }
+
+  if (httpStatus === 400 || rpcStatus === 'INVALID_ARGUMENT') {
+    return {
+      category: 'bad_request',
+      httpStatus: 400,
+      rpcStatus: rpcStatus || 'INVALID_ARGUMENT',
+      retryable: false,
+      preferFallbackModel: false,
+      safeReason,
+    };
+  }
+
+  if (
+    httpStatus === 500 ||
+    httpStatus === 502 ||
+    httpStatus === 503 ||
+    httpStatus === 504 ||
+    rpcStatus === 'UNAVAILABLE' ||
+    rpcStatus === 'INTERNAL' ||
+    rpcStatus === 'DEADLINE_EXCEEDED' ||
+    /fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|overloaded|unavailable|high demand/i.test(combined)
+  ) {
+    return {
+      category: 'transient_upstream',
+      httpStatus: httpStatus || 503,
+      rpcStatus: rpcStatus || 'UNAVAILABLE',
+      retryable: true,
+      preferFallbackModel: false,
+      safeReason,
+    };
+  }
+
+  return {
+    category: 'unknown_upstream',
+    httpStatus: httpStatus || 502,
+    rpcStatus: rpcStatus || 'UNKNOWN',
+    retryable: false,
+    preferFallbackModel: false,
+    safeReason,
+  };
+}
+
+function parseConsultantJsonOutput(rawJsonText: string): Record<string, unknown> | null {
+  try {
+    const cleaned = rawJsonText
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null;
+    }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+app.post(
+  '/api/ai/consultant/chat',
+  requireAuth,
+  async (req: AuthenticatedRequest, res) => {
+    const caller = req.authUser;
+    if (!caller?.uid) {
+      return res.status(401).json({
+        code: 'UNAUTHENTICATED',
+        error: 'Authentication required. Please sign in to continue.',
+        errorHi: 'आगे बढ़ने के लिए कृपया साइन इन करें।',
+      });
+    }
+
+    // Validate input and key availability BEFORE consuming the user's 30/10min quota
+    const parsedBody = aiConsultantChatRequestSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({
+        code: 'INVALID_INPUT',
+        error: 'Please enter a valid message (up to 1500 characters).',
+        errorHi: 'कृपया एक मान्य संदेश लिखें (अधिकतम 1500 अक्षर)।',
+      });
+    }
+
+    const client = getAiConsultantGeminiClient();
+    if (!client) {
+      return res.status(503).json({
+        code: 'AI_NOT_CONFIGURED',
+        error: 'AI Consultant is not configured on the server yet. Please contact the site administrator.',
+        errorHi: 'सर्वर पर AI Consultant अभी कॉन्फ़िगर नहीं है। कृपया साइट एडमिन से संपर्क करें।',
+      });
+    }
+
+    const rateCheck = reserveAiConsultantRateLimitSlot(caller.uid);
+    if (!rateCheck.allowed) {
+      const waitMins = Math.max(1, Math.ceil(rateCheck.retryAfterSeconds / 60));
+      res.setHeader('Retry-After', String(rateCheck.retryAfterSeconds));
+      return res.status(429).json({
+        code: 'RATE_LIMITED',
+        retryAfterSeconds: rateCheck.retryAfterSeconds,
+        error: `You have reached the limit of 30 messages per 10 minutes. Please try again in about ${waitMins} minute(s).`,
+        errorHi: `आपने पिछले 10 मिनट में 30 संदेशों की सीमा पूरी कर ली है। कृपया लगभग ${waitMins} मिनट बाद दोबारा प्रयास करें।`,
+      });
+    }
+
+    const { language, currentStep, message, history, collected } = parsedBody.data;
+    const sanitizedMessage = redactContactPiiForAi(message).slice(0, 1500);
+    const sanitizedHistory = history.slice(-24).map((entry) => ({
+      role: entry.role,
+      text: redactContactPiiForAi(entry.text).slice(0, 2000),
+    }));
+    const sanitizedCollected = sanitizeCollectedForAiPrompt(collected);
+
+    const promptPayload = JSON.stringify({
+      language,
+      currentStep,
+      collectedSoFar: sanitizedCollected,
+      recentHistory: sanitizedHistory,
+      latestUserMessage: sanitizedMessage,
+    });
+
+    const systemInstruction = buildAiConsultantSystemInstruction(language);
+
+    const startedAtMs = Date.now();
+    // Build bounded attempt plan: primary model (with 1 same-model retry on 503/parse spike) + optional fallback model if not on quota cooldown
+    const primaryOnCooldown = isAiConsultantModelOnCooldown(AI_CONSULTANT_MODEL);
+    const fallbackOnCooldown = isAiConsultantModelOnCooldown(AI_CONSULTANT_FALLBACK_MODEL);
+    let activeModel =
+      primaryOnCooldown && !fallbackOnCooldown ? AI_CONSULTANT_FALLBACK_MODEL : AI_CONSULTANT_MODEL;
+    let triedFallback = activeModel === AI_CONSULTANT_FALLBACK_MODEL;
+    let sameModelRetries = 0;
+
+    let parsedAi: Record<string, unknown> | null = null;
+    let reply = '';
+    let lastClassifiedError: ClassifiedGeminiConsultantError | null = null;
+    let lastParseOrEmptyFailure: 'parse' | 'empty' | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const elapsedMs = Date.now() - startedAtMs;
+      const remainingBudgetMs = AI_CONSULTANT_TOTAL_BUDGET_MS - elapsedMs;
+      if (attempt > 0 && remainingBudgetMs < 7_000) {
+        break;
+      }
+
+      const attemptTimeoutMs = Math.min(AI_CONSULTANT_TIMEOUT_MS, Math.max(7_000, remainingBudgetMs));
+      try {
+        const rawJsonText = await generateConsultantReplyWithTimeout(
+          client,
+          activeModel,
+          systemInstruction,
+          promptPayload,
+          attemptTimeoutMs
+        );
+
+        const candidate = parseConsultantJsonOutput(rawJsonText);
+        if (!candidate) {
+          lastParseOrEmptyFailure = 'parse';
+          lastClassifiedError = null;
+          console.error(
+            `[POST /api/ai/consultant/chat] Malformed JSON output from Gemini (model=${activeModel}, attempt=${attempt + 1})`
+          );
+          if (sameModelRetries < 1) {
+            sameModelRetries += 1;
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            continue;
+          }
+          break;
+        }
+
+        const candidateReply = redactContactPiiForAi(clampAiString(candidate.reply, 2400));
+        if (!candidateReply) {
+          lastParseOrEmptyFailure = 'empty';
+          lastClassifiedError = null;
+          console.error(
+            `[POST /api/ai/consultant/chat] Empty reply field from Gemini (model=${activeModel}, attempt=${attempt + 1})`
+          );
+          if (sameModelRetries < 1) {
+            sameModelRetries += 1;
+            await new Promise((resolve) => setTimeout(resolve, 600));
+            continue;
+          }
+          break;
+        }
+
+        parsedAi = candidate;
+        reply = candidateReply;
+        lastClassifiedError = null;
+        lastParseOrEmptyFailure = null;
+        break;
+      } catch (err: unknown) {
+        const classified = classifyGeminiConsultantError(err);
+        lastClassifiedError = classified;
+        lastParseOrEmptyFailure = null;
+
+        console.error(
+          `[POST /api/ai/consultant/chat] Gemini call failed (model=${activeModel}, attempt=${attempt + 1}, category=${classified.category}, httpStatus=${classified.httpStatus}, rpcStatus=${classified.rpcStatus}, reason="${classified.safeReason}")`
+        );
+
+        if (classified.category === 'quota_exhausted') {
+          markAiConsultantModelCooldown(activeModel);
+        }
+
+        if (!classified.retryable) {
+          break;
+        }
+
+        // On quota/model error, switch directly to fallback model if available and not on cooldown
+        if (classified.preferFallbackModel) {
+          if (!triedFallback && !isAiConsultantModelOnCooldown(AI_CONSULTANT_FALLBACK_MODEL)) {
+            triedFallback = true;
+            activeModel = AI_CONSULTANT_FALLBACK_MODEL;
+            sameModelRetries = 0;
+            await new Promise((resolve) => setTimeout(resolve, 800));
+            continue;
+          }
+          break;
+        }
+
+        // On transient 503/network spike: first retry the same model once, then fall back once if fallback is healthy
+        if (sameModelRetries < 1) {
+          sameModelRetries += 1;
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          continue;
+        }
+        if (!triedFallback && !isAiConsultantModelOnCooldown(AI_CONSULTANT_FALLBACK_MODEL)) {
+          triedFallback = true;
+          activeModel = AI_CONSULTANT_FALLBACK_MODEL;
+          sameModelRetries = 0;
+          await new Promise((resolve) => setTimeout(resolve, 700));
+          continue;
+        }
+        break;
+      }
+    }
+
+    if (!parsedAi || !reply) {
+      // Do not penalize the user's 30/10min rate limit when Gemini fails upstream
+      releaseAiConsultantRateLimitSlot(caller.uid, rateCheck.slotTimestamp);
+
+      if (lastClassifiedError) {
+        switch (lastClassifiedError.category) {
+          case 'timeout':
+            return res.status(504).json({
+              code: 'AI_TIMEOUT',
+              error: 'The AI Consultant took too long to respond. Please try sending your message again.',
+              errorHi: 'AI Consultant से जवाब आने में अधिक समय लग गया। कृपया दोबारा प्रयास करें।',
+            });
+          case 'quota_exhausted':
+            return res.status(429).json({
+              code: 'AI_QUOTA_EXCEEDED',
+              error: 'The AI service API quota is currently exhausted. Please try again later or contact the site administrator.',
+              errorHi: 'AI सेवा का वर्तमान API कोटा समाप्त हो गया है। कृपया बाद में प्रयास करें या साइट एडमिन को सूचित करें।',
+            });
+          case 'rate_limit_burst':
+            return res.status(429).json({
+              code: 'AI_RATE_LIMITED',
+              error: 'The AI service is temporarily receiving too many requests. Please wait a minute and try again.',
+              errorHi: 'AI सेवा पर अभी अस्थायी रूप से बहुत अनुरोध आ रहे हैं। कृपया एक मिनट बाद दोबारा प्रयास करें।',
+            });
+          case 'model_not_found':
+            return res.status(502).json({
+              code: 'AI_MODEL_ERROR',
+              error: 'The configured AI model is currently unavailable. Please contact the site administrator.',
+              errorHi: 'चयनित AI मॉडल अभी उपलब्ध नहीं है। कृपया साइट एडमिन को सूचित करें।',
+            });
+          case 'auth_error':
+            return res.status(502).json({
+              code: 'AI_AUTH_ERROR',
+              error: 'There is a server authentication issue with the AI service. Please contact the site administrator.',
+              errorHi: 'AI सेवा की सर्वर प्रमाणीकरण सेटिंग में समस्या है। कृपया साइट एडमिन को सूचित करें।',
+            });
+          case 'bad_request':
+            return res.status(400).json({
+              code: 'AI_BAD_REQUEST',
+              error: 'The AI could not process this message format. Please shorten or rephrase your message and try again.',
+              errorHi: 'AI इस संदेश को संसाधित नहीं कर सका। कृपया संदेश को थोड़ा छोटा या स्पष्ट लिखकर दोबारा भेजें।',
+            });
+          case 'transient_upstream':
+          default:
+            return res.status(503).json({
+              code: 'AI_UNAVAILABLE',
+              error: 'The AI service is temporarily unavailable due to a server or network issue. Please try again in a few seconds.',
+              errorHi: 'नेटवर्क या सर्वर समस्या के कारण AI सेवा अस्थायी रूप से उपलब्ध नहीं है। कृपया कुछ सेकंड बाद दोबारा प्रयास करें।',
+            });
+        }
+      }
+
+      if (lastParseOrEmptyFailure === 'empty') {
+        return res.status(502).json({
+          code: 'AI_EMPTY_RESPONSE',
+          error: 'AI Consultant returned an empty response. Please try again.',
+          errorHi: 'AI Consultant से खाली उत्तर मिला। कृपया दोबारा प्रयास करें।',
+        });
+      }
+
+      return res.status(502).json({
+        code: 'AI_INVALID_RESPONSE',
+        error: 'Received an unexpected response format from AI. Please try sending your message again.',
+        errorHi: 'AI से अपेक्षित प्रारूप में उत्तर नहीं मिला। कृपया दोबारा प्रयास करें।',
+      });
+    }
+
+    const rawStep = typeof parsedAi.step === 'number' ? Math.round(parsedAi.step) : currentStep;
+    const nextStep = Math.min(8, Math.max(1, Number.isFinite(rawStep) ? rawStep : currentStep));
+    const quickReplies = clampAiStringArray(parsedAi.quickReplies, 6, 100);
+    const mergedCollected = mergeAiCollectedFields(
+      sanitizedCollected,
+      parsedAi.collected as Record<string, unknown> | undefined
+    );
+    const isSummaryReady = Boolean(parsedAi.isSummaryReady === true && nextStep === 8);
+
+    return res.status(200).json({
+      reply,
+      quickReplies,
+      step: nextStep,
+      isSummaryReady,
+      collected: mergedCollected,
+      remainingQuota: rateCheck.remaining,
+    });
+  }
+);
+
+/* =========================================================================
    SEARCH ENGINE OPTIMIZATION & DISCOVERABILITY (SEO)
    ========================================================================= */
 
-const DEFAULT_SITE_URL = 'https://YOUR-DOMAIN.com';
-
-const SITEMAP_APP_IDS = [
-  'bariha-pay',
-  'vidyasetu-lms',
-  'taskmatrix-pro',
-  'networkpulse-diagnostic',
-  'bharatbazaar-omnichannel',
-  'trackcore-logistics',
-  'docusense-vision-ai',
-  'retailflow-pos',
-];
-
-function resolveSeoBaseUrl(req?: express.Request): string {
-  const envUrl = (process.env.SITE_URL || process.env.APP_URL || '').trim().replace(/\/+$/, '');
-  if (/^https?:\/\//i.test(envUrl) && !envUrl.includes('YOUR-DOMAIN.com')) {
-    return envUrl;
-  }
-  if (req) {
-    const reqHost = (req.get('host') || '').trim();
-    if (reqHost && !reqHost.includes('YOUR-DOMAIN.com')) {
-      const protoHeader = (req.headers['x-forwarded-proto'] || '')
-        .toString()
-        .split(',')[0]
-        .trim();
-      const proto = req.secure || protoHeader === 'https' ? 'https' : req.protocol || 'http';
-      return `${proto}://${reqHost}`;
-    }
-  }
-  return DEFAULT_SITE_URL;
+function resolveSeoBaseUrl(): string {
+  return resolveCanonicalSiteOrigin(process.env.SITE_URL);
 }
 
-app.get('/robots.txt', (req, res) => {
-  const baseUrl = resolveSeoBaseUrl(req);
-  const publicFile = path.resolve(__dirname, 'public', 'robots.txt');
-  const distFile = path.resolve(__dirname, 'dist', 'robots.txt');
-  const targetFile = fs.existsSync(publicFile) ? publicFile : distFile;
+app.get('/robots.txt', (_req, res) => {
+  const baseUrl = resolveSeoBaseUrl();
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  if (fs.existsSync(targetFile)) {
-    const content = fs
-      .readFileSync(targetFile, 'utf8')
-      .replaceAll(DEFAULT_SITE_URL, baseUrl);
-    return res.send(content);
-  }
-  return res.send(
-    `User-agent: *\nAllow: /\nDisallow: /admin\nDisallow: /admin-dashboard\nDisallow: /client-dashboard\nDisallow: /api/\n\nSitemap: ${baseUrl}/sitemap.xml\n`
-  );
+  return res.send(buildRobotsTxt(baseUrl));
 });
 
-app.get('/sitemap.xml', async (req, res) => {
-  const baseUrl = resolveSeoBaseUrl(req);
-  const publicFile = path.resolve(__dirname, 'public', 'sitemap.xml');
-  const distFile = path.resolve(__dirname, 'dist', 'sitemap.xml');
-  const targetFile = fs.existsSync(publicFile) ? publicFile : distFile;
+app.get('/sitemap.xml', async (_req, res) => {
+  const baseUrl = resolveSeoBaseUrl();
   res.setHeader('Content-Type', 'application/xml; charset=utf-8');
 
   const lastMod = new Date().toISOString().split('T')[0];
-  let dynamicAppIds = [...SITEMAP_APP_IDS];
+  let dynamicAppIds = [...DEFAULT_SITEMAP_APP_IDS];
+  let dynamicBlogPostIds = BLOG_POSTS.map((post) => post.id);
+
   if (adminDb) {
     try {
       const appsSnap = await adminDb.collection('apps').select('id').limit(100).get();
       const firestoreIds = appsSnap.docs
         .map((d) => String(d.data()?.id || d.id || '').trim())
         .filter((id) => SAFE_ID_REGEX.test(id));
-      dynamicAppIds = Array.from(new Set([...SITEMAP_APP_IDS, ...firestoreIds]));
+      dynamicAppIds = Array.from(new Set([...DEFAULT_SITEMAP_APP_IDS, ...firestoreIds]));
     } catch {
       // Fall back safely to default catalog app IDs when Admin Firestore read is unavailable
     }
-  }
 
-  if (fs.existsSync(targetFile)) {
-    let content = fs
-      .readFileSync(targetFile, 'utf8')
-      .replaceAll(DEFAULT_SITE_URL, baseUrl);
-    const extraEntries = dynamicAppIds
-      .filter((id) => !content.includes(`/apps/${id}</loc>`))
-      .map(
-        (id) =>
-          `  <url>\n    <loc>${baseUrl}/apps/${id}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>`
-      );
-    if (extraEntries.length > 0 && content.includes('</urlset>')) {
-      content = content.replace('</urlset>', `${extraEntries.join('\n')}\n</urlset>`);
+    try {
+      const blogSnap = await adminDb.collection('blog_posts').select('id').limit(200).get();
+      const firestorePostIds = blogSnap.docs
+        .map((d) => String(d.data()?.id || d.id || '').trim())
+        .filter((id) => SAFE_ID_REGEX.test(id));
+      dynamicBlogPostIds = Array.from(new Set([...dynamicBlogPostIds, ...firestorePostIds]));
+    } catch {
+      // Fall back safely to bundled blog posts when Admin Firestore read is unavailable
     }
-    return res.send(content);
   }
 
-  const entries = [
-    { path: '/', changefreq: 'weekly', priority: '1.0' },
-    { path: '/services', changefreq: 'weekly', priority: '0.9' },
-    { path: '/ai-solutions', changefreq: 'weekly', priority: '0.9' },
-    { path: '/android-portfolio', changefreq: 'weekly', priority: '0.9' },
-    ...dynamicAppIds.map((id) => ({
-      path: `/apps/${id}`,
-      changefreq: 'monthly',
-      priority: '0.8',
-    })),
-    { path: '/process', changefreq: 'monthly', priority: '0.8' },
-    { path: '/about', changefreq: 'monthly', priority: '0.8' },
-    { path: '/contact', changefreq: 'monthly', priority: '0.8' },
-    { path: '/blog', changefreq: 'weekly', priority: '0.8' },
-    { path: '/privacy', changefreq: 'yearly', priority: '0.5' },
-    { path: '/terms', changefreq: 'yearly', priority: '0.5' },
-  ];
-  const xmlUrls = entries
-    .map(
-      (e) =>
-        `  <url>\n    <loc>${baseUrl}${e.path}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <changefreq>${e.changefreq}</changefreq>\n    <priority>${e.priority}</priority>\n  </url>`
-    )
-    .join('\n');
+  const xml = buildSitemapXml({
+    siteUrl: baseUrl,
+    lastMod,
+    appIds: dynamicAppIds,
+    blogPostIds: dynamicBlogPostIds,
+    demoSlugs: DEMO_SITES.map((demo) => demo.slug),
+  });
 
-  return res.send(
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${xmlUrls}\n</urlset>`
-  );
+  return res.send(xml);
 });
 
 // Explicit 404 JSON fallback for unknown /api/* routes (prevents SPA HTML fallthrough)
@@ -5760,6 +6694,11 @@ const STATIC_ROUTE_HTML_META: Record<
     description:
       'Privacy-first private LLMs, verified RAG pipelines, workflow automation, and sovereign AI orchestration by Bhanu Ram Bariha Digital Technologies.',
   },
+  '/ai-website-consultant': {
+    title: 'AI Website Consultant | Power Web Studio AI',
+    description:
+      'Step-by-step AI consultant to plan your business website structure, design preferences, and required features.',
+  },
   '/android-portfolio': {
     title: 'Native Android Apps Portfolio | POWER WEB STUDIO AI',
     description:
@@ -5779,6 +6718,7 @@ const STATIC_ROUTE_HTML_META: Record<
     title: 'UPI Payment | POWER WEB STUDIO AI',
     description:
       'Pay for services, quotations, or invoices directly via UPI to Bhanu Ram Bariha Digital Technologies.',
+    robots: 'noindex, nofollow',
   },
   '/blog': {
     title: 'Engineering Blog & Research | POWER WEB STUDIO AI',
@@ -5794,6 +6734,11 @@ const STATIC_ROUTE_HTML_META: Record<
     title: 'Terms & Conditions of Service | POWER WEB STUDIO AI',
     description:
       'Master service terms, intellectual property rights, and SOW engagement guidelines for POWER WEB STUDIO AI clients.',
+  },
+  '/refund-policy': {
+    title: 'Refund & Cancellation Policy | POWER WEB STUDIO AI',
+    description:
+      'Advance payment, cancellation, and refund policy for POWER WEB STUDIO AI software and digital services.',
   },
   '/client-dashboard': {
     title: 'Client Engineering Portal | POWER WEB STUDIO AI',
@@ -5869,7 +6814,11 @@ function escapeHtmlAttr(str: string): string {
   return escapeHtmlText(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-function resolveRouteHtmlInfo(rawPath: string, origin: string): {
+function resolveRouteHtmlInfo(
+  rawPath: string,
+  origin: string,
+  rawQuery?: express.Request['query']
+): {
   statusCode: 200 | 404;
   title: string;
   description: string;
@@ -5879,7 +6828,24 @@ function resolveRouteHtmlInfo(rawPath: string, origin: string): {
   origin: string;
 } {
   const cleanPath = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : '/';
-  const safeBase = origin || DEFAULT_SITE_URL;
+  const safeBase = resolveCanonicalSiteOrigin(origin || CANONICAL_SITE_URL);
+
+  if (cleanPath === '/blog' && rawQuery && typeof rawQuery.post === 'string' && rawQuery.post.trim()) {
+    const postId = rawQuery.post.trim();
+    const matchedPost = BLOG_POSTS.find((p) => p.id === postId);
+    if (matchedPost) {
+      const pageUrl = `${safeBase}/blog?post=${encodeURIComponent(matchedPost.id)}`;
+      return {
+        statusCode: 200,
+        title: `${matchedPost.title} | Blog | POWER WEB STUDIO AI`,
+        description: matchedPost.excerpt,
+        canonicalUrl: pageUrl,
+        ogUrl: pageUrl,
+        robots: 'index, follow',
+        origin: safeBase,
+      };
+    }
+  }
 
   const staticMeta = STATIC_ROUTE_HTML_META[cleanPath];
   if (staticMeta) {
@@ -5926,50 +6892,15 @@ function resolveRouteHtmlInfo(rawPath: string, origin: string): {
 
   if (/^\/demo\/[a-z0-9-]+$/i.test(cleanPath)) {
     const slug = cleanPath.slice('/demo/'.length).toLowerCase();
+    const demoSite = getDemoSiteBySlug(slug);
     const pageUrl = `${safeBase}/demo/${encodeURIComponent(slug)}`;
-    const isShopping = slug === 'shopping';
-    const isCoreEng = slug === 'core-engineering';
-    const isWebEco = slug === 'web-ecosystem';
-    const isMobileSys = slug === 'mobile-system';
-    const isAiDemo = slug === 'artificial-intelligence';
-    const isCloudEng = slug === 'cloud-engineering';
-    const isIntegrationSuite = slug === 'integration-suite';
-    const isMahaBazaar = slug === 'maha-bazaar';
     return {
       statusCode: 200,
-      title: isShopping
-        ? 'Desi Bazaar — Demo Website | POWER WEB STUDIO AI'
-        : isCoreEng
-        ? 'Core Engineering — Demo Website | POWER WEB STUDIO AI'
-        : isWebEco
-        ? 'Web Ecosystem — Demo Website | POWER WEB STUDIO AI'
-        : isMobileSys
-        ? 'Mobile System — Demo Website | POWER WEB STUDIO AI'
-        : isAiDemo
-        ? 'Artificial Intelligence — Demo Website | POWER WEB STUDIO AI'
-        : isCloudEng
-        ? 'Cloud Engineering — Demo Website | POWER WEB STUDIO AI'
-        : isIntegrationSuite
-        ? 'Integration Suite — Demo Website | POWER WEB STUDIO AI'
-        : isMahaBazaar
-        ? 'Maha Bazaar Platform — Flagship Marketplace Demo | POWER WEB STUDIO AI'
+      title: demoSite
+        ? `${demoSite.nameEn} — Demo Website | POWER WEB STUDIO AI`
         : 'Interactive Demo Website | POWER WEB STUDIO AI',
-      description: isShopping
-        ? 'Interactive Indian online shopping store demo by Power Web Studio AI. Sample only — no real orders or payments.'
-        : isCoreEng
-        ? 'Interactive engineering and construction company demo website by Power Web Studio AI. Sample only.'
-        : isWebEco
-        ? 'Interactive dark-theme digital agency and web ecosystem demo website by Power Web Studio AI. Sample only.'
-        : isMobileSys
-        ? 'Interactive native Android app development company demo website by Power Web Studio AI. Sample only.'
-        : isAiDemo
-        ? 'Interactive enterprise AI and autonomous agents demo website by Power Web Studio AI. Sample only.'
-        : isCloudEng
-        ? 'Interactive cloud engineering and DevOps automation demo website by Power Web Studio AI. Sample only.'
-        : isIntegrationSuite
-        ? 'Interactive secure API gateway and data integration demo website by Power Web Studio AI. Sample only.'
-        : isMahaBazaar
-        ? 'Flagship enterprise multi-vendor marketplace demo with Customer Storefront, Seller Panel, Delivery Tracking, and Admin Dashboard. Sample only.'
+      description: demoSite
+        ? demoSite.descriptionEn
         : 'Interactive client preview demo website built by Power Web Studio AI.',
       canonicalUrl: pageUrl,
       ogUrl: pageUrl,
@@ -5993,8 +6924,8 @@ function injectRouteHtmlMeta(rawHtml: string, req: express.Request): {
   statusCode: 200 | 404;
   html: string;
 } {
-  const origin = resolveSeoBaseUrl(req);
-  const info = resolveRouteHtmlInfo(req.path || '/', origin);
+  const origin = resolveSeoBaseUrl();
+  const info = resolveRouteHtmlInfo(req.path || '/', origin, req.query);
   const safeTitle = escapeHtmlText(info.title);
   const safeTitleAttr = escapeHtmlAttr(info.title);
   const safeDescAttr = escapeHtmlAttr(info.description);
@@ -6004,7 +6935,8 @@ function injectRouteHtmlMeta(rawHtml: string, req: express.Request): {
   const safeOrigin = escapeHtmlAttr(info.origin);
 
   const html = rawHtml
-    .replaceAll(DEFAULT_SITE_URL, info.origin)
+    .replaceAll(PLACEHOLDER_SITE_URL, info.origin)
+    .replaceAll(CANONICAL_SITE_URL, info.origin)
     .replace(/<title>[\s\S]*?<\/title>/i, `<title>${safeTitle}</title>`)
     .replace(
       /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
@@ -6138,7 +7070,7 @@ async function startServer() {
     );
     app.get('*', (req, res) => {
       if (!cachedIndexHtml) {
-        const routeInfo = resolveRouteHtmlInfo(req.path || '/', resolveSeoBaseUrl(req));
+        const routeInfo = resolveRouteHtmlInfo(req.path || '/', resolveSeoBaseUrl(), req.query);
         return res.status(routeInfo.statusCode).sendFile(distIndexPath);
       }
       const { statusCode, html } = injectRouteHtmlMeta(cachedIndexHtml, req);

@@ -114,7 +114,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
         {/* Navigation Links */}
         <div className="p-6 pb-10 flex-1 flex flex-col gap-1">
           {/* User Account Card in Drawer */}
-          <div className="mb-3 p-3 bg-slate-900 text-white rounded-lg">
+          <div className="mb-3 p-3 bg-[#0B1220] text-white rounded-lg border border-blue-500/25 shadow-md">
             {currentUser ? (
               <div className="flex items-center justify-between gap-2">
                 <button
@@ -183,7 +183,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
                     onClose();
                     openAuthModal('login');
                   }}
-                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded transition-colors cursor-pointer shrink-0"
+                  className="pws-btn-3d px-3 py-1.5 text-white font-bold text-xs rounded-md cursor-pointer shrink-0"
                 >
                   {t('Login', 'लॉगिन')}
                 </button>
@@ -263,10 +263,10 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
               type="button"
               aria-current={currentRoute === 'pay' ? 'page' : undefined}
               onClick={() => handleRouteClick('pay')}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-md border transition-all cursor-pointer ${
+              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold rounded-md cursor-pointer ${
                 currentRoute === 'pay'
-                  ? 'bg-emerald-700 text-white border-emerald-700'
-                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-emerald-200'
+                  ? 'pws-btn-emerald text-white'
+                  : 'pws-btn-glass text-emerald-800 border-emerald-300'
               }`}
             >
               <span>{t('Pay Now (UPI)', 'भुगतान करें')}</span>
@@ -275,9 +275,9 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({
             <button
               type="button"
               onClick={handleCtaClick}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-all shadow-xs cursor-pointer"
+              className="pws-btn-3d w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold text-white rounded-md cursor-pointer"
             >
-              <span>{t('Schedule Consultation', 'परामर्श बुक करें')}</span>
+              <span>{t('Book Free Consultation', 'मुफ़्त परामर्श बुक करें')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

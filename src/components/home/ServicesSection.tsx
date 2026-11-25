@@ -48,8 +48,8 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
     <section id="services" className="py-20 sm:py-28 bg-slate-50/70 border-b border-slate-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header & Filter Controls */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-          <div className="max-w-2xl">
+        <div className="pws-reveal flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+          <div className="pws-home-surface-dark max-w-2xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('CORE CAPABILITIES & ENGINEERING SUITE', 'प्रमुख क्षमताएं और सेवाएं')}
             </div>
@@ -59,11 +59,11 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
             >
               {language === 'hi' ? (
                 <>
-                  एंटरप्राइज-ग्रेड <span className="text-blue-700">सॉफ्टवेयर व सिस्टम इंजीनियरिंग</span> सेवाएं
+                  एंटरप्राइज-ग्रेड <span className="pws-gradient-text">सॉफ्टवेयर व सिस्टम इंजीनियरिंग</span> सेवाएं
                 </>
               ) : (
                 <>
-                  Enterprise-Grade <span className="text-blue-700">Software & System Engineering</span> Capabilities
+                  Enterprise-Grade <span className="pws-gradient-text">Software & System Engineering</span> Capabilities
                 </>
               )}
             </h2>
@@ -76,15 +76,15 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
           </div>
 
           {/* Interactive Filter Segmented Control (Buttons with click handlers) */}
-          <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white border border-slate-200 rounded-lg shadow-2xs self-start md:self-end max-w-full">
+          <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-white/85 backdrop-blur-md border border-blue-100 rounded-xl shadow-sm self-start md:self-end max-w-full">
             {categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategory(cat.id)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   activeCategory === cat.id
-                    ? 'bg-blue-700 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-950 hover:bg-slate-100'
+                    ? 'pws-btn-3d text-white'
+                    : 'text-slate-600 hover:text-slate-950 hover:bg-blue-50/70'
                 }`}
               >
                 {language === 'hi' ? cat.labelHi : cat.label}
@@ -94,13 +94,13 @@ export const ServicesSection: React.FC<ServicesSectionProps> = ({ onSelectServic
         </div>
 
         {/* Bento Grid with Asymmetric Hierarchy */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredServices.map((service) => (
             <button
               type="button"
               key={service.id}
               onClick={() => onSelectService(service)}
-              className="group bg-white rounded-xl border border-slate-200 p-6 hover:border-blue-500 hover:shadow-md transition-all duration-200 cursor-pointer flex flex-col justify-between w-full text-left focus-visible:outline-2 focus-visible:outline-blue-600"
+              className="pws-card-3d group rounded-2xl p-6 cursor-pointer flex flex-col justify-between w-full text-left focus-visible:outline-2 focus-visible:outline-blue-600"
             >
               <span className="block w-full">
                 {/* Header: Editorial Number & Category (Clean unboxed text) */}

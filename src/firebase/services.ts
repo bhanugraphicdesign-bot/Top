@@ -470,6 +470,8 @@ export async function submitQuotation(data: {
   _hp?: string;
   formOpenedAt?: number;
   fillDurationMs?: number;
+  recaptchaToken?: string;
+  recaptchaAction?: string;
   attachment?: {
     fileUrl?: string;
     fileName?: string;
@@ -505,6 +507,8 @@ export async function submitQuotation(data: {
       _hp: data._hp || '',
       formOpenedAt: data.formOpenedAt,
       fillDurationMs: data.fillDurationMs,
+      recaptchaToken: data.recaptchaToken || '',
+      recaptchaAction: data.recaptchaAction || '',
       attachment: data.attachment
         ? {
             fileUrl: clampStr(data.attachment.fileUrl, 300),
@@ -559,6 +563,8 @@ export async function submitLead(data: {
   _hp?: string;
   formOpenedAt?: number;
   fillDurationMs?: number;
+  recaptchaToken?: string;
+  recaptchaAction?: string;
   attachment?: {
     fileUrl?: string;
     fileName?: string;
@@ -590,6 +596,8 @@ export async function submitLead(data: {
         _hp: data._hp || '',
         formOpenedAt: data.formOpenedAt,
         fillDurationMs: data.fillDurationMs,
+        recaptchaToken: data.recaptchaToken || '',
+        recaptchaAction: data.recaptchaAction || '',
         attachment: data.attachment
           ? {
               fileUrl: clampStr(data.attachment.fileUrl, 300),

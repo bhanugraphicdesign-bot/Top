@@ -425,6 +425,24 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id"]
+    },
+    "AiConsultationSession": {
+      "title": "AiConsultationSession",
+      "description": "Authenticated user AI Website Consultant chat session with consent and collected website planning fields",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "maxLength": 128 },
+        "language": { "type": "string", "enum": ["hi", "en"] },
+        "step": { "type": "integer" },
+        "status": { "type": "string", "enum": ["in_progress", "summary_ready"] },
+        "collected": { "type": "object" },
+        "messages": { "type": "array" },
+        "consent": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerUid", "language", "step", "status", "collected", "messages", "consent", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -523,6 +541,10 @@
     "/test/{docId}": {
       "schema": "TestDoc",
       "description": "Admin-only rules verification test documents"
+    },
+    "/ai_consultation_sessions/{sessionId}": {
+      "schema": "AiConsultationSession",
+      "description": "User-owned AI Website Consultant sessions (owner create/read/update, admin read only)"
     }
   }
 }

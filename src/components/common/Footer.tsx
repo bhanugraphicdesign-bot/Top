@@ -7,6 +7,8 @@ import { Phone, Mail, MapPin, Send, CheckCircle, ShieldCheck, Award, ArrowUp } f
 import { PageRoute } from '../../types';
 import { PWAInstallButton } from './PWAInstallButton';
 import { extractBilingualApiError } from '../../utils/formProtection';
+import { executeRecaptchaEnterprise } from '../../utils/recaptcha';
+import { RecaptchaNotice } from './RecaptchaNotice';
 import { authenticatedFetch } from '../../firebase/services';
 
 export const Footer: React.FC = () => {
@@ -36,6 +38,7 @@ export const Footer: React.FC = () => {
     setSubscribeError('');
     setSubscribing(true);
     try {
+      const { recaptchaToken, recaptchaAction } = await executeRecaptchaEnterprise('newsletter_submit');
       const res = await authenticatedFetch(
         '/api/newsletter/subscribe',
         {
@@ -43,7 +46,13 @@ export const Footer: React.FC = () => {
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ email: trimmed, language, _hp: honeypot }),
+          body: JSON.stringify({
+            email: trimmed,
+            language,
+            _hp: honeypot,
+            recaptchaToken,
+            recaptchaAction,
+          }),
         },
         { includeAppCheck: true, optionalAuth: true }
       );
@@ -85,7 +94,7 @@ export const Footer: React.FC = () => {
   };
 
   return (
-    <footer className="bg-slate-950 text-slate-300 border-t border-slate-800">
+    <footer className="pws-footer-premium bg-[#0B1220] text-slate-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-14 sm:py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-10 lg:gap-12 pb-12 border-b border-slate-800">
           {/* Brand & Corporate Entity (4 cols) */}
@@ -224,6 +233,14 @@ export const Footer: React.FC = () => {
                   {t('Terms & Conditions (MSA)', 'नियम और शर्तें')}
                 </button>
               </li>
+              <li>
+                <button
+                  onClick={(e) => handleRouteClick(e, 'refund-policy')}
+                  className="hover:text-white transition-colors cursor-pointer text-left"
+                >
+                  {t('Refund Policy', 'रिफंड नीति')}
+                </button>
+              </li>
               <li className="pt-2 border-t border-slate-800/80">
                 <button
                   onClick={(e) => handleRouteClick(e, 'client-dashboard')}
@@ -281,7 +298,10 @@ export const Footer: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                   <input
+                    id="footer-newsletter-email"
+                    name="newsletter_email"
                     type="email"
+                    autoComplete="email"
                     required
                     disabled={subscribing}
                     aria-label={t('Work email address', 'कार्य ईमेल पता')}
@@ -297,9 +317,13 @@ export const Footer: React.FC = () => {
                     type="submit"
                     disabled={subscribing}
                     aria-label={t('Subscribe to dispatch', 'सदस्यता लें')}
-                    className="min-w-[40px] min-h-[38px] flex items-center justify-center px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 disabled:opacity-60 rounded-md transition-colors cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-blue-400"
+                    className="pws-btn-3d min-w-[42px] min-h-[38px] flex items-center justify-center px-3.5 py-2 text-xs font-bold text-white rounded-md cursor-pointer shrink-0 focus-visible:outline-2 focus-visible:outline-blue-400"
                   >
-                    <Send className="w-3.5 h-3.5" />
+                    {subscribing ? (
+                      <span className="pws-spinner" aria-hidden="true" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
                   </button>
                 </div>
                 {subscribeError && (
@@ -307,38 +331,39 @@ export const Footer: React.FC = () => {
                     {subscribeError}
                   </div>
                 )}
-                <div className="text-[11px] text-slate-400">
+                <div className="text-xs text-slate-200">
                   {t('Strictly confidential. Unsubscribe at any time.', 'सख्ती से गोपनीय। किसी भी समय रद्द करें।')}
                 </div>
+                <RecaptchaNotice tone="dark" />
               </form>
             )}
           </div>
         </div>
 
         {/* Bottom Bar: Copyright & Compliance Signatures */}
-        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-200">
           <div>
             © {new Date().getFullYear()} {siteContact.name}. {t('All Rights Reserved.', 'सर्वाधिकार सुरक्षित।')}
           </div>
 
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-            <span className="flex items-center gap-1.5 text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span className="flex items-center gap-1.5 text-slate-200">
+              <ShieldCheck className="w-3.5 h-3.5 text-sky-400 shrink-0" />
               <span>{t('Security-First Design Practices', 'सुरक्षा-प्रथम इंजीनियरिंग अभ्यास')}</span>
             </span>
-            <span aria-hidden="true" className="text-slate-700">·</span>
-            <span className="flex items-center gap-1.5 text-slate-400">
-              <Award className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span aria-hidden="true" className="text-slate-500">·</span>
+            <span className="flex items-center gap-1.5 text-slate-200">
+              <Award className="w-3.5 h-3.5 text-sky-400 shrink-0" />
               <span>{t('DPDP Aligned Architecture (Uncertified)', 'DPDP अनुरूप डिज़ाइन (अप्रमाणित)')}</span>
             </span>
             <PWAInstallButton />
-            <span aria-hidden="true" className="text-slate-700">·</span>
+            <span aria-hidden="true" className="text-slate-500">·</span>
             <button
               onClick={scrollToTop}
-              className="inline-flex items-center gap-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              aria-label="Back to top"
+              className="inline-flex items-center gap-1 text-slate-200 hover:text-white transition-colors cursor-pointer"
+              aria-label={t('Back to top', 'ऊपर जाएं')}
             >
-              <span>{t('Back to Top', 'शीर्ष पर जाएं')}</span>
+              <span>{t('Back to Top', 'ऊपर जाएं')}</span>
               <ArrowUp className="w-3.5 h-3.5" />
             </button>
           </div>

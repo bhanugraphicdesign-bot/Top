@@ -5,6 +5,7 @@ export type PageRoute =
   | 'about'
   | 'services'
   | 'ai-solutions'
+  | 'ai-website-consultant'
   | 'android-portfolio'
   | 'app-detail'
   | 'demo'
@@ -14,6 +15,7 @@ export type PageRoute =
   | 'blog'
   | 'privacy'
   | 'terms'
+  | 'refund-policy'
   | 'client-dashboard'
   | 'admin-dashboard'
   | 'not-found';
@@ -141,6 +143,7 @@ export interface BlogPost {
   content: string[];
   contentHi: string[];
   author: string;
+  authorHi?: string;
   authorRole: string;
   authorRoleHi: string;
   date: string;

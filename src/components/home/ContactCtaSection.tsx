@@ -8,6 +8,9 @@ import { Phone, Mail, MapPin, Send, CheckCircle, Shield, MessageCircle } from 'l
 
 import { submitLead } from '../../firebase/services';
 import { trackConsultationFormSubmit } from '../../firebase/analytics';
+import { trackGenerateLead } from '../../utils/ga4';
+import { executeRecaptchaEnterprise } from '../../utils/recaptcha';
+import { RecaptchaNotice } from '../common/RecaptchaNotice';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
 import {
@@ -152,6 +155,7 @@ export const ContactCtaSection: React.FC = () => {
     setSubmitting(true);
 
     try {
+      const { recaptchaToken, recaptchaAction } = await executeRecaptchaEnterprise('contact_submit');
       const result = await submitLead({
         fullName: formData.fullName,
         email: trimmedEmail,
@@ -167,6 +171,8 @@ export const ContactCtaSection: React.FC = () => {
         _hp: honeypot,
         formOpenedAt: formOpenedAtRef.current,
         fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),
+        recaptchaToken,
+        recaptchaAction,
         attachment: attachment
           ? {
               fileUrl: attachment.downloadUrl,
@@ -183,6 +189,7 @@ export const ContactCtaSection: React.FC = () => {
         timeline: formData.timeline,
         hasAttachment: Boolean(attachment),
       });
+      trackGenerateLead(currentRoute === 'contact' ? 'contact_page' : 'home_contact_form');
       setSubmittedQuoteId(result.leadId || '');
       setSubmitted(true);
       showToast(language === 'hi' ? result.messageHi : result.messageEn, 'success');
@@ -213,7 +220,7 @@ export const ContactCtaSection: React.FC = () => {
       };
     }
     return {
-      squad: '1 Principal System Architect, 2 Backend Engineers, 1 Frontend Engineer, 1 DevOps Lead',
+      squad: t('Team sized according to project needs', 'प्रोजेक्ट की ज़रूरत के अनुसार टीम'),
       duration: '10–14 Weeks',
     };
   };
@@ -225,8 +232,8 @@ export const ContactCtaSection: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-14">
           {/* Left: Contact Info & Scope Guidance (5 cols) */}
-          <div className="lg:col-span-5 space-y-6">
-            <div>
+          <div className="pws-reveal lg:col-span-5 space-y-6">
+            <div className="pws-home-surface-dark">
               <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
                 {t('DIRECT ARCHITECT ENGAGEMENT', 'सीधा संपर्क और परामर्श')}
               </div>
@@ -236,11 +243,11 @@ export const ContactCtaSection: React.FC = () => {
               >
                 {language === 'hi' ? (
                   <>
-                    अपने अगले प्रोजेक्ट के लिए <span className="text-blue-700">इंजीनियरिंग परामर्श</span> प्रारंभ करें
+                    अपने अगले प्रोजेक्ट के लिए <span className="pws-gradient-text">इंजीनियरिंग परामर्श</span> प्रारंभ करें
                   </>
                 ) : (
                   <>
-                    Initiate Your <span className="text-blue-700">Architecture Scope</span> & Discovery
+                    Initiate Your <span className="pws-gradient-text">Architecture Scope</span> & Discovery
                   </>
                 )}
               </h2>
@@ -253,8 +260,8 @@ export const ContactCtaSection: React.FC = () => {
             </div>
 
             {/* Direct Contact Cards */}
-            <div className="space-y-3 pt-2">
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-start gap-3">
+            <div className="pws-stagger-grid space-y-3 pt-2">
+              <div className="pws-card-3d p-4 rounded-xl flex items-start gap-3">
                 <MapPin className="w-5 h-5 text-blue-700 shrink-0 mt-0.5" />
                 <div>
                   <div className="text-xs font-bold text-slate-900">
@@ -269,7 +276,7 @@ export const ContactCtaSection: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="pws-card-3d p-4 rounded-xl flex flex-wrap items-center justify-between gap-2.5">
                 <div className="flex items-center gap-3 min-w-0">
                   <Phone className="w-5 h-5 text-blue-700 shrink-0" />
                   <div className="min-w-0">
@@ -289,7 +296,7 @@ export const ContactCtaSection: React.FC = () => {
                 </span>
               </div>
 
-              <div className="p-4 rounded-lg bg-slate-50 border border-slate-200 flex items-center gap-3">
+              <div className="pws-card-3d p-4 rounded-xl flex items-center gap-3">
                 <Mail className="w-5 h-5 text-blue-700 shrink-0" />
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-slate-900">
@@ -306,7 +313,7 @@ export const ContactCtaSection: React.FC = () => {
             </div>
 
             {/* Projected Squad Composition Box */}
-            <div className="p-4 rounded-lg bg-blue-50/70 border border-blue-200/60 space-y-2">
+            <div className="pws-home-light-card-blue p-4 rounded-lg bg-blue-50/70 border border-blue-200/60 space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-blue-900 uppercase tracking-wider">
                   {t('Standard Squad Allocation:', 'मानक टीम आवंटन:')}
@@ -324,8 +331,8 @@ export const ContactCtaSection: React.FC = () => {
           </div>
 
           {/* Right: Functional Scope & Estimator Form (7 cols) */}
-          <div className="lg:col-span-7">
-            <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+          <div className="pws-reveal lg:col-span-7">
+            <div className="pws-card-3d pws-no-tilt rounded-2xl p-6 sm:p-8">
               {submitted ? (
                 <div className="py-12 text-center space-y-4">
                   <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto border border-emerald-200">
@@ -349,7 +356,7 @@ export const ContactCtaSection: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleResetInquiry}
-                      className="px-5 py-2.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors cursor-pointer"
+                      className="pws-btn-glass px-5 py-2.5 text-xs font-semibold text-blue-700 rounded-lg cursor-pointer"
                     >
                       {t('Submit Another Inquiry', 'एक और अनुरोध भेजें')}
                     </button>
@@ -357,7 +364,7 @@ export const ContactCtaSection: React.FC = () => {
                       href={whatsappHref}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                      className="pws-btn-emerald inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-lg"
                     >
                       <MessageCircle className="w-4 h-4 shrink-0" />
                       <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
@@ -402,11 +409,14 @@ export const ContactCtaSection: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label htmlFor="contact-full-name" className="block text-xs font-semibold text-slate-700 mb-1">
                         {t('Full Name *', 'पूरा नाम *')}
                       </label>
                       <input
+                        id="contact-full-name"
+                        name="fullName"
                         type="text"
+                        autoComplete="name"
                         required
                         value={formData.fullName}
                         onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
@@ -415,11 +425,14 @@ export const ContactCtaSection: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label htmlFor="contact-phone" className="block text-xs font-semibold text-slate-700 mb-1">
                         {t('Mobile Number (10 digits) *', 'मोबाइल नंबर (10 अंक) *')}
                       </label>
                       <input
+                        id="contact-phone"
+                        name="phone"
                         type="tel"
+                        autoComplete="tel"
                         required
                         inputMode="numeric"
                         maxLength={14}
@@ -433,11 +446,14 @@ export const ContactCtaSection: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label htmlFor="contact-email" className="block text-xs font-semibold text-slate-700 mb-1">
                         {t('Email (Optional)', 'ईमेल (वैकल्पिक)')}
                       </label>
                       <input
+                        id="contact-email"
+                        name="workEmail"
                         type="email"
+                        autoComplete="email"
                         value={formData.workEmail}
                         onChange={(e) => setFormData({ ...formData, workEmail: e.target.value })}
                         placeholder="name@company.com"
@@ -445,11 +461,14 @@ export const ContactCtaSection: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label htmlFor="contact-company" className="block text-xs font-semibold text-slate-700 mb-1">
                         {t('Company / Organization', 'कंपनी / संगठन')}
                       </label>
                       <input
+                        id="contact-company"
+                        name="company"
                         type="text"
+                        autoComplete="organization"
                         value={formData.company}
                         onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                         placeholder="Company Ltd."
@@ -460,10 +479,12 @@ export const ContactCtaSection: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label htmlFor="contact-service" className="block text-xs font-semibold text-slate-700 mb-1">
                         {t('Technology Service Needed', 'आवश्यक तकनीकी सेवा')}
                       </label>
                       <select
+                        id="contact-service"
+                        name="serviceType"
                         value={formData.serviceType}
                         onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
@@ -477,10 +498,12 @@ export const ContactCtaSection: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      <label htmlFor="contact-timeline" className="block text-xs font-semibold text-slate-700 mb-1">
                         {t('Target Launch Window', 'लक्षित लॉन्च समय-सीमा')}
                       </label>
                       <select
+                        id="contact-timeline"
+                        name="timeline"
                         value={formData.timeline}
                         onChange={(e) => setFormData({ ...formData, timeline: e.target.value })}
                         className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
@@ -493,10 +516,12 @@ export const ContactCtaSection: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="contact-budget" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Estimated Budget (Optional)', 'अनुमानित बजट (वैकल्पिक)')}
                     </label>
                     <select
+                      id="contact-budget"
+                      name="budget"
                       value={formData.budget}
                       onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
@@ -511,10 +536,12 @@ export const ContactCtaSection: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="contact-brief" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Message / Project Requirements', 'संदेश / प्रोजेक्ट विवरण')}
                     </label>
                     <textarea
+                      id="contact-brief"
+                      name="projectBrief"
                       rows={3}
                       value={formData.projectBrief}
                       onChange={(e) => setFormData({ ...formData, projectBrief: e.target.value })}
@@ -541,15 +568,19 @@ export const ContactCtaSection: React.FC = () => {
                   )}
 
                   <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs font-medium text-slate-700">
                       {t('No login required · Direct architect response', 'बिना लॉगिन पूछताछ · सीधा आर्किटेक्ट जवाब')}
                     </span>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                      className="pws-btn-3d w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 text-xs font-bold text-white rounded-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                     >
-                      <Send className="w-3.5 h-3.5 shrink-0" />
+                      {submitting ? (
+                        <span className="pws-spinner" aria-hidden="true" />
+                      ) : (
+                        <Send className="w-3.5 h-3.5 shrink-0" />
+                      )}
                       <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Submit Inquiry', 'पूछताछ भेजें')}</span>
                     </button>
                   </div>
@@ -560,12 +591,14 @@ export const ContactCtaSection: React.FC = () => {
                       href={whatsappHref}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                      className="pws-btn-emerald w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-xs sm:text-sm font-bold text-white rounded-lg"
                     >
                       <MessageCircle className="w-4 h-4 shrink-0" />
                       <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
                     </a>
                   </div>
+
+                  <RecaptchaNotice className="pt-1" />
                 </form>
               )}
             </div>

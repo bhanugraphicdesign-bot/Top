@@ -3,6 +3,7 @@ Allow: /
 Disallow: /admin
 Disallow: /admin-dashboard
 Disallow: /client-dashboard
+Disallow: /pay
 Disallow: /api/
 
-Sitemap: https://YOUR-DOMAIN.com/sitemap.xml
+Sitemap: https://power-web-studio-ai-enterprise-digital-platform.ai.studio/sitemap.xml

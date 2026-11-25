@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { DemoPriceBar } from '../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../components/common/DemoLanguageToggle';
 
 interface MobileSystemDemoProps {
   onBackToHome: () => void;
@@ -400,9 +401,9 @@ const APP_FEATURES: AppFeature[] = [
   {
     id: 'bilingual',
     icon: 'lang',
-    titleHi: 'हिंदी/English भाषा',
+    titleHi: 'हिन्दी/English भाषा',
     titleEn: 'Hindi / English Support',
-    descHi: 'स्थानीय ग्राहकों के लिए आसान हिंदी और अंग्रेज़ी भाषा स्विच की सुविधा।',
+    descHi: 'स्थानीय ग्राहकों के लिए आसान हिन्दी और अंग्रेज़ी भाषा स्विच की सुविधा।',
     descEn: 'Built-in bilingual readiness so local customers can navigate comfortably in Hindi or English.',
   },
   {
@@ -428,7 +429,7 @@ const PACKAGES: AppPackage[] = [
       '5 कस्टम Material You स्क्रीन',
       'रेडी-टू-इंस्टॉल साइन्ड APK बिल्ड',
       'संपर्क व इंक्वायरी फ़ॉर्म स्क्रीन',
-      'हिंदी / English टेक्स्ट सपोर्ट',
+      'हिन्दी / English टेक्स्ट सपोर्ट',
     ],
     featuresEn: [
       '5 custom Material You Android screens',
@@ -663,7 +664,7 @@ export const MobileSystemDemo: React.FC<MobileSystemDemoProps> = ({
   onBackToHome,
   onRequestQuote,
 }) => {
-  const { language, toggleLanguage } = useLanguage();
+  const { language, setLanguage } = useLanguage();
   const isHi = language === 'hi';
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -863,14 +864,11 @@ export const MobileSystemDemo: React.FC<MobileSystemDemoProps> = ({
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={toggleLanguage}
-                className="px-2.5 py-1 rounded-lg border border-white/15 bg-white/5 hover:bg-white/10 text-[11px] font-semibold text-slate-100 transition-colors cursor-pointer whitespace-nowrap"
-                aria-label={isHi ? 'Switch to English' : 'हिंदी में बदलें'}
-              >
-                {isHi ? 'EN' : 'हिन्दी'}
-              </button>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="dark"
+              />
               <button
                 type="button"
                 onClick={onBackToHome}

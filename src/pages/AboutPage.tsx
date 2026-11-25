@@ -15,9 +15,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
   return (
     <div className="bg-white">
       {/* Page Header Banner */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('CORPORATE PROFILE & GOVERNANCE', 'कॉर्पोरेट प्रोफ़ाइल एवं प्रशासन')}
             </div>
@@ -27,11 +28,11 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             >
               {language === 'hi' ? (
                 <>
-                  भारतीय इंजीनियरिंग प्रतिभा का वैश्विक मंच: <span className="text-blue-700">भानु राम बरीहा डिजिटल टेक्नोलॉजीज</span>
+                  भारतीय इंजीनियरिंग प्रतिभा का वैश्विक मंच: <span className="pws-gradient-text">भानु राम बरीहा डिजिटल टेक्नोलॉजीज</span>
                 </>
               ) : (
                 <>
-                  Pioneering Sovereign Engineering Excellence: <span className="text-blue-700">{COMPANY_INFO.name}</span>
+                  Pioneering Sovereign Engineering Excellence: <span className="pws-gradient-text">{COMPANY_INFO.name}</span>
                 </>
               )}
             </h1>
@@ -60,12 +61,12 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
                 sizes="(max-width: 1024px) 100vw, 50vw"
                 className="w-full h-80 sm:h-96 object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-transparent pointer-events-none" />
-              <div className="absolute bottom-4 left-4 right-4 text-white">
-                <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950/95 via-slate-950/55 to-transparent pointer-events-none" />
+              <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 bg-gradient-to-t from-slate-950/95 via-slate-950/80 to-transparent text-white">
+                <span className="text-xs font-bold uppercase tracking-wider text-sky-300 block">
                   {t('Innovation Hub & Delivery Center', 'इनोवेशन हब एवं डिलीवरी सेंटर')}
                 </span>
-                <p className="text-sm font-semibold mt-0.5">
+                <p className="text-sm font-semibold mt-1 leading-snug whitespace-normal break-words">
                   {siteContact.location}
                 </p>
               </div>
@@ -127,7 +128,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             </h2>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-6 sm:p-8 lg:p-10 shadow-xs">
+          <div className="pws-reveal pws-card-3d pws-no-tilt rounded-2xl p-6 sm:p-8 lg:p-10">
             <div className="flex flex-col md:flex-row items-center gap-6 sm:gap-8 lg:gap-12">
               {/* Softly Rounded Professional Portrait Frame */}
               <div className="shrink-0">
@@ -190,7 +191,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
               {
                 title: 'Data Sovereignty',
@@ -219,7 +220,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
             ].map((pillar, idx) => (
               <div
                 key={idx}
-                className="p-6 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:shadow-xs transition-all"
+                className="pws-card-3d p-6 rounded-2xl"
               >
                 <div className="text-xs font-mono font-bold text-blue-700 mb-2">
                   0{idx + 1}.
@@ -236,7 +237,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
         </div>
 
         {/* CTA Banner */}
-        <div className="p-8 sm:p-12 rounded-2xl bg-slate-950 text-white flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="pws-reveal pws-card-3d-dark pws-no-tilt p-8 sm:p-12 rounded-2xl bg-[#0B1220] text-white flex flex-col md:flex-row items-center justify-between gap-6">
           <div>
             <h3 className="text-xl sm:text-2xl font-bold tracking-tight">
               {t('Ready to Partner with Bhanu Ram Bariha Digital Technologies?', 'भानु राम बरीहा डिजिटल टेक्नोलॉजीज के साथ जुड़ने के लिए तैयार हैं?')}
@@ -250,7 +251,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({ onOpenConsultation }) => {
           </div>
           <button
             onClick={onOpenConsultation}
-            className="px-6 py-3 text-xs font-bold text-white bg-blue-700 hover:bg-blue-600 rounded-md transition-colors cursor-pointer shrink-0 shadow-xs"
+            className="pws-btn-3d px-6 py-3 text-xs font-bold text-white rounded-lg cursor-pointer shrink-0"
           >
             {t('Schedule Consultation', 'परामर्श बुक करें')}
           </button>

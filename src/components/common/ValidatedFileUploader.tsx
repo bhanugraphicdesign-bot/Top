@@ -257,9 +257,9 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
       {/* Label & Description */}
       {(label || labelHi) && (
         <div className="flex items-center justify-between">
-          <label className="block text-xs font-semibold text-slate-700">
+          <div className="block text-xs font-semibold text-slate-700">
             {language === 'hi' && labelHi ? labelHi : label}
-          </label>
+          </div>
           <span className="text-[11px] font-mono text-slate-600">
             Max: {maxSizeMb} MB
           </span>
@@ -306,7 +306,7 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
           <button
             type="button"
             onClick={() => openAuthModal('login')}
-            className="px-3.5 py-2 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-md transition-colors cursor-pointer shrink-0"
+            className="pws-btn-3d px-3.5 py-2 text-xs font-bold text-white rounded-lg cursor-pointer shrink-0"
           >
             {t('Sign In to Attach File', 'फ़ाइल अपलोड हेतु साइन इन करें')}
           </button>
@@ -367,7 +367,10 @@ export const ValidatedFileUploader: React.FC<ValidatedFileUploaderProps> = ({
         >
           <input
             ref={fileInputRef}
+            id={`file-upload-${category}`}
+            name={`file_${category}`}
             type="file"
+            aria-label={language === 'hi' && labelHi ? labelHi : label || 'Upload file'}
             onChange={handleInputChange}
             onClick={(e) => e.stopPropagation()}
             accept={allowedExtensions.map((e) => `.${e}`).join(',')}

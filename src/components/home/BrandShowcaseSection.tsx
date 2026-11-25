@@ -22,9 +22,9 @@ interface BrandPoster {
 const BRAND_POSTERS: BrandPoster[] = [
   {
     id: 'power-web-studio-poster',
-    src: '/assets/aistudio/file_00000000cc788211898eb2b408d0365b_678b494d.png',
-    width: 1122,
-    height: 1402,
+    src: '/assets/aistudio/file_00000000cc788211898eb2b408d0365b_678b494d.jpg',
+    width: 1000,
+    height: 1250,
     titleEn: 'Power Web Studio AI — Full-Stack Digital Solutions',
     titleHi: 'पावर वेब स्टूडियो एआई — संपूर्ण डिजिटल समाधान',
     metaEn: 'Website Design · AI Solutions · 24/7 Support',
@@ -36,9 +36,9 @@ const BRAND_POSTERS: BrandPoster[] = [
   },
   {
     id: 'ai-website-platform-poster',
-    src: '/assets/aistudio/file_00000000b0fc82089d798ee81c3ca317_75a20486.png',
-    width: 1254,
-    height: 1254,
+    src: '/assets/aistudio/file_00000000b0fc82089d798ee81c3ca317_75a20486.jpg',
+    width: 1000,
+    height: 1000,
     titleEn: 'Studio AI Enterprise Digital Platform',
     titleHi: 'स्टूडियो एआई एंटरप्राइज डिजिटल प्लेटफॉर्म',
     metaEn: 'AI Powered Solutions · Modern Web Design · Smart Technology',
@@ -91,7 +91,7 @@ export const BrandShowcaseSection: React.FC<BrandShowcaseSectionProps> = ({
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 sm:mb-10">
+        <div className="pws-reveal pws-home-surface-dark flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 sm:mb-10">
           <div className="max-w-2xl">
             <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 mb-2">
               <span className="text-blue-700 font-bold">
@@ -111,11 +111,11 @@ export const BrandShowcaseSection: React.FC<BrandShowcaseSectionProps> = ({
               {language === 'hi' ? (
                 <>
                   AI के साथ बनाएं अपनी{' '}
-                  <span className="text-blue-700">डिजिटल पहचान</span>
+                  <span className="pws-gradient-text">डिजिटल पहचान</span>
                 </>
               ) : (
                 <>
-                  Build Your <span className="text-blue-700">Digital Identity</span> with AI
+                  Build Your <span className="pws-gradient-text">Digital Identity</span> with AI
                 </>
               )}
             </h2>
@@ -130,7 +130,7 @@ export const BrandShowcaseSection: React.FC<BrandShowcaseSectionProps> = ({
           <button
             type="button"
             onClick={onOpenConsultation}
-            className="inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-md transition-colors cursor-pointer whitespace-nowrap shrink-0 self-start md:self-auto focus-visible:outline-2 focus-visible:outline-blue-600"
+            className="pws-btn-3d inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-bold text-white rounded-lg cursor-pointer whitespace-nowrap shrink-0 self-start md:self-auto focus-visible:outline-2 focus-visible:outline-blue-600"
           >
             <span>{t('Start Your Project', 'अपना प्रोजेक्ट शुरू करें')}</span>
             <ArrowRight className="w-4 h-4 shrink-0" />
@@ -138,13 +138,13 @@ export const BrandShowcaseSection: React.FC<BrandShowcaseSectionProps> = ({
         </div>
 
         {/* Compact Instagram-Style Poster Row: Snap Scroll on Mobile, Centered Side-by-Side on Desktop */}
-        <div className="flex items-stretch gap-5 sm:gap-6 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 sm:mx-0 sm:px-0 md:justify-center md:overflow-visible">
+        <div className="pws-stagger-grid flex items-stretch gap-5 sm:gap-6 overflow-x-auto snap-x snap-mandatory pb-3 -mx-4 px-4 sm:mx-0 sm:px-0 md:justify-center md:overflow-visible">
           {BRAND_POSTERS.map((poster, index) => {
             const isFailed = failedImages[poster.id];
             return (
               <article
                 key={poster.id}
-                className="snap-center shrink-0 w-[240px] sm:w-[270px] md:w-[300px] max-w-[300px] flex flex-col rounded-xl bg-white border border-slate-200 shadow-sm hover:shadow-md overflow-hidden transition-transform duration-200 hover:-translate-y-0.5"
+                className="pws-card-3d snap-center shrink-0 w-[240px] sm:w-[270px] md:w-[300px] max-w-[300px] flex flex-col rounded-xl overflow-hidden"
               >
                 {/* Uncropped Image Frame (No overlay buttons on top of image) */}
                 <button
@@ -197,7 +197,7 @@ export const BrandShowcaseSection: React.FC<BrandShowcaseSectionProps> = ({
                   <button
                     type="button"
                     onClick={() => setActiveIndex(index)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 hover:text-blue-800 bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-lg transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600"
+                    className="pws-btn-glass w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-blue-700 hover:text-blue-800 rounded-lg cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600"
                   >
                     <Maximize2 className="w-3.5 h-3.5 shrink-0" />
                     <span>{t('View Full Size', 'पूरा देखें')}</span>
@@ -283,9 +283,9 @@ export const BrandShowcaseSection: React.FC<BrandShowcaseSectionProps> = ({
                   handleClose();
                   onOpenConsultation();
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors cursor-pointer whitespace-nowrap"
+                className="pws-btn-3d inline-flex items-center gap-2 px-4 py-2 text-xs font-bold text-white rounded-md cursor-pointer whitespace-nowrap"
               >
-                <span>{t('Request Consultation', 'परामर्श बुक करें')}</span>
+                <span>{t('Book Free Consultation', 'मुफ़्त परामर्श बुक करें')}</span>
                 <ArrowRight className="w-3.5 h-3.5 shrink-0" />
               </button>
             </div>

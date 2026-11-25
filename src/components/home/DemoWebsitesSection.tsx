@@ -2,6 +2,7 @@ import React from 'react';
 import { useLanguage } from '../../context/LanguageContext';
 import { DEMO_SITES, DemoSiteItem, formatIndianMrp } from '../../data/demoSites';
 import { useGstStatus } from '../../hooks/useGstStatus';
+import { trackViewDemo } from '../../utils/ga4';
 import { ArrowRight, ExternalLink } from 'lucide-react';
 
 interface DemoWebsitesSectionProps {
@@ -61,7 +62,7 @@ export const DemoWebsitesSection: React.FC<DemoWebsitesSectionProps> = ({ onOpen
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
-        <div className="max-w-2xl mb-10">
+        <div className="pws-reveal pws-home-surface-dark max-w-2xl mb-10">
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-500 mb-2">
             <span className="text-blue-700 font-bold">
               {t('Interactive Client Previews', 'इंटरैक्टिव क्लाइंट प्रीव्यू')}
@@ -77,11 +78,11 @@ export const DemoWebsitesSection: React.FC<DemoWebsitesSectionProps> = ({ onOpen
           >
             {isHindi ? (
               <>
-                डेमो <span className="text-blue-700">वेबसाइट्स</span>
+                डेमो <span className="pws-gradient-text">वेबसाइट्स</span>
               </>
             ) : (
               <>
-                Demo <span className="text-blue-700">Websites</span>
+                Demo <span className="pws-gradient-text">Websites</span>
               </>
             )}
           </h2>
@@ -94,11 +95,11 @@ export const DemoWebsitesSection: React.FC<DemoWebsitesSectionProps> = ({ onOpen
         </div>
 
         {/* Demo Card Grid (1 col on mobile, 3 cols on desktop) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-3 gap-6">
           {DEMO_SITES.map((site) => (
             <article
               key={site.slug}
-              className="flex flex-col rounded-xl bg-white border border-slate-200 shadow-xs hover:shadow-md overflow-hidden transition-transform duration-200 hover:-translate-y-0.5"
+              className="pws-card-3d flex flex-col rounded-2xl overflow-hidden"
             >
               {/* Miniature Preview */}
               <DemoCardPreview site={site} isHindi={isHindi} />
@@ -155,9 +156,10 @@ export const DemoWebsitesSection: React.FC<DemoWebsitesSectionProps> = ({ onOpen
                     href={`/demo/${site.slug}`}
                     onClick={(e) => {
                       e.preventDefault();
+                      trackViewDemo(site.nameEn);
                       onOpenDemo(site.slug);
                     }}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 active:bg-blue-900 rounded-md transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600"
+                    className="pws-btn-3d w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold text-white rounded-lg cursor-pointer whitespace-nowrap focus-visible:outline-2 focus-visible:outline-blue-600"
                   >
                     <span>{t('View Demo', 'डेमो देखें')}</span>
                     <ExternalLink className="w-3.5 h-3.5 shrink-0" />

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { DemoPriceBar } from '../../components/DemoPriceBar';
+import { DemoLanguageToggle } from '../../components/common/DemoLanguageToggle';
 import {
   DeliveryTask,
   INITIAL_DELIVERY_TASKS,
@@ -226,26 +227,12 @@ export const MahaBazaarDemo: React.FC<MahaBazaarDemoProps> = ({
             </div>
 
             {role !== 'customer' && (
-              <div className="hidden md:inline-flex rounded-lg bg-slate-100 p-0.5 border border-slate-200 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setLanguage('hi')}
-                  className={`px-2 py-0.5 text-[11px] font-bold rounded cursor-pointer ${
-                    isHi ? 'bg-indigo-950 text-white' : 'text-slate-600'
-                  }`}
-                >
-                  हिंदी
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLanguage('en')}
-                  className={`px-2 py-0.5 text-[11px] font-bold rounded cursor-pointer ${
-                    !isHi ? 'bg-indigo-950 text-white' : 'text-slate-600'
-                  }`}
-                >
-                  EN
-                </button>
-              </div>
+              <DemoLanguageToggle
+                language={language}
+                onChange={setLanguage}
+                tone="light"
+                className="hidden md:inline-flex"
+              />
             )}
           </div>
         </div>

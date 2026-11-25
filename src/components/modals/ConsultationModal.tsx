@@ -5,6 +5,9 @@ import { useSiteContact } from '../../hooks/useSiteContact';
 import { X, CheckCircle, Shield, Send, MessageCircle } from 'lucide-react';
 import { submitLead } from '../../firebase/services';
 import { trackConsultationFormOpen, trackConsultationFormSubmit } from '../../firebase/analytics';
+import { trackBookConsultation } from '../../utils/ga4';
+import { executeRecaptchaEnterprise } from '../../utils/recaptcha';
+import { RecaptchaNotice } from '../common/RecaptchaNotice';
 import { ValidatedFileUploader } from '../common/ValidatedFileUploader';
 import { UploadedFileRecord } from '../../types';
 import {
@@ -194,6 +197,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
     setSubmitting(true);
 
     try {
+      const { recaptchaToken, recaptchaAction } = await executeRecaptchaEnterprise('consultation_submit');
       const result = await submitLead({
         fullName: formData.fullName,
         email: trimmedEmail,
@@ -209,6 +213,8 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         _hp: honeypot,
         formOpenedAt: formOpenedAtRef.current,
         fillDurationMs: computeFillDurationMs(formOpenedAtRef.current),
+        recaptchaToken,
+        recaptchaAction,
         attachment: attachment
           ? {
               fileUrl: attachment.downloadUrl,
@@ -224,6 +230,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
         timeline: formData.timeline,
         hasAttachment: Boolean(attachment),
       });
+      trackBookConsultation(formData.service);
       setSubmittedQuoteId(result.leadId || '');
       setIsSubmitted(true);
       showToast(language === 'hi' ? result.messageHi : result.messageEn, 'success');
@@ -286,7 +293,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
           role="dialog"
           aria-modal="true"
           aria-labelledby="consultation-modal-title"
-          className="relative bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 text-left border border-slate-200 transform transition-all"
+          className="relative bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl max-w-2xl w-full p-6 sm:p-8 text-left border border-blue-200/70 transform transition-all"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}
@@ -294,7 +301,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
             type="button"
             onClick={handleClose}
             className="absolute top-5 right-5 p-2 text-slate-500 hover:text-slate-900 rounded-md hover:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
-            aria-label="Close modal"
+            aria-label={t('Close modal', 'बंद करें')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -325,7 +332,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
               <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
                 <button
                   onClick={handleReset}
-                  className="px-6 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold text-xs rounded-md transition-colors cursor-pointer"
+                  className="pws-btn-3d px-6 py-2.5 text-white font-semibold text-xs rounded-lg cursor-pointer"
                 >
                   {t('Return to Platform', 'प्लेटफ़ॉर्म पर वापस जाएं')}
                 </button>
@@ -333,7 +340,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   href={whatsappHref}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                  className="pws-btn-emerald inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-lg"
                 >
                   <MessageCircle className="w-4 h-4 shrink-0" />
                   <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
@@ -347,7 +354,7 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   {siteContact.name}
                 </div>
                 <h3 id="consultation-modal-title" className="text-2xl font-bold text-slate-900">
-                  {t('Schedule an Architecture Review', 'आर्किटेक्चर समीक्षा शेड्यूल करें')}
+                  {t('Book Free Consultation', 'मुफ़्त परामर्श बुक करें')}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">
                   {t(
@@ -385,11 +392,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="consult-full-name" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Full Name *', 'पूरा नाम *')}
                     </label>
                     <input
+                      id="consult-full-name"
+                      name="fullName"
                       type="text"
+                      autoComplete="name"
                       required
                       value={formData.fullName}
                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
@@ -398,11 +408,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="consult-phone" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Mobile Number (10 digits) *', 'मोबाइल नंबर (10 अंक) *')}
                     </label>
                     <input
+                      id="consult-phone"
+                      name="phone"
                       type="tel"
+                      autoComplete="tel"
                       required
                       inputMode="numeric"
                       maxLength={14}
@@ -416,11 +429,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="consult-email" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Email (Optional)', 'ईमेल (वैकल्पिक)')}
                     </label>
                     <input
+                      id="consult-email"
+                      name="email"
                       type="email"
+                      autoComplete="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       placeholder="name@enterprise.com"
@@ -428,11 +444,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="consult-company" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Company / Organization', 'कंपनी / संगठन')}
                     </label>
                     <input
+                      id="consult-company"
+                      name="company"
                       type="text"
+                      autoComplete="organization"
                       value={formData.company}
                       onChange={(e) => setFormData({ ...formData, company: e.target.value })}
                       placeholder="Enterprise Ltd."
@@ -443,10 +462,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="consult-service" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Technology Domain', 'प्रौद्योगिकी डोमेन')}
                     </label>
                     <select
+                      id="consult-service"
+                      name="service"
                       value={formData.service}
                       onChange={(e) => setFormData({ ...formData, service: e.target.value })}
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
@@ -459,10 +480,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label htmlFor="consult-timeline" className="block text-xs font-semibold text-slate-700 mb-1">
                       {t('Project Target Timeline', 'परियोजना समय-सीमा')}
                     </label>
                     <select
+                      id="consult-timeline"
+                      name="timeline"
                       value={formData.timeline}
                       onChange={(e) => setFormData({ ...formData, timeline: e.target.value })}
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
@@ -475,10 +498,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="consult-budget" className="block text-xs font-semibold text-slate-700 mb-1">
                     {t('Estimated Budget (Optional)', 'अनुमानित बजट (वैकल्पिक)')}
                   </label>
                   <select
+                    id="consult-budget"
+                    name="budget"
                     value={formData.budget}
                     onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
                     className="w-full px-3 py-2 text-sm border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-hidden transition-all text-slate-900 bg-white cursor-pointer"
@@ -493,10 +518,12 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  <label htmlFor="consult-brief" className="block text-xs font-semibold text-slate-700 mb-1">
                     {t('Message / Technical Requirements', 'संदेश / संक्षिप्त विवरण')}
                   </label>
                   <textarea
+                    id="consult-brief"
+                    name="brief"
                     rows={3}
                     value={formData.brief}
                     onChange={(e) => setFormData({ ...formData, brief: e.target.value })}
@@ -530,10 +557,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-blue-700 hover:bg-blue-800 disabled:opacity-50 rounded-md transition-all shadow-xs cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
+                    className="pws-btn-3d w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-xs font-bold text-white rounded-lg cursor-pointer focus-visible:outline-2 focus-visible:outline-blue-600"
                   >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Book Consultation', 'परामर्श बुक करें')}</span>
+                    {submitting ? (
+                      <span className="pws-spinner" aria-hidden="true" />
+                    ) : (
+                      <Send className="w-3.5 h-3.5" />
+                    )}
+                    <span>{submitting ? t('Submitting...', 'भेजा जा रहा है...') : t('Book Free Consultation', 'मुफ़्त परामर्श बुक करें')}</span>
                   </button>
                 </div>
 
@@ -543,12 +574,14 @@ export const ConsultationModal: React.FC<ConsultationModalProps> = ({
                     href={whatsappHref}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md transition-colors shadow-xs"
+                    className="pws-btn-emerald w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-xs sm:text-sm font-bold text-white rounded-lg"
                   >
                     <MessageCircle className="w-4 h-4 shrink-0" />
                     <span>{t('Chat on WhatsApp', 'WhatsApp पर बात करें')}</span>
                   </a>
                 </div>
+
+                <RecaptchaNotice className="pt-1" />
               </form>
             </div>
           )}

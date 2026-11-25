@@ -19,6 +19,7 @@ ENV VITE_FIREBASE_MEASUREMENT_ID=${VITE_FIREBASE_MEASUREMENT_ID}
 ENV SITE_URL=${SITE_URL}
 
 COPY index.html vite.config.ts tsconfig.json firebase-applet-config.json ./
+COPY scripts/generate-seo-files.ts ./scripts/generate-seo-files.ts
 COPY public ./public
 COPY src ./src
 
@@ -41,7 +42,9 @@ ENV PORT=8080
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=builder --chown=node:node /app/dist ./dist
 COPY --chown=node:node package.json package-lock.json firebase-applet-config.json server.ts ./
-COPY --chown=node:node public/robots.txt public/sitemap.xml ./public/
+COPY --chown=node:node src/config/siteConfig.ts ./src/config/siteConfig.ts
+COPY --chown=node:node src/data/demoSites.ts src/data/blogData.ts ./src/data/
+COPY --from=builder --chown=node:node /app/public/robots.txt /app/public/sitemap.xml ./public/
 
 USER node
 EXPOSE 8080

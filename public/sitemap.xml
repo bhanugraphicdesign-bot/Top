@@ -1,110 +1,182 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://YOUR-DOMAIN.com/</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/services</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/services</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/ai-solutions</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/ai-solutions</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/android-portfolio</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/android-portfolio</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/process</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/process</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/about</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/about</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/contact</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/contact</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/blog</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/blog</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/privacy</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/privacy</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/terms</loc>
-    <lastmod>2026-11-13</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/terms</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.5</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/bariha-pay</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/bariha-pay</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/vidyasetu-lms</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/vidyasetu-lms</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/taskmatrix-pro</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/taskmatrix-pro</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/networkpulse-diagnostic</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/networkpulse-diagnostic</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/bharatbazaar-omnichannel</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/bharatbazaar-omnichannel</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/trackcore-logistics</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/trackcore-logistics</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/docusense-vision-ai</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/docusense-vision-ai</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://YOUR-DOMAIN.com/apps/retailflow-pos</loc>
-    <lastmod>2026-11-16</lastmod>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/apps/retailflow-pos</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/blog?post=sovereign-ai-rag-architectures</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/blog?post=offline-first-kotlin-jetpack-compose</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/blog?post=dpdp-act-corporate-compliance</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/shopping</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/core-engineering</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/web-ecosystem</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/mobile-system</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/artificial-intelligence</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/cloud-engineering</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/integration-suite</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/maha-bazaar</loc>
+    <lastmod>2026-11-25</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://power-web-studio-ai-enterprise-digital-platform.ai.studio/demo/vidya-shikhar</loc>
+    <lastmod>2026-11-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>

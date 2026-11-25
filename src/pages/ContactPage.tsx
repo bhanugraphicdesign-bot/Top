@@ -11,9 +11,10 @@ export const ContactPage: React.FC = () => {
   return (
     <div className="bg-white">
       {/* Header */}
-      <section className="bg-slate-50 border-b border-slate-200 py-16 sm:py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="max-w-3xl">
+      <section className="pws-hero-surface border-b border-slate-200 py-16 sm:py-20">
+        <div className="pws-hero-grid" aria-hidden="true" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="pws-reveal max-w-3xl">
             <div className="text-xs font-bold text-blue-700 tracking-wider uppercase mb-2">
               {t('DIRECT ARCHITECTURAL ENGAGEMENT', 'सीधा तकनीकी संपर्क')}
             </div>
@@ -23,11 +24,11 @@ export const ContactPage: React.FC = () => {
             >
               {language === 'hi' ? (
                 <>
-                  हमारे <span className="text-blue-700">प्रमुख आर्किटेक्ट्स</span> से सीधा संपर्क करें
+                  हमारे <span className="pws-gradient-text">प्रमुख आर्किटेक्ट्स</span> से सीधा संपर्क करें
                 </>
               ) : (
                 <>
-                  Engage Directly with Our <span className="text-blue-700">Principal Architects</span>
+                  Engage Directly with Our <span className="pws-gradient-text">Principal Architects</span>
                 </>
               )}
             </h1>
@@ -43,8 +44,8 @@ export const ContactPage: React.FC = () => {
 
       {/* Corporate Offices Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2">
+        <div className="pws-stagger-grid grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="pws-card-3d p-6 rounded-2xl space-y-2">
             <Building2 className="w-6 h-6 text-blue-700 mb-2" />
             <h3 className="text-sm font-bold text-slate-900">
               {t('Headquarters & Innovation Hub', 'मुख्यालय एवं इनोवेशन हब')}
@@ -60,7 +61,7 @@ export const ContactPage: React.FC = () => {
             )}
           </div>
 
-          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2">
+          <div className="pws-card-3d p-6 rounded-2xl space-y-2">
             <Phone className="w-6 h-6 text-blue-700 mb-2" />
             <h3 className="text-sm font-bold text-slate-900">
               {t('Mobile & Direct Hotline', 'मोबाइल एवं सीधा संपर्क')}
@@ -81,7 +82,7 @@ export const ContactPage: React.FC = () => {
             </p>
           </div>
 
-          <div className="p-6 rounded-xl border border-slate-200 bg-white shadow-2xs space-y-2">
+          <div className="pws-card-3d p-6 rounded-2xl space-y-2">
             <Mail className="w-6 h-6 text-blue-700 mb-2" />
             <h3 className="text-sm font-bold text-slate-900">
               {t('Official Corporate Email', 'आधिकारिक ईमेल पता')}

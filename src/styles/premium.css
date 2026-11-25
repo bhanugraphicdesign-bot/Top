@@ -1,0 +1,1241 @@
+/* ==========================================================================
+   POWER WEB STUDIO AI — Premium Heavy 3D Visual Design System
+   Pure CSS tokens, 3D buttons, glassmorphic tilt cards, aurora atmosphere,
+   scroll reveals, and strict prefers-reduced-motion / transform+opacity perf.
+   ========================================================================== */
+
+:root {
+  --pws-royal-start: #1d4ed8;
+  --pws-royal-mid: #2563eb;
+  --pws-royal-end: #3b82f6;
+  --pws-royal-deep: #1e3a8a;
+  --pws-navy: #0b1220;
+  --pws-navy-elevated: #111b30;
+  --pws-white: #ffffff;
+  --pws-cyan: #38bdf8;
+  --pws-cyan-glow: rgba(56, 189, 248, 0.34);
+  --pws-blue-glow: rgba(37, 99, 235, 0.36);
+
+  /* 3D Button Elevation Shadows */
+  --pws-btn-primary-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.28),
+    0 4px 0 #173594,
+    0 10px 22px -6px rgba(29, 78, 216, 0.46),
+    0 0 0 1px rgba(59, 130, 246, 0.25);
+
+  --pws-btn-primary-shadow-hover:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(15, 23, 42, 0.22),
+    0 6px 0 #173594,
+    0 16px 32px -6px rgba(29, 78, 216, 0.54),
+    0 0 22px rgba(56, 189, 248, 0.34);
+
+  --pws-btn-primary-shadow-active:
+    inset 0 2px 5px rgba(11, 18, 32, 0.35),
+    0 1px 0 #173594,
+    0 4px 10px -3px rgba(29, 78, 216, 0.38);
+
+  --pws-btn-glass-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 0 rgba(148, 163, 184, 0.24),
+    0 3px 0 rgba(148, 163, 184, 0.42),
+    0 10px 22px -10px rgba(11, 18, 32, 0.2);
+
+  --pws-btn-glass-shadow-hover:
+    inset 0 1px 0 rgba(255, 255, 255, 0.98),
+    inset 0 -2px 0 rgba(59, 130, 246, 0.22),
+    0 5px 0 rgba(37, 99, 235, 0.32),
+    0 16px 28px -10px rgba(29, 78, 216, 0.26),
+    0 0 18px rgba(56, 189, 248, 0.22);
+
+  --pws-btn-glass-shadow-active:
+    inset 0 2px 4px rgba(11, 18, 32, 0.16),
+    0 1px 0 rgba(148, 163, 184, 0.35),
+    0 4px 8px -4px rgba(11, 18, 32, 0.15);
+
+  /* Glass Card Shadows */
+  --pws-card-shadow:
+    0 1px 2px rgba(11, 18, 32, 0.04),
+    0 12px 30px -12px rgba(11, 18, 32, 0.14),
+    0 24px 48px -28px rgba(29, 78, 216, 0.16);
+
+  --pws-card-shadow-hover:
+    0 2px 4px rgba(11, 18, 32, 0.05),
+    0 22px 44px -16px rgba(11, 18, 32, 0.2),
+    0 30px 64px -26px rgba(29, 78, 216, 0.26),
+    0 0 24px -8px rgba(56, 189, 248, 0.28);
+
+  --pws-card-dark-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.09),
+    0 16px 36px -14px rgba(2, 6, 23, 0.65),
+    0 0 28px -14px rgba(56, 189, 248, 0.22);
+
+  --pws-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --pws-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ==========================================================================
+   Keyframes — STRICTLY transform & opacity only
+   ========================================================================== */
+
+@keyframes pwsRippleExpand {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0.55;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.8);
+    opacity: 0;
+  }
+}
+
+@keyframes pwsShineSweep {
+  0% {
+    transform: translateX(-140%) skewX(-24deg);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.72;
+  }
+  82% {
+    opacity: 0.72;
+  }
+  100% {
+    transform: translateX(260%) skewX(-24deg);
+    opacity: 0;
+  }
+}
+
+@keyframes pwsAuroraFloatA {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate3d(42px, -28px, 0) scale(1.1);
+    opacity: 0.58;
+  }
+}
+
+@keyframes pwsAuroraFloatB {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.34;
+  }
+  50% {
+    transform: translate3d(-38px, 30px, 0) scale(1.08);
+    opacity: 0.5;
+  }
+}
+
+@keyframes pwsAuroraFloatC {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(0.98);
+    opacity: 0.24;
+  }
+  50% {
+    transform: translate3d(26px, 22px, 0) scale(1.06);
+    opacity: 0.4;
+  }
+}
+
+@keyframes pwsSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pwsHeadingPulse {
+  0%,
+  100% {
+    opacity: 0.94;
+    transform: translateZ(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateZ(0);
+  }
+}
+
+/* ==========================================================================
+   3D Buttons — Primary, Glass, Amber, Emerald
+   ========================================================================== */
+
+.pws-btn-3d,
+.pws-btn-glass,
+.pws-btn-amber,
+.pws-btn-emerald {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    transform 240ms var(--pws-bounce),
+    opacity 200ms ease;
+  will-change: transform;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Primary 3D Glossy Royal Blue Button */
+.pws-btn-3d {
+  background-image: linear-gradient(135deg, #1d4ed8 0%, #2563eb 48%, #3b82f6 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(147, 197, 253, 0.35) !important;
+  box-shadow: var(--pws-btn-primary-shadow);
+}
+
+/* Top glossy highlight ridge */
+.pws-btn-3d::before,
+.pws-btn-glass::before,
+.pws-btn-amber::before,
+.pws-btn-emerald::before {
+  content: "";
+  position: absolute;
+  inset: 0 1px auto 1px;
+  height: 46%;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
+.pws-btn-glass::before {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.65) 0%,
+    rgba(255, 255, 255, 0.05) 100%
+  );
+}
+
+/* Diagonal Shine Sweep Overlay (transform + opacity only) */
+.pws-btn-3d::after,
+.pws-btn-glass::after,
+.pws-btn-amber::after,
+.pws-btn-emerald::after {
+  content: "";
+  position: absolute;
+  top: -15%;
+  bottom: -15%;
+  left: 0;
+  width: 44%;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transform: translateX(-140%) skewX(-24deg);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.42) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.pws-btn-glass::after {
+  background: linear-gradient(
+    90deg,
+    rgba(56, 189, 248, 0) 0%,
+    rgba(56, 189, 248, 0.28) 50%,
+    rgba(56, 189, 248, 0) 100%
+  );
+}
+
+/* Secondary 3D Glass Button */
+.pws-btn-glass {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(241, 245, 249, 0.84) 100%
+  ) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(59, 130, 246, 0.28) !important;
+  box-shadow: var(--pws-btn-glass-shadow);
+}
+
+/* Dark-surface variant for glass button */
+.pws-btn-glass-dark {
+  background: linear-gradient(
+    180deg,
+    rgba(30, 41, 59, 0.78) 0%,
+    rgba(11, 18, 32, 0.88) 100%
+  ) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(56, 189, 248, 0.32) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 3px 0 rgba(2, 6, 23, 0.85),
+    0 12px 24px -10px rgba(2, 6, 23, 0.65);
+}
+
+/* 3D Amber CTA Button (Demo Price Bar) */
+.pws-btn-amber {
+  background-image: linear-gradient(135deg, #f59e0b 0%, #fbbf24 52%, #fcd34d 100%) !important;
+  color: #0b1220 !important;
+  border: 1px solid rgba(254, 243, 199, 0.7) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -2px 0 rgba(180, 83, 9, 0.25),
+    0 4px 0 #b45309,
+    0 10px 22px -6px rgba(217, 119, 6, 0.42);
+}
+
+/* 3D Emerald CTA Button (Pay / WhatsApp) */
+.pws-btn-emerald {
+  background-image: linear-gradient(135deg, #047857 0%, #059669 52%, #10b981 100%) !important;
+  color: #ffffff !important;
+  border: 1px solid rgba(167, 243, 208, 0.35) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -2px 0 rgba(6, 78, 59, 0.32),
+    0 4px 0 #065f46,
+    0 10px 22px -6px rgba(5, 150, 105, 0.42);
+}
+
+/* Hover States (Desktop pointer devices) */
+@media (hover: hover) and (pointer: fine) {
+  .pws-btn-3d:not(:disabled):not([aria-disabled="true"]):hover {
+    transform: translate3d(0, -2.5px, 0) scale(1.012);
+    box-shadow: var(--pws-btn-primary-shadow-hover);
+  }
+
+  .pws-btn-glass:not(:disabled):not([aria-disabled="true"]):hover {
+    transform: translate3d(0, -2px, 0) scale(1.01);
+    border-color: rgba(37, 99, 235, 0.5) !important;
+    box-shadow: var(--pws-btn-glass-shadow-hover);
+  }
+
+  .pws-btn-amber:not(:disabled):not([aria-disabled="true"]):hover {
+    transform: translate3d(0, -2px, 0) scale(1.012);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.78),
+      0 6px 0 #b45309,
+      0 14px 28px -6px rgba(217, 119, 6, 0.5);
+  }
+
+  .pws-btn-emerald:not(:disabled):not([aria-disabled="true"]):hover {
+    transform: translate3d(0, -2px, 0) scale(1.012);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.48),
+      0 6px 0 #065f46,
+      0 14px 28px -6px rgba(5, 150, 105, 0.52),
+      0 0 18px rgba(52, 211, 153, 0.28);
+  }
+
+  .pws-btn-3d:not(:disabled):not([aria-disabled="true"]):hover::after,
+  .pws-btn-glass:not(:disabled):not([aria-disabled="true"]):hover::after,
+  .pws-btn-amber:not(:disabled):not([aria-disabled="true"]):hover::after,
+  .pws-btn-emerald:not(:disabled):not([aria-disabled="true"]):hover::after {
+    animation: pwsShineSweep 780ms var(--pws-spring) forwards;
+  }
+}
+
+/* Active Press State — sinks inward with smaller shadow, springs back on release */
+.pws-btn-3d:not(:disabled):not([aria-disabled="true"]):active {
+  transform: translate3d(0, 2px, 0) scale(0.96);
+  box-shadow: var(--pws-btn-primary-shadow-active);
+  transition-duration: 90ms;
+}
+
+.pws-btn-glass:not(:disabled):not([aria-disabled="true"]):active {
+  transform: translate3d(0, 1.5px, 0) scale(0.96);
+  box-shadow: var(--pws-btn-glass-shadow-active);
+  transition-duration: 90ms;
+}
+
+.pws-btn-amber:not(:disabled):not([aria-disabled="true"]):active {
+  transform: translate3d(0, 2px, 0) scale(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(120, 53, 15, 0.28),
+    0 1px 0 #b45309,
+    0 4px 10px -4px rgba(217, 119, 6, 0.35);
+  transition-duration: 90ms;
+}
+
+.pws-btn-emerald:not(:disabled):not([aria-disabled="true"]):active {
+  transform: translate3d(0, 2px, 0) scale(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(6, 78, 59, 0.34),
+    0 1px 0 #065f46,
+    0 4px 10px -4px rgba(5, 150, 105, 0.35);
+  transition-duration: 90ms;
+}
+
+/* Disabled State — muted, flat, no hover/press animation */
+.pws-btn-3d:disabled,
+.pws-btn-3d[aria-disabled="true"],
+.pws-btn-glass:disabled,
+.pws-btn-glass[aria-disabled="true"],
+.pws-btn-amber:disabled,
+.pws-btn-amber[aria-disabled="true"],
+.pws-btn-emerald:disabled,
+.pws-btn-emerald[aria-disabled="true"] {
+  opacity: 0.56 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  box-shadow: none !important;
+  filter: saturate(0.65);
+}
+
+/* Click-origin Ripple Element */
+.pws-ripple {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  z-index: 3;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.65) 0%,
+    rgba(125, 211, 252, 0.35) 55%,
+    rgba(56, 189, 248, 0) 100%
+  );
+  transform: translate(-50%, -50%) scale(0);
+  animation: pwsRippleExpand 580ms var(--pws-spring) forwards;
+  will-change: transform, opacity;
+}
+
+.pws-btn-glass .pws-ripple {
+  background: radial-gradient(
+    circle,
+    rgba(37, 99, 235, 0.34) 0%,
+    rgba(56, 189, 248, 0.22) 55%,
+    rgba(56, 189, 248, 0) 100%
+  );
+}
+
+/* Loading Spinner inside Buttons */
+.pws-spinner {
+  display: inline-block;
+  width: 0.95rem;
+  height: 0.95rem;
+  border-radius: 9999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: pwsSpin 680ms linear infinite;
+  flex-shrink: 0;
+}
+
+/* Keyboard Focus Ring */
+.pws-btn-3d:focus-visible,
+.pws-btn-glass:focus-visible,
+.pws-btn-amber:focus-visible,
+.pws-btn-emerald:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* ==========================================================================
+   3D Glassmorphism Cards with Luminous Border + Desktop Tilt + Spotlight
+   ========================================================================== */
+
+.pws-card-3d,
+.pws-card-3d-dark {
+  position: relative;
+  isolation: isolate;
+  transform: perspective(1000px)
+    rotateX(var(--pws-rx, 0deg))
+    rotateY(var(--pws-ry, 0deg))
+    translate3d(0, var(--pws-ty, 0px), 0);
+  transition: transform 280ms var(--pws-spring);
+  will-change: transform;
+}
+
+.pws-card-3d {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(248, 250, 252, 0.8) 100%
+  );
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  box-shadow: var(--pws-card-shadow);
+}
+
+.pws-card-3d-dark {
+  background: linear-gradient(
+    160deg,
+    rgba(17, 27, 48, 0.86) 0%,
+    rgba(11, 18, 32, 0.92) 100%
+  );
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(59, 130, 246, 0.26);
+  box-shadow: var(--pws-card-dark-shadow);
+}
+
+/* Luminous Thin Gradient Border */
+.pws-card-3d::before,
+.pws-card-3d-dark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.42) 0%,
+    rgba(56, 189, 248, 0.24) 42%,
+    rgba(255, 255, 255, 0.14) 72%,
+    rgba(29, 78, 216, 0.35) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  opacity: 0.65;
+  transition: opacity 240ms ease;
+}
+
+/* Cursor-Tracking Spotlight Overlay (Desktop Only via opacity) */
+.pws-card-3d::after,
+.pws-card-3d-dark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+  opacity: var(--pws-spot-opacity, 0);
+  transition: opacity 220ms ease;
+  background: radial-gradient(
+    360px circle at var(--pws-mx, 50%) var(--pws-my, 50%),
+    rgba(56, 189, 248, 0.16) 0%,
+    rgba(37, 99, 235, 0.08) 38%,
+    rgba(255, 255, 255, 0) 72%
+  );
+}
+
+.pws-card-3d-dark::after {
+  background: radial-gradient(
+    360px circle at var(--pws-mx, 50%) var(--pws-my, 50%),
+    rgba(56, 189, 248, 0.2) 0%,
+    rgba(59, 130, 246, 0.1) 40%,
+    rgba(11, 18, 32, 0) 72%
+  );
+}
+
+.pws-card-3d > *,
+.pws-card-3d-dark > * {
+  position: relative;
+  z-index: 2;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pws-card-3d:hover {
+    box-shadow: var(--pws-card-shadow-hover);
+  }
+
+  .pws-card-3d:hover::before,
+  .pws-card-3d-dark:hover::before {
+    opacity: 1;
+  }
+
+  .pws-card-3d-dark:hover {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.14),
+      0 22px 46px -14px rgba(2, 6, 23, 0.8),
+      0 0 32px -10px rgba(56, 189, 248, 0.34);
+  }
+}
+
+/* Mobile / Touch: NO tilt, subtle tactile press only */
+@media (hover: none), (pointer: coarse) {
+  .pws-card-3d,
+  .pws-card-3d-dark {
+    transform: none !important;
+    transition: transform 150ms ease;
+  }
+
+  .pws-card-3d::after,
+  .pws-card-3d-dark::after {
+    display: none;
+  }
+
+  .pws-card-3d:active,
+  .pws-card-3d-dark:active {
+    transform: scale(0.986) !important;
+  }
+}
+
+/* ==========================================================================
+   Hero Atmosphere — Aurora Orbs + Subtle Architectural Grid
+   ========================================================================== */
+
+.pws-hero-surface {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 55%, #f4f8ff 100%);
+}
+
+.pws-hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(to right, rgba(29, 78, 216, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(29, 78, 216, 0.055) 1px, transparent 1px);
+  background-size: 46px 46px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 75% at 50% 25%, #000 45%, transparent 100%);
+  mask-image: radial-gradient(ellipse 85% 75% at 50% 25%, #000 45%, transparent 100%);
+}
+
+.pws-hero-aurora {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.pws-aurora-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  will-change: transform, opacity;
+  pointer-events: none;
+}
+
+.pws-aurora-orb-1 {
+  width: 460px;
+  height: 460px;
+  top: -140px;
+  left: -100px;
+  background: radial-gradient(circle, rgba(29, 78, 216, 0.28) 0%, rgba(59, 130, 246, 0.1) 52%, transparent 72%);
+  animation: pwsAuroraFloatA 16s ease-in-out infinite;
+}
+
+.pws-aurora-orb-2 {
+  width: 520px;
+  height: 520px;
+  top: -90px;
+  right: -130px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, rgba(37, 99, 235, 0.12) 52%, transparent 72%);
+  animation: pwsAuroraFloatB 20s ease-in-out infinite;
+}
+
+.pws-aurora-orb-3 {
+  width: 380px;
+  height: 380px;
+  bottom: -140px;
+  left: 36%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, rgba(56, 189, 248, 0.1) 55%, transparent 74%);
+  animation: pwsAuroraFloatC 18s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Header Glass & Premium Dark Navy Footer
+   ========================================================================== */
+
+.pws-header-top {
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.85);
+}
+
+.pws-header-glass {
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.42);
+  box-shadow:
+    0 10px 30px -14px rgba(11, 18, 32, 0.24),
+    0 1px 0 rgba(59, 130, 246, 0.16);
+}
+
+.pws-footer-premium {
+  position: relative;
+  background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(29, 78, 216, 0.22) 0%, #0b1220 55%, #070c16 100%);
+  color: #cbd5e1;
+  border-top: 1px solid rgba(59, 130, 246, 0.22);
+}
+
+.pws-footer-premium::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    rgba(29, 78, 216, 0) 0%,
+    #1d4ed8 18%,
+    #38bdf8 50%,
+    #3b82f6 82%,
+    rgba(29, 78, 216, 0) 100%
+  );
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.55);
+}
+
+/* ==========================================================================
+   Animated Gradient Text for Main Heading Blue Words (High Contrast)
+   ========================================================================== */
+
+.pws-gradient-text {
+  background-image: linear-gradient(120deg, #1d4ed8 0%, #2563eb 42%, #0284c7 72%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline;
+  animation: pwsHeadingPulse 4.6s ease-in-out infinite;
+}
+
+.pws-gradient-text-dark {
+  background-image: linear-gradient(120deg, #60a5fa 0%, #38bdf8 50%, #93c5fd 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline;
+  animation: pwsHeadingPulse 4.6s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Scroll Reveal & Card Stagger — Immediately visible (never opacity: 0 hidden)
+   Animations stay strictly under 300ms and respect prefers-reduced-motion.
+   ========================================================================== */
+
+.pws-reveal,
+html.pws-js-ready .pws-reveal,
+html.pws-js-ready .pws-reveal.pws-visible {
+  opacity: 1;
+  transform: none;
+  transition: transform 220ms var(--pws-spring), opacity 220ms var(--pws-spring);
+}
+
+.pws-stagger-grid > *,
+html.pws-js-ready .pws-stagger-grid > *,
+html.pws-js-ready .pws-stagger-grid.pws-visible > * {
+  opacity: 1;
+  transform: none;
+  transition: transform 220ms var(--pws-spring), opacity 220ms var(--pws-spring);
+}
+
+/* ==========================================================================
+   Global Form Inputs — Blue Glow Focus Ring
+   ========================================================================== */
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="hidden"]):focus,
+textarea:focus,
+select:focus {
+  border-color: #2563eb !important;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.2),
+    0 0 14px rgba(56, 189, 248, 0.22) !important;
+  outline: none;
+}
+
+/* ==========================================================================
+   Demo Websites Zone (All 8 Demo Pages)
+   Enhances primary buttons & cards with 3D glass/tilt while keeping DEMO UI intact
+   ========================================================================== */
+
+.pws-zone-demo button:not(:disabled),
+.pws-zone-demo a[role="button"] {
+  position: relative;
+  overflow: hidden;
+  transition: transform 220ms var(--pws-bounce), opacity 180ms ease;
+}
+
+.pws-zone-demo button[class*="bg-blue-"]:not(:disabled),
+.pws-zone-demo button[class*="bg-indigo-"]:not(:disabled),
+.pws-zone-demo button[class*="bg-emerald-"]:not(:disabled),
+.pws-zone-demo button[class*="bg-orange-"]:not(:disabled),
+.pws-zone-demo button[class*="bg-slate-900"]:not(:disabled) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -2px 0 rgba(11, 18, 32, 0.24),
+    0 3px 0 rgba(11, 18, 32, 0.25),
+    0 10px 20px -8px rgba(11, 18, 32, 0.34);
+}
+
+.pws-zone-demo button[class*="bg-blue-"]:not(:disabled)::after,
+.pws-zone-demo button[class*="bg-indigo-"]:not(:disabled)::after,
+.pws-zone-demo button[class*="bg-emerald-"]:not(:disabled)::after,
+.pws-zone-demo button[class*="bg-orange-"]:not(:disabled)::after,
+.pws-zone-demo button[class*="bg-slate-900"]:not(:disabled)::after {
+  content: "";
+  position: absolute;
+  top: -15%;
+  bottom: -15%;
+  left: 0;
+  width: 44%;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transform: translateX(-140%) skewX(-24deg);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.36) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.pws-zone-demo button:not(:disabled):active {
+  transform: scale(0.96);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pws-zone-demo button:not(:disabled):hover {
+    transform: translate3d(0, -1.5px, 0);
+  }
+
+  .pws-zone-demo button[class*="bg-blue-"]:not(:disabled):hover::after,
+  .pws-zone-demo button[class*="bg-indigo-"]:not(:disabled):hover::after,
+  .pws-zone-demo button[class*="bg-emerald-"]:not(:disabled):hover::after,
+  .pws-zone-demo button[class*="bg-orange-"]:not(:disabled):hover::after,
+  .pws-zone-demo button[class*="bg-slate-900"]:not(:disabled):hover::after {
+    animation: pwsShineSweep 780ms var(--pws-spring) forwards;
+  }
+}
+
+.pws-zone-demo article,
+.pws-zone-demo .pws-demo-card {
+  transition: transform 280ms var(--pws-spring);
+  box-shadow:
+    0 10px 26px -14px rgba(11, 18, 32, 0.16),
+    0 1px 2px rgba(11, 18, 32, 0.04);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pws-zone-demo article[data-pws-tilt="1"] {
+    transform: perspective(1000px)
+      rotateX(var(--pws-rx, 0deg))
+      rotateY(var(--pws-ry, 0deg))
+      translate3d(0, var(--pws-ty, 0px), 0);
+  }
+}
+
+/* ==========================================================================
+   Admin Console & Client Portal — Lightweight Edition
+   3D buttons + subtle elevated card shadows, ZERO tilt or heavy table motion
+   ========================================================================== */
+
+.pws-zone-admin .bg-white.rounded-xl,
+.pws-zone-admin .bg-white.rounded-2xl {
+  box-shadow:
+    0 1px 2px rgba(11, 18, 32, 0.04),
+    0 12px 26px -16px rgba(11, 18, 32, 0.16);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.pws-zone-admin button:not(:disabled):not(table button) {
+  position: relative;
+  overflow: hidden;
+  transition: transform 180ms var(--pws-spring), opacity 150ms ease;
+}
+
+.pws-zone-admin button[class*="bg-blue-"]:not(:disabled):not(table button),
+.pws-zone-admin button[class*="bg-emerald-"]:not(:disabled):not(table button),
+.pws-zone-admin button[class*="bg-slate-900"]:not(:disabled):not(table button) {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -2px 0 rgba(11, 18, 32, 0.22),
+    0 3px 0 rgba(15, 23, 42, 0.24),
+    0 8px 18px -8px rgba(29, 78, 216, 0.34);
+}
+
+.pws-zone-admin button:not(:disabled):not(table button):active {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pws-zone-admin button:not(:disabled):not(table button):hover {
+    transform: translate3d(0, -1px, 0);
+  }
+}
+
+.pws-zone-admin table,
+.pws-zone-admin table *,
+.pws-zone-admin .pws-no-tilt {
+  transform: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* ==========================================================================
+   Homepage-Only Full-Page Wallpaper Background & Readable Glass Surfaces
+   Scoped strictly to .pws-home-wallpaper (route / only). No new animations.
+   ========================================================================== */
+
+.pws-home-wallpaper {
+  position: relative;
+  min-height: 100%;
+  background-color: #090f24;
+  overflow-x: clip;
+}
+
+.pws-home-wallpaper-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: #090f24;
+  background-image: url("/images/bg-purple-blue.webp");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.pws-home-wallpaper-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(8, 13, 30, 0.56) 0%,
+    rgba(10, 16, 38, 0.62) 50%,
+    rgba(8, 13, 30, 0.68) 100%
+  );
+}
+
+/* Tablet (768px+): slightly stronger dark navy overlay + subtle static blur */
+@media (min-width: 768px) {
+  .pws-home-wallpaper-bg {
+    filter: blur(2px);
+    transform: scale(1.03);
+  }
+
+  .pws-home-wallpaper-scrim {
+    background: linear-gradient(
+      180deg,
+      rgba(8, 13, 30, 0.68) 0%,
+      rgba(10, 16, 38, 0.74) 50%,
+      rgba(8, 13, 30, 0.78) 100%
+    );
+  }
+}
+
+/* Desktop (1024px+): stronger dark navy overlay + light blur to mask portrait softness */
+@media (min-width: 1024px) {
+  .pws-home-wallpaper-bg {
+    filter: blur(3px);
+    transform: scale(1.04);
+  }
+
+  .pws-home-wallpaper-scrim {
+    background: linear-gradient(
+      180deg,
+      rgba(7, 12, 28, 0.74) 0%,
+      rgba(9, 15, 36, 0.78) 50%,
+      rgba(7, 12, 28, 0.82) 100%
+    );
+  }
+}
+
+/* Make homepage section bands transparent so wallpaper flows across the full homepage */
+.pws-home-wallpaper section {
+  background: transparent;
+  background-image: none;
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.pws-home-wallpaper .pws-hero-surface {
+  background: transparent;
+}
+
+.pws-home-wallpaper .pws-hero-aurora {
+  display: none;
+}
+
+.pws-home-wallpaper .pws-hero-grid {
+  background-image:
+    linear-gradient(to right, rgba(148, 197, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 197, 255, 0.06) 1px, transparent 1px);
+}
+
+/* Crisp frosted white glass for homepage cards & form panels */
+.pws-home-wallpaper .pws-card-3d {
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.94) 0%,
+    rgba(248, 250, 252, 0.9) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 18px 36px -22px rgba(2, 6, 23, 0.72),
+    0 2px 6px rgba(2, 6, 23, 0.24);
+}
+
+.pws-home-wallpaper .pws-home-light-card {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-color: rgba(226, 232, 240, 0.75);
+  box-shadow:
+    0 18px 36px -22px rgba(2, 6, 23, 0.68),
+    0 2px 6px rgba(2, 6, 23, 0.2);
+}
+
+.pws-home-wallpaper .pws-home-light-card-blue {
+  background: rgba(239, 246, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(191, 219, 254, 0.85);
+  box-shadow: 0 12px 26px -18px rgba(2, 6, 23, 0.55);
+}
+
+/* Translucent dark navy glass panels behind section headers & hero copy */
+.pws-home-wallpaper .pws-home-kicker-bar {
+  display: inline-flex;
+  max-width: 100%;
+  background: rgba(9, 15, 34, 0.68);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  color: #cbd5e1;
+}
+
+.pws-home-wallpaper .pws-home-kicker-bar .text-blue-700 {
+  color: #7dd3fc;
+}
+
+.pws-home-wallpaper .pws-home-kicker-bar .text-slate-300 {
+  color: rgba(148, 163, 184, 0.6);
+}
+
+.pws-home-wallpaper .pws-home-surface-dark {
+  background: rgba(9, 15, 34, 0.68);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  box-shadow: 0 18px 40px -24px rgba(2, 6, 23, 0.75);
+}
+
+@media (min-width: 640px) {
+  .pws-home-wallpaper .pws-home-surface-dark {
+    padding: 1.75rem;
+  }
+}
+
+.pws-home-wallpaper .pws-home-surface-dark h1,
+.pws-home-wallpaper .pws-home-surface-dark h2,
+.pws-home-wallpaper .pws-home-surface-dark h3 {
+  color: #f8fafc;
+}
+
+.pws-home-wallpaper .pws-home-surface-dark p {
+  color: #e2e8f0;
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .text-blue-700 {
+  color: #7dd3fc;
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .text-slate-500 {
+  color: #cbd5e1;
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .text-slate-300 {
+  color: rgba(148, 163, 184, 0.6);
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .text-emerald-600 {
+  color: #34d399;
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .border-slate-100 {
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .pws-gradient-text {
+  background-image: linear-gradient(120deg, #93c5fd 0%, #38bdf8 50%, #c4b5fd 100%);
+}
+
+/* Preserve crisp dark text inside frosted white glass buttons on the homepage */
+.pws-home-wallpaper .pws-btn-glass {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(255, 255, 255, 0.72);
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .pws-btn-glass {
+  color: #0f172a;
+}
+
+.pws-home-wallpaper .pws-home-surface-dark .pws-btn-glass:hover {
+  background: #ffffff;
+  color: #1d4ed8;
+}
+
+.pws-home-wallpaper .pws-home-heading-chip {
+  display: inline-block;
+  max-width: 100%;
+  background: rgba(9, 15, 34, 0.68);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0.75rem;
+  padding: 0.625rem 1rem;
+  color: #f8fafc;
+}
+
+.pws-home-wallpaper .pws-home-divider {
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+/* ==========================================================================
+   Homepage AI Consultant CTA Card — Scroll Pop-In & 3D Raised Buttons ONLY
+   Pure CSS transform/opacity, 400ms once, respects prefers-reduced-motion.
+   ========================================================================== */
+
+@keyframes pwsAiCtaPopIn {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.pws-ai-cta-card-waiting {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0) scale(0.96);
+}
+
+.pws-ai-cta-card-pop {
+  animation: pwsAiCtaPopIn 400ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  will-change: transform, opacity;
+}
+
+.pws-ai-cta-btn-primary,
+.pws-ai-cta-btn-secondary {
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.pws-ai-cta-btn-primary {
+  background-image: linear-gradient(180deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    0 4px 0 #1e3a8a,
+    0 10px 20px -6px rgba(29, 78, 216, 0.45);
+}
+
+.pws-ai-cta-btn-secondary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    0 4px 0 #cbd5e1,
+    0 10px 18px -8px rgba(15, 23, 42, 0.18);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pws-ai-cta-btn-primary:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.42),
+      0 6px 0 #1e3a8a,
+      0 14px 26px -6px rgba(29, 78, 216, 0.54);
+  }
+
+  .pws-ai-cta-btn-secondary:hover {
+    transform: translate3d(0, -2px, 0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 1),
+      0 6px 0 #94a3b8,
+      0 14px 24px -8px rgba(37, 99, 235, 0.24);
+  }
+}
+
+.pws-ai-cta-btn-primary:active {
+  transform: translate3d(0, 3px, 0);
+  box-shadow:
+    inset 0 2px 4px rgba(15, 23, 42, 0.28),
+    0 1px 0 #1e3a8a,
+    0 4px 10px -4px rgba(29, 78, 216, 0.36);
+  transition-duration: 80ms;
+}
+
+.pws-ai-cta-btn-secondary:active {
+  transform: translate3d(0, 3px, 0);
+  box-shadow:
+    inset 0 2px 4px rgba(15, 23, 42, 0.12),
+    0 1px 0 #cbd5e1,
+    0 3px 8px -4px rgba(15, 23, 42, 0.16);
+  transition-duration: 80ms;
+}
+
+/* ==========================================================================
+   Strict Accessibility: prefers-reduced-motion: reduce
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .pws-aurora-orb,
+  .pws-gradient-text,
+  .pws-gradient-text-dark,
+  .pws-ripple,
+  .pws-ai-cta-card-pop,
+  .pws-btn-3d::after,
+  .pws-btn-glass::after,
+  .pws-btn-amber::after,
+  .pws-btn-emerald::after {
+    animation: none !important;
+  }
+
+  .pws-ai-cta-card-waiting,
+  .pws-ai-cta-card-pop {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  .pws-card-3d,
+  .pws-card-3d-dark,
+  .pws-btn-3d,
+  .pws-btn-glass,
+  .pws-btn-amber,
+  .pws-btn-emerald,
+  .pws-ai-cta-btn-primary,
+  .pws-ai-cta-btn-secondary,
+  .pws-zone-demo article,
+  .pws-zone-demo button {
+    transform: none !important;
+  }
+
+  html.pws-js-ready .pws-reveal,
+  html.pws-js-ready .pws-stagger-grid > * {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
